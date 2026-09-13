@@ -7,9 +7,9 @@
 > **例外：`hero-surfaces.png` / `hero-surfaces.zh-CN.png`**（2026-09-13 起）不再由 `hero-surfaces.html`
 > 渲染，而是宣传横幅（真机截图 + HTML/CSS 合成；1920×960 是 3840×2160 主图的 2:1 版）。英文版给
 > `README.md` 与 `README.zh-Hant.md`，中文版给 `README.zh-CN.md`。生成器与截图素材在仓库外
-> （`~/Pictures/Lyrimuse宣传图/源文件/poster/gen_real4.py`，用法见文件头注释；重截四个界面用同目录
-> `重截真实UI并出图-图层版.sh`）。同一张图的其它尺寸——GitHub 社交预览 1280×640、落地页 og 1200×630、
-> Product Hunt 1270×760——也从那里出。`hero-surfaces.html` 是旧的四格拼贴版，留作回滚参考，
+> 生成器（`gen_real4.py`）、一键出图脚本（`导出各尺寸.sh`）、真机截图与素材放在作者本地的宣传横幅工具目录里，
+> 不进仓库。同一张图的其它尺寸——GitHub 社交预览 1280×640、落地页 og 1200×630、Product Hunt 1270×760——
+> 也从那里出。`hero-surfaces.html` 是旧的四格拼贴版，留作回滚参考，
 > 重渲时跳过下面第一条命令。
 
 ```bash
