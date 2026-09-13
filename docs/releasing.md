@@ -42,6 +42,8 @@
       AlternativeTo 条目——v1.5.0 后这些地方到处写着「8 个源」，漏一处就自相矛盾。
 - [ ] **README 四张合成大图**（docs/images/hero-*.png）：界面明显变化时用 [docs/heroes/](heroes/README.md)
       的 HTML 源重渲，文件名不变原地替换；gh-pages 的 `assets/img/` 截图副本同步。
+      其中 `hero-surfaces.png` / `hero-surfaces.zh-CN.png` 是宣传横幅（2026-09-13 起），来源见 heroes/README 的
+      例外说明；它的 og 版 `assets/img/og-banner-{en,zh}.jpg` 也在 gh-pages 上，界面大改时一起重出。
 - [ ] **第三方条目**（大版本才动）：AlternativeTo 条目、macosmenubar 的管理链接（无账号体系，
       链接即凭证）里的描述与截图；awesome 列表的一句话描述只在头牌卖点变化时提 PR 改。
 

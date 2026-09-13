@@ -22,7 +22,7 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 
 **安装：** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse`（Apple Silicon 与 Intel 都支持；自动清掉一次性的 Gatekeeper 拦截）——或者去 [最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 手动下载，详见[快速开始](#快速开始)。
 
-<img src="docs/images/hero-surfaces.png" alt="Lyrimuse 歌词展示形态——歌词窗口、灵动岛胶囊、桌面悬浮歌词（逐字染色）、菜单栏歌词">
+<img src="docs/images/hero-surfaces.zh-CN.png" alt="Lyrimuse 歌词展示形态——歌词窗口、灵动岛胶囊、桌面悬浮歌词（逐字染色）、菜单栏歌词">
 <p align="center"><sub>四种展示形态——完整歌词窗口、灵动岛样式胶囊、经典桌面悬浮歌词（逐字染色）、菜单栏歌词</sub></p>
 
 <img src="docs/images/hero-engine.png" alt="Lyrimuse 歌词引擎——歌词管理、带打分的手动搜索、逐首歌的解析决策面板">
