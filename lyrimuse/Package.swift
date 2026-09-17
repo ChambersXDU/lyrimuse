@@ -79,5 +79,11 @@ let package = Package(
             dependencies: ["LyrimuseCore"],
             path: "Sources/lyrics-romanize"
         ),
+        // UX 基准测试套件: 评测菜单栏槽位稳定性、同步引擎 tick 延迟与缓存查找性能
+        .executableTarget(
+            name: "lyrimuse-benchmark",
+            dependencies: ["LyrimuseCore"],
+            path: "Sources/lyrimuse-benchmark"
+        ),
     ]
 )
