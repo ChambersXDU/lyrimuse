@@ -238,6 +238,172 @@ func runCacheKeyTests() {
         )
     }
 
+    // ---- EnrichCacheReader.lookup / resolvedKey: Tier 3 忽略专辑的兜底匹配 ----
+    //
+    // 当播放器上报的专辑名与 collector 存盘的不同(例如 Apple Music 电台/单曲报 "The Journal" 或 "",
+    // 而 collector 存的是 '丁世光|如果我们当时一起会怎么样|神经志'),Tier 1 精确匹配和 Tier 2 宽松匹配
+    // 均会 miss。Tier 3 忽略专辑按「歌手 + 歌名」兜底命中,避免歌词永久卡在 "♪ <title>" 不显示。
+    do {
+        typealias R = EnrichCacheReader
+        let sampleLyrics = "[00:01.00]当时如果一起会怎样\n[00:05.00]现在又是在哪里"
+        let entry1 = EnrichCacheEntry(
+            lyrics: sampleLyrics,
+            lyricsTr: "Tr",
+            lyricsRoma: "Roma",
+            lyricsYRC: "YRC",
+            lyricsSource: "netease",
+            coverSource: "netease",
+            coverURL: "https://cover/dsg",
+            instrumental: false,
+            ts: 1726000000,
+            appleMusicURL: "https://music.apple.com/song/123",
+            qqMusicURL: "https://y.qq.com/song/456",
+            neteaseURL: "https://music.163.com/song/789",
+            durationSecs: 245.0,
+            resolvedDurationSecs: 245.5
+        )
+        let collabEntry = EnrichCacheEntry(
+            lyrics: "[00:02.00]Ashe Project",
+            lyricsSource: "qq",
+            coverSource: "qq",
+            instrumental: false,
+            ts: 1726000001,
+            durationSecs: 180.0
+        )
+        let emptyEntry = EnrichCacheEntry(
+            lyrics: "",
+            lyricsSource: nil,
+            coverSource: nil,
+            instrumental: false,
+            ts: 0
+        )
+        let richEntry = EnrichCacheEntry(
+            lyrics: "[00:00.00]故事的小黄花",
+            lyricsSource: "kugou",
+            coverSource: "kugou",
+            instrumental: false,
+            ts: 1726000002,
+            durationSecs: 269.0
+        )
+
+        let mockEntries: [String: EnrichCacheEntry] = [
+            "丁世光|如果我们当时一起会怎么样|神经志": entry1,
+            "Sebastien Najand/英雄联盟|PROJECT: Ashe|PROJECT: Ashe": collabEntry,
+            "周杰伦|晴天|EP": emptyEntry,
+            "周杰伦|晴天|叶惠美": richEntry,
+        ]
+        R.setEntriesForTesting(mockEntries)
+        defer { R.setEntriesForTesting(nil) }
+
+        // 1. Tier 1 精确命中
+        let exact = R.lookup(artist: "丁世光", title: "如果我们当时一起会怎么样", album: "神经志")
+        expectEqual(exact?.lyrics, sampleLyrics, "EnrichCacheReader.lookup: Tier 1 精确命中")
+        expectEqual(R.resolvedKey(artist: "丁世光", title: "如果我们当时一起会怎么样", album: "神经志"),
+                    "丁世光|如果我们当时一起会怎么样|神经志", "resolvedKey: 精确命中")
+
+        // 2. Tier 3 兜底: 专辑不一致 (Apple Music 报 "The Journal")
+        let mismatched = R.lookup(artist: "丁世光", title: "如果我们当时一起会怎么样", album: "The Journal")
+        expectEqual(mismatched?.lyrics, sampleLyrics, "EnrichCacheReader.lookup: Tier 3 专辑不一致兜底命中")
+        expectEqual(R.resolvedKey(artist: "丁世光", title: "如果我们当时一起会怎么样", album: "The Journal"),
+                    "丁世光|如果我们当时一起会怎么样|神经志", "resolvedKey: Tier 3 兜底解析到实际 key")
+        expectEqual(R.sourceInfo(artist: "丁世光", title: "如果我们当时一起会怎么样", album: "The Journal")?.lyricsSource,
+                    "netease", "sourceInfo: Tier 3 兜底命中")
+        expectEqual(R.trackDurationSecs(artist: "丁世光", title: "如果我们当时一起会怎么样", album: "The Journal"),
+                    245.5, "trackDurationSecs: Tier 3 兜底命中")
+        expectEqual(R.platformLinks(artist: "丁世光", title: "如果我们当时一起会怎么样", album: "The Journal")?.neteaseSong,
+                    URL(string: "https://music.163.com/song/789"), "platformLinks: Tier 3 兜底命中")
+
+        // 3. Tier 3 兜底: 专辑为空串 (单曲/电台) 或空白
+        let emptyAlbum = R.lookup(artist: "丁世光", title: "如果我们当时一起会怎么样", album: "")
+        expectEqual(emptyAlbum?.lyrics, sampleLyrics, "EnrichCacheReader.lookup: Tier 3 专辑为空串兜底命中")
+        expectEqual(R.resolvedKey(artist: "丁世光", title: "如果我们当时一起会怎么样", album: ""),
+                    "丁世光|如果我们当时一起会怎么样|神经志", "resolvedKey: 专辑为空串兜底解析到实际 key")
+        let spaceAlbum = R.lookup(artist: "丁世光", title: "如果我们当时一起会怎么样", album: "   ")
+        expectEqual(spaceAlbum?.lyrics, sampleLyrics, "EnrichCacheReader.lookup: Tier 3 专辑为空白字符兜底命中")
+
+        // 4. Tier 3 合唱 credit 别名兜底
+        // 4a. 缓存存合唱 (Sebastien Najand/英雄联盟), 播放器报主歌手 (Sebastien Najand)
+        let collab = R.lookup(artist: "Sebastien Najand", title: "PROJECT: Ashe", album: "Mismatch Album")
+        expectEqual(collab?.lyrics, "[00:02.00]Ashe Project", "EnrichCacheReader.lookup: Tier 3 合唱 credit 归主歌手兜底")
+        expectEqual(R.resolvedKey(artist: "Sebastien Najand", title: "PROJECT: Ashe", album: "Mismatch Album"),
+                    "Sebastien Najand/英雄联盟|PROJECT: Ashe|PROJECT: Ashe", "resolvedKey: 合唱 credit 归主歌手解析到实际 key")
+
+        // 4b. 缓存存主歌手 (丁世光), 播放器报合唱 (丁世光 feat. 嘉宾)
+        let queryCollab = R.lookup(artist: "丁世光 feat. 嘉宾", title: "如果我们当时一起会怎么样", album: "The Journal")
+        expectEqual(queryCollab?.lyrics, sampleLyrics, "EnrichCacheReader.lookup: 查询侧合唱归并命中缓存单人条目")
+        expectEqual(R.resolvedKey(artist: "丁世光 feat. 嘉宾", title: "如果我们当时一起会怎么样", album: "The Journal"),
+                    "丁世光|如果我们当时一起会怎么样|神经志", "resolvedKey: 查询侧合唱归并解析到实际 key")
+        expectEqual(R.sourceInfo(artist: "丁世光 feat. 嘉宾", title: "如果我们当时一起会怎么样", album: "The Journal")?.lyricsSource,
+                    "netease", "sourceInfo: 查询侧合唱归并命中")
+        expectEqual(R.trackDurationSecs(artist: "丁世光 feat. 嘉宾", title: "如果我们当时一起会怎么样", album: "The Journal"),
+                    245.5, "trackDurationSecs: 查询侧合唱归并命中")
+        expectEqual(R.platformLinks(artist: "丁世光 feat. 嘉宾", title: "如果我们当时一起会怎么样", album: "The Journal")?.neteaseSong,
+                    URL(string: "https://music.163.com/song/789"), "platformLinks: 查询侧合唱归并命中")
+
+        // 4c. 缓存与播放器使用不同合唱分隔符 (缓存 / vs 播放器 &)
+        let queryDiffSep = R.lookup(artist: "Sebastien Najand & 英雄联盟", title: "PROJECT: Ashe", album: "Mismatch Album")
+        expectEqual(queryDiffSep?.lyrics, "[00:02.00]Ashe Project", "EnrichCacheReader.lookup: 异种合唱分隔符归并命中")
+        expectEqual(R.resolvedKey(artist: "Sebastien Najand & 英雄联盟", title: "PROJECT: Ashe", album: "Mismatch Album"),
+                    "Sebastien Najand/英雄联盟|PROJECT: Ashe|PROJECT: Ashe", "resolvedKey: 异种合唱分隔符归并解析到实际 key")
+
+        // 5. 存在多个同名条目时,优先挑选质量最高的条目
+        // 5a. 有歌词条目优先于空壳条目 (晴天 EP 是空壳, 叶惠美 有歌词)
+        let prioritized = R.lookup(artist: "周杰伦", title: "晴天", album: "完全不同的专辑")
+        expectEqual(prioritized?.lyrics, "[00:00.00]故事的小黄花", "EnrichCacheReader.lookup: Tier 3 优先挑选有歌词的条目")
+        expectEqual(R.resolvedKey(artist: "周杰伦", title: "晴天", album: "完全不同的专辑"),
+                    "周杰伦|晴天|叶惠美", "resolvedKey: Tier 3 优先挑选有歌词条目的 key")
+
+        // 5b. 时间戳逐字/同步歌词优先于纯文本歌词 (Album A 仅纯文本, Album B 有时间戳)
+        let plainOnly = EnrichCacheEntry(ts: 1726000000, plainLyrics: "纯文本歌词")
+        let syncedEntry = EnrichCacheEntry(lyrics: "[00:01.00]时间戳歌词", ts: 1726000001)
+        let priorityMock: [String: EnrichCacheEntry] = [
+            "方大同|红豆|Album A": plainOnly,
+            "方大同|红豆|Album B": syncedEntry,
+        ]
+        R.setEntriesForTesting(priorityMock)
+        let lyricsPriority = R.lookup(artist: "方大同", title: "红豆", album: "Unknown Album")
+        expectEqual(lyricsPriority?.lyrics, "[00:01.00]时间戳歌词", "EnrichCacheReader.lookup: 时间戳歌词优先于纯文本歌词")
+        expectEqual(R.resolvedKey(artist: "方大同", title: "红豆", album: "Unknown Album"),
+                    "方大同|红豆|Album B", "resolvedKey: 时间戳歌词条目 key 优先")
+
+        // 5c. 已确认解析完成 (ts > 0) 优先于未完成占位条目 (ts == 0)
+        let placeholder = EnrichCacheEntry(lyrics: "", ts: 0)
+        let resolvedEmpty = EnrichCacheEntry(lyrics: "", ts: 1726000005)
+        let statusMock: [String: EnrichCacheEntry] = [
+            "陶喆|天天|Album A": placeholder,
+            "陶喆|天天|Album B": resolvedEmpty,
+        ]
+        R.setEntriesForTesting(statusMock)
+        let statusPriority = R.lookup(artist: "陶喆", title: "天天", album: "Unknown Album")
+        expectEqual(statusPriority?.resolved, true, "EnrichCacheReader.lookup: ts > 0 优先于 ts == 0 占位")
+        expectEqual(R.resolvedKey(artist: "陶喆", title: "天天", album: "Unknown Album"),
+                    "陶喆|天天|Album B", "resolvedKey: 已解析条目 key 优先")
+
+        // 恢复初始测试数据
+        R.setEntriesForTesting(mockEntries)
+
+        // 6. 查无此歌应返回 nil
+        let notFound = R.lookup(artist: "丁世光", title: "没写过的歌", album: "神經志")
+        expectEqual(notFound, nil, "EnrichCacheReader.lookup: 歌名不匹配返回 nil")
+        expectEqual(R.resolvedKey(artist: "丁世光", title: "没写过的歌", album: "神经志"), nil, "resolvedKey: 查无此歌返回 nil")
+
+        // 7. 纯函数 entryForArtistTitle / resolvedKeyForArtistTitle 直接断言
+        let testIndices = R.entryIndicesByArtistTitle(mockEntries)
+        let foundDirect = R.entryForArtistTitle(in: testIndices.entries, artist: "丁世光", title: "如果我们当时一起会怎么样")
+        expectEqual(foundDirect?.lyrics, sampleLyrics, "entryForArtistTitle: 精确键命中")
+        let foundMerged = R.entryForArtistTitle(in: testIndices.entries, artist: "丁世光 & 朋友", title: "如果我们当时一起会怎么样")
+        expectEqual(foundMerged?.lyrics, sampleLyrics, "entryForArtistTitle: 合唱归并命中")
+        let notFoundEntry = R.entryForArtistTitle(in: testIndices.entries, artist: "未知歌手", title: "未知歌名")
+        expectEqual(notFoundEntry, nil, "entryForArtistTitle: 未命中给 nil")
+
+        let keyDirect = R.resolvedKeyForArtistTitle(in: testIndices.keys, artist: "丁世光", title: "如果我们当时一起会怎么样")
+        expectEqual(keyDirect, "丁世光|如果我们当时一起会怎么样|神经志", "resolvedKeyForArtistTitle: 精确键命中")
+        let keyMerged = R.resolvedKeyForArtistTitle(in: testIndices.keys, artist: "丁世光 & 朋友", title: "如果我们当时一起会怎么样")
+        expectEqual(keyMerged, "丁世光|如果我们当时一起会怎么样|神经志", "resolvedKeyForArtistTitle: 合唱归并命中")
+        let keyNotFound = R.resolvedKeyForArtistTitle(in: testIndices.keys, artist: "未知歌手", title: "未知歌名")
+        expectEqual(keyNotFound, nil, "resolvedKeyForArtistTitle: 未命中给 nil")
+    }
+
     // ---- 按日历天定义的缓存:跨零点必须作废(2026-08-17) ----
     //
     // 用户报「那年今日」昨天和今天显示同一份。根因是那张卡用 6 小时 TTL 判缓存,而 TTL 只

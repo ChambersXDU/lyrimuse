@@ -1055,4 +1055,68 @@ func runSyncEngineTests() {
         let plain = SyncedLyricLine(romanization: nil, translation: "t", mainText: "aabb", words: nil, wordGroups: nil, side: nil)
         expectEqual(plain.lineLevel, plain, "整行压平: 本来就是整行的原样返回(== 语义不变)")
     }
+
+    // ---- 边缘用例与压力测试：快速 Scrubbing / 纯音乐 / 日文汉字 / 缓存一致性 ----
+    do {
+        print("\n== 快速拖动与边界用例 ==")
+        let engine = LyricsSyncEngine()
+        let yrc = """
+        [1000,4000](1000,1000,0)春 (2000,1000,0)が (3000,2000,0)来た
+        [8000,4000](8000,1000,0)夏 (9000,1000,0)が (10000,2000,0)来た
+        [15000,5000](15000,2000,0)秋 (17000,3000,0)風
+        """
+        engine.load(lyrics: "[00:01.00]春が来た\n[00:08.00]夏が来た\n[00:15.00]秋風\n",
+                    lyricsTr: "[00:01.00]春天来了\n[00:08.00]夏天来了\n[00:15.00]秋风\n",
+                    lyricsRoma: "", lyricsYRC: yrc,
+                    trackTitle: "四季", trackArtist: "歌手",
+                    romanizationScripts: [.japanese])
+
+        // 1. 全曲预热缓存与 activeLine 缓存一致性校验
+        let all = engine.allLines(idPrefix: "yrc-test")
+        expectEqual(all.count, 3, "Scrubbing: 包含 3 行歌词")
+        expectEqual(engine.cachedLinesCount, 3, "Scrubbing: allLines 预热全部缓存行")
+
+        // 2. 快速跳转测试：倒跳、前跳、边界外跳
+        // 倒跳到第 0 行中间
+        let r1 = engine.tickQuery(atMs: 2500)
+        expectEqual(r1.index, 0, "Scrubbing: 倒跳到第 0 行")
+        expectEqual(r1.line?.plainText, "春 が 来た", "Scrubbing: 行正文匹配")
+        expectEqual(r1.line?.translation, "春天来了", "Scrubbing: 译文匹配")
+
+        // 前跳到最后一行
+        let r2 = engine.tickQuery(atMs: 16000)
+        expectEqual(r2.index, 2, "Scrubbing: 前跳到最后一行")
+        expectEqual(r2.line?.plainText, "秋 風", "Scrubbing: 行正文匹配")
+
+        // 倒跳回第一句开唱前（空档）
+        let r3 = engine.tickQuery(atMs: 500)
+        expectEqual(r3.index, nil, "Scrubbing: 跳回开唱前 index 为 nil")
+        expectEqual(r3.line, nil, "Scrubbing: 跳回开唱前 line 为 nil")
+        expectEqual(r3.compactLine, nil, "Scrubbing: 前奏空档 compactLine 为 nil")
+        expectEqual(engine.upcomingLineText(afterMs: 500), "春 が 来た", "Scrubbing: 双行模式提前预览第一句")
+
+        // 跳过曲末
+        let r4 = engine.tickQuery(atMs: 50000)
+        expectEqual(r4.index, 2, "Scrubbing: 越过曲末后停在最后一行")
+
+        // 3. 纯音乐/无歌词/仅头部元数据曲目安全校验
+        let emptyEngine = LyricsSyncEngine()
+        let metadataOnlyLrc = "[ti:纯音乐]\n[ar:无人]\n[al:空]\n[by:lyrimuse]\n"
+        emptyEngine.load(lyrics: metadataOnlyLrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
+                         trackTitle: "纯音乐", trackArtist: "无人")
+        expectEqual(emptyEngine.hasContent, false, "纯音乐: 仅包含元数据行被过滤后无内容")
+        expectEqual(emptyEngine.allLines(idPrefix: "inst").isEmpty, true, "纯音乐: allLines 为空")
+        let instTick = emptyEngine.tickQuery(atMs: 10000)
+        expectEqual(instTick.index, nil, "纯音乐: tickQuery index 为 nil")
+        expectEqual(instTick.line, nil, "纯音乐: tickQuery line 为 nil")
+        expectEqual(instTick.compactLine, nil, "纯音乐: compactLine 为 nil")
+
+        // 4. 换歌时缓存彻底作废
+        let oldLine = engine.activeLine(atMs: 2500)
+        engine.load(lyrics: "[00:02.00]新歌曲第一行\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
+                    trackTitle: "新歌", trackArtist: "新歌手")
+        let newLine = engine.activeLine(atMs: 2500)
+        expectEqual(newLine?.plainText, "新歌曲第一行", "换歌作废: load 后同时间点获取到新曲内容")
+        expectEqual(oldLine?.plainText != newLine?.plainText, true, "换歌作废: 不遗留旧歌缓存")
+    }
 }

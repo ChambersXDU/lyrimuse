@@ -5,73 +5,96 @@ import Foundation
 // "歌手|歌名|专辑"(跟 collector/enrich.go:93 的 `artist + "|" + title + "|" + album`
 // 完全一致),value 里已经有解析好的歌词——本地数据源靠这个拿歌词,不用在 Swift 里
 // 重新实现一遍网易云/QQ/酷狗/Musixmatch/LRCLIB 的匹配逻辑。
-public struct EnrichCacheEntry: Decodable {
-    let lyrics: String?
-    let lyricsTr: String?
-    let lyricsRoma: String?
-    let lyricsYRC: String?
-    let lyricsSource: String?
-    let coverSource: String?
-    // collector 解析出的封面地址(网易云/QQ/Apple)。桌面这边原来只读歌词字段,封面一直
-    // 没人用 —— 直到「最近播放」列表需要一个 Last.fm 之外的兜底,见 coverURL(artist:...)。
-    let coverURL: String?
-    /// 这张**专辑**的 Apple Music 动态封面(motion artwork)master m3u8,由 collector 的
-    /// motioncover.go 按已校验的目录专辑 ID 查出来(空 = 没有 / 不是 Apple 目录曲目)。
-    /// 选档、下载、播放在 `MotionCoverManifest` / `MotionCoverStore` / `MotionCoverLayer`。
-    let motionCoverURL: String?
-    /// 同一份资源的静态首帧模板(尾部 `{w}x{h}bb.{f}`)。动态封面还没下好时先铺它;它本身也是
-    /// 一张按专辑 ID 精确定位的高清静态图(实测 3840²),比按歌名匹配来的更权威。
-    let motionPreviewURL: String?
-    // 这张封面在**来源平台上属于哪张专辑**(collector/enrich.go 的 e.CoverAlbum,
-    // 2026-08-20 起落盘)。2026-09-01 起 Swift 侧解码——「最近记录」需要区分"缓存里有图"
-    // 和"缓存里这张图确实属于这行的专辑":后者才有资格纠正 Last.fm 自带图,见
-    // albumVerifiedCoverURL。
-    let coverAlbum: String?
-    // 联网查过了、至少一个源(目前是 lrclib)明确说这首歌是纯音乐——跟"lyrics 是空的"
-    // 要分开看,后者也可能是"还没解析完"或者"所有源都没查到"这类更含糊的情况。见
-    // collector/enrich.go 的 enrichEntry.Instrumental 定义处的注释。
-    let instrumental: Bool?
-    // 这条记录的**解析时刻**(Unix 秒)。>0 就代表"联网解析已经完整跑完一轮"——
-    // collector 一轮搜索结束时才写它,而且找不到歌词时**同样会写**一条只有 ts、
-    // 没有 lyrics 的记录(2026-08-11 在真实缓存里核实过确有这种条目)。
-    //
-    // 为什么不能用"查得到这个 key"当判据:外围字段补全那条路径(封面/各平台链接)也会
-    // 写这个 key,但它刻意不动 ts(见 collector/enrich.go 里 e.PeripheralTS 那段注释),
-    // 于是"条目存在"可能只代表封面补好了、歌词还在查 —— 拿它当"搜完了"会让 UI 提前
-    // 认输。ts 是那一轮搜索真正结束的凭据。
-    let ts: Int64?
-    // 各平台跳转目标(2026-08-24)。collector 早就把这几个落进缓存了,Swift 侧此前一个
-    // 都没解码 —— 见 PlatformLinks 的头注。
-    let appleMusicURL: String?
-    let qqMusicURL: String?
-    let neteaseURL: String?
-    let qqAlbumMid: String?
-    let qqSingerMid: String?
-    // Spotify 真曲目 ID(collector/spotifytrack.go,Spotify 原生播放换曲那一拍从 `spotify url` 留下的
-    // 22 位 base62)。2026-09-10 起解码,只喂 PlatformLinks.spotifySong;缓存里另一个 spotify_url 是
-    // 本地拼的搜索页兜底,刻意不读。
-    let spotifyTrackID: String?
-    // 这首歌的语种真值(collector/enrich.go 的 enrichEntry.SongLanguage,取值
-    // "yue"=粤语/"cmn"=普通话/空=没判出来),给粤拼罗马音开关用——光看歌词文字认不出
-    // 粤语和普通话(汉字一样),得靠 collector 那边已经判出来的这个字段。2026-08-29 起
-    // 才第一次被 Swift 侧读取,此前完全没人解码它。
-    let songLanguage: String?
-    // plainLyrics:2026-08-30 起才被读取——"搜索候选歌词"弹窗采纳一条"仅纯文本"候选时
-    // (见 lyrimuse target 的 EnrichCacheStore.savePlainTextEdit)写的独立字段,跟 lyrics
-    // 不是一回事:这个没有时间戳,只给"歌词窗口"当静态兜底用。collector 侧
-    // enrichEntry.PlainLyrics 头注解释了为什么必须分开存。
-    let plainLyrics: String?
-    // 播放器报的时长(秒,collector/enrich.go 的 DurationSecs)。2026-09-04 起解码,给「英文歌名 →
-    // 中文歌名」的本机别名推断当第二道闸(见 EnrichTitleAliases),此前 Swift 侧没人读它。
-    let durationSecs: Double?
-    // 所配歌词候选在来源上的时长(秒,collector 的 ResolvedDurationSecs)。同日起解码:跟 durationSecs
-    // 差得远说明这条配到了别的歌的词,别名推断的 E2 路径据此判歌词可不可信。
-    let resolvedDurationSecs: Double?
-    // 这一轮解析里因为源级熔断被跳过的歌词源(collector 的 LyricsSourcesSkipped),以及
-    // "一条歌词都没有"这条自愈路径已经补搜过几次(LyricsFillCount)。2026-09-09 起解码,
-    // 只服务 EnrichCacheLyrics.searchIncomplete 一件事,见那个字段的头注。
-    let lyricsSourcesSkipped: [String]?
-    let lyricsFillCount: Int?
+public struct EnrichCacheEntry: Decodable, Equatable {
+    public let lyrics: String?
+    public let lyricsTr: String?
+    public let lyricsRoma: String?
+    public let lyricsYRC: String?
+    public let lyricsSource: String?
+    public let coverSource: String?
+    // collector 解析出的封面地址(网易云/QQ/Apple)。
+    public let coverURL: String?
+    /// 专辑 Apple Music 动态封面 master m3u8 地址。
+    public let motionCoverURL: String?
+    /// 动态封面静态首帧模板。
+    public let motionPreviewURL: String?
+    // 来源平台所属专辑名，用于纠正第三方封面。
+    public let coverAlbum: String?
+    // 纯音乐标记。
+    public let instrumental: Bool?
+    // 解析完成时刻(Unix 秒)，>0 代表完整搜索已结束。
+    public let ts: Int64?
+    // 各平台跳转链接与 MID。
+    public let appleMusicURL: String?
+    public let qqMusicURL: String?
+    public let neteaseURL: String?
+    public let qqAlbumMid: String?
+    public let qqSingerMid: String?
+    // Spotify 权威曲目 ID。
+    public let spotifyTrackID: String?
+    // 语种真值("yue"=粤语/"cmn"=普通话)，供罗马音注音使用。
+    public let songLanguage: String?
+    // 无时间戳纯文本歌词，供静态展示兜底。
+    public let plainLyrics: String?
+    // 播放器上报时长(秒)。
+    public let durationSecs: Double?
+    // 来源歌词匹配候选时长(秒)。
+    public let resolvedDurationSecs: Double?
+    // 因源熔断跳过的歌词源与补搜尝试次数，供 searchIncomplete 判定。
+    public let lyricsSourcesSkipped: [String]?
+    public let lyricsFillCount: Int?
+
+    public init(
+        lyrics: String? = nil,
+        lyricsTr: String? = nil,
+        lyricsRoma: String? = nil,
+        lyricsYRC: String? = nil,
+        lyricsSource: String? = nil,
+        coverSource: String? = nil,
+        coverURL: String? = nil,
+        motionCoverURL: String? = nil,
+        motionPreviewURL: String? = nil,
+        coverAlbum: String? = nil,
+        instrumental: Bool? = nil,
+        ts: Int64? = nil,
+        appleMusicURL: String? = nil,
+        qqMusicURL: String? = nil,
+        neteaseURL: String? = nil,
+        qqAlbumMid: String? = nil,
+        qqSingerMid: String? = nil,
+        spotifyTrackID: String? = nil,
+        songLanguage: String? = nil,
+        plainLyrics: String? = nil,
+        durationSecs: Double? = nil,
+        resolvedDurationSecs: Double? = nil,
+        lyricsSourcesSkipped: [String]? = nil,
+        lyricsFillCount: Int? = nil
+    ) {
+        self.lyrics = lyrics
+        self.lyricsTr = lyricsTr
+        self.lyricsRoma = lyricsRoma
+        self.lyricsYRC = lyricsYRC
+        self.lyricsSource = lyricsSource
+        self.coverSource = coverSource
+        self.coverURL = coverURL
+        self.motionCoverURL = motionCoverURL
+        self.motionPreviewURL = motionPreviewURL
+        self.coverAlbum = coverAlbum
+        self.instrumental = instrumental
+        self.ts = ts
+        self.appleMusicURL = appleMusicURL
+        self.qqMusicURL = qqMusicURL
+        self.neteaseURL = neteaseURL
+        self.qqAlbumMid = qqAlbumMid
+        self.qqSingerMid = qqSingerMid
+        self.spotifyTrackID = spotifyTrackID
+        self.songLanguage = songLanguage
+        self.plainLyrics = plainLyrics
+        self.durationSecs = durationSecs
+        self.resolvedDurationSecs = resolvedDurationSecs
+        self.lyricsSourcesSkipped = lyricsSourcesSkipped
+        self.lyricsFillCount = lyricsFillCount
+    }
 
     enum CodingKeys: String, CodingKey {
         case lyrics
@@ -114,7 +137,7 @@ public func enrichLyricsSearchIncomplete(lyrics: String, sourcesSkipped: [String
 // 那份常量的注释就说了它是 lyricCandidate.language 与 enrichEntry.SongLanguage 共用的取值。
 private let songLanguageCantonese = "yue"
 
-public struct EnrichCacheLyrics {
+public struct EnrichCacheLyrics: Equatable {
     public let lyrics: String
     public let lyricsTr: String
     public let lyricsRoma: String
@@ -165,6 +188,9 @@ public enum EnrichCacheReader {
     // 构建 —— 见 looseMatch(2026-08-20 性能审计:原来每次精确 miss 都对全部 ~900 个 key
     // 逐个现算 ICU 繁简 transform,~7ms 主线程,新歌未解析窗口内每 2s 重复一遍)。
     private static var cachedLooseIndex: [String: String]?
+    // 忽略专辑的条目索引与 key 索引,跟 cachedEntries 同寿命、惰性构建 —— 见 entryByArtistTitle()。
+    private static var cachedEntryIndex: [String: EnrichCacheEntry]?
+    private static var cachedResolvedKeyIndex: [String: String]?
     // 后台解码的世代号:kick 时占位,完成回主线程时对得上才采纳(reloadNow 的同步解码
     // 会推进世代号,把在飞的旧结果作废)。nil = 没有在飞的后台解码。
     private static var decodeGeneration = 0
@@ -179,7 +205,7 @@ public enum EnrichCacheReader {
     /// 当前曲目的歌词/封面来源(2026-08-22,歌词窗口「显示简介」面板)。entry 里这两个
     /// 字段一直解码着但没往外传,这里补一个只读口;沿用 lookup 同款的 精确 key → 宽松
     /// key 两级匹配。首次调用要解析整份缓存 JSON,别在主线程调。
-    public struct SourceInfo: Sendable {
+    public struct SourceInfo: Sendable, Equatable {
         public let lyricsSource: String?
         public let coverSource: String?
     }
@@ -187,7 +213,13 @@ public enum EnrichCacheReader {
     public static func sourceInfo(artist: String, title: String, album: String) -> SourceInfo? {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        guard let entry = all[key] ?? looseMatch(key, in: all) else { return nil }
+        let atKey = artistTitleKey(artist: artist, title: title)
+        let entries = entryByArtistTitle()
+        guard let entry = all[key]
+            ?? looseMatch(key, in: all)
+            ?? entries[atKey]
+            ?? entryForArtistTitle(in: entries, artist: artist, title: title)
+        else { return nil }
         return SourceInfo(lyricsSource: entry.lyricsSource, coverSource: entry.coverSource)
     }
 
@@ -202,7 +234,13 @@ public enum EnrichCacheReader {
     public static func platformLinks(artist: String, title: String, album: String) -> PlatformLinks? {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        guard let entry = all[key] ?? looseMatch(key, in: all) else { return nil }
+        let atKey = artistTitleKey(artist: artist, title: title)
+        let entries = entryByArtistTitle()
+        guard let entry = all[key]
+            ?? looseMatch(key, in: all)
+            ?? entries[atKey]
+            ?? entryForArtistTitle(in: entries, artist: artist, title: title)
+        else { return nil }
         let rawQQ = entry.qqMusicURL ?? ""
         // 搜索兜底链接不当"歌曲页"给出去,理由见 PlatformLinks.isQQSearchFallback
         let qqSong = (!rawQQ.isEmpty && !PlatformLinks.isQQSearchFallback(rawQQ))
@@ -231,7 +269,13 @@ public enum EnrichCacheReader {
     public static func trackDurationSecs(artist: String, title: String, album: String) -> Double? {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        guard let entry = all[key] ?? looseMatch(key, in: all) else { return nil }
+        let atKey = artistTitleKey(artist: artist, title: title)
+        let entries = entryByArtistTitle()
+        guard let entry = all[key]
+            ?? looseMatch(key, in: all)
+            ?? entries[atKey]
+            ?? entryForArtistTitle(in: entries, artist: artist, title: title)
+        else { return nil }
         for candidate in [entry.resolvedDurationSecs, entry.durationSecs] {
             if let candidate, candidate > 0 { return candidate }
         }
@@ -242,7 +286,10 @@ public enum EnrichCacheReader {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         if all[key] != nil { return key }
-        return looseIndex(in: all)[EnrichCacheKeys.looseKey(key)]
+        if let loose = looseIndex(in: all)[EnrichCacheKeys.looseKey(key)] { return loose }
+        let atKey = artistTitleKey(artist: artist, title: title)
+        let keys = resolvedKeyByArtistTitle()
+        return keys[atKey] ?? resolvedKeyForArtistTitle(in: keys, artist: artist, title: title)
     }
 
     public static var fileModificationDate: Date? {
@@ -258,7 +305,13 @@ public enum EnrichCacheReader {
         // (`不散的筵席（I Miss You）`)就会**查不到任何歌词**——不是显示旧内容,是整首歌
         // 没词,而且只在部分播放器上复现。
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        guard let entry = all[key] ?? looseMatch(key, in: all) else { return nil }
+        let atKey = artistTitleKey(artist: artist, title: title)
+        let entries = entryByArtistTitle()
+        guard let entry = all[key]
+            ?? looseMatch(key, in: all)
+            ?? entries[atKey]
+            ?? entryForArtistTitle(in: entries, artist: artist, title: title)
+        else { return nil }
         return EnrichCacheLyrics(
             lyrics: entry.lyrics ?? "",
             lyricsTr: entry.lyricsTr ?? "",
@@ -576,6 +629,131 @@ public enum EnrichCacheReader {
         return index
     }
 
+    /// 忽略专辑的条目索引。跟 cachedEntries 同寿命(mtime 一变就一起作废),惰性构建。
+    /// 给 Tier 3 兜底查找用 —— 当播放器报的专辑名与 collector 落盘的专辑名不一致
+    /// (如 Apple Music 电台/单曲报 "The Journal" 或 ""、而 collector 存的是 "神经志")时,
+    /// 依然能按歌手+歌名取到歌词,避免界面永久卡在 `♪ <title>`。
+    private static func entryByArtistTitle() -> [String: EnrichCacheEntry] {
+        if let cachedEntryIndex { return cachedEntryIndex }
+        buildArtistTitleIndices()
+        return cachedEntryIndex ?? [:]
+    }
+
+    private static func resolvedKeyByArtistTitle() -> [String: String] {
+        if let cachedResolvedKeyIndex { return cachedResolvedKeyIndex }
+        buildArtistTitleIndices()
+        return cachedResolvedKeyIndex ?? [:]
+    }
+
+    private static func buildArtistTitleIndices() {
+        let (entries, keys) = Self.entryIndicesByArtistTitle(cachedEntries ?? [:])
+        cachedEntryIndex = entries
+        cachedResolvedKeyIndex = keys
+    }
+
+    /// 在"忽略专辑"的条目索引里查一行: 先精确歌手写法, 再退到合唱 credit 归并写法。
+    /// 纯函数, 与 coverURLString 同模式, selftest 直接覆盖。
+    public nonisolated static func entryForArtistTitle(
+        in index: [String: EnrichCacheEntry],
+        artist: String,
+        title: String
+    ) -> EnrichCacheEntry? {
+        if let entry = index[artistTitleKey(artist: artist, title: title)] { return entry }
+        let merged = ArtistCredit.mergeArtist(artist)
+        guard merged != artist else { return nil }
+        return index[artistTitleKey(artist: merged, title: title)]
+    }
+
+    /// 在"忽略专辑"的 key 索引里查实际 key: 先精确歌手写法, 再退到合唱 credit 归并写法。
+    public nonisolated static func resolvedKeyForArtistTitle(
+        in index: [String: String],
+        artist: String,
+        title: String
+    ) -> String? {
+        if let key = index[artistTitleKey(artist: artist, title: title)] { return key }
+        let merged = ArtistCredit.mergeArtist(artist)
+        guard merged != artist else { return nil }
+        return index[artistTitleKey(artist: merged, title: title)]
+    }
+
+    /// 从「缓存 key → 条目」建出忽略专辑的条目索引与实际 key 索引。纯函数,selftest 直接覆盖。
+    ///
+    /// 每个条目进两个键:歌手写法原样的精确键,以及合唱 credit 归并到主歌手之后的别名键。
+    /// 别名只填精确键没占的位置 —— 精确写法永远优先。
+    ///
+    /// 同一首歌出现在多张专辑时按质量优先级挑选:
+    ///  3: 有时间戳/逐字歌词 (lyrics / lyricsYRC)
+    ///  2: 有纯文本歌词或标记为纯音乐 (plainLyrics / instrumental)
+    ///  1: 完整搜索已结束但无词 (ts > 0)
+    ///  0: 未完成占位条目 (ts == 0)
+    /// 质量相同按 key 字典序稳定取第一个,保证跨启动行为确定一致。
+    public nonisolated static func entryIndicesByArtistTitle(
+        _ all: [String: EnrichCacheEntry]
+    ) -> (entries: [String: EnrichCacheEntry], keys: [String: String]) {
+        func entryRank(_ e: EnrichCacheEntry) -> Int {
+            if !(e.lyrics?.isEmpty ?? true) || !(e.lyricsYRC?.isEmpty ?? true) {
+                return 3
+            }
+            if !(e.plainLyrics?.isEmpty ?? true) || (e.instrumental ?? false) {
+                return 2
+            }
+            if (e.ts ?? 0) > 0 {
+                return 1
+            }
+            return 0
+        }
+
+        var entries: [String: EnrichCacheEntry] = [:]
+        var keys: [String: String] = [:]
+        var aliasEntries: [String: EnrichCacheEntry] = [:]
+        var aliasKeys: [String: String] = [:]
+
+        for key in all.keys.sorted() {
+            guard let entry = all[key] else { continue }
+            let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+            guard parts.count == 3 else { continue }
+            let artist = String(parts[0]), title = String(parts[1])
+            let exact = artistTitleKey(artist: artist, title: title)
+            if entries[exact] == nil {
+                entries[exact] = entry
+                keys[exact] = key
+            } else if let existing = entries[exact], entryRank(entry) > entryRank(existing) {
+                entries[exact] = entry
+                keys[exact] = key
+            }
+
+            let alias = artistTitleKey(artist: ArtistCredit.mergeArtist(artist), title: title)
+            if alias != exact {
+                if aliasEntries[alias] == nil {
+                    aliasEntries[alias] = entry
+                    aliasKeys[alias] = key
+                } else if let existing = aliasEntries[alias], entryRank(entry) > entryRank(existing) {
+                    aliasEntries[alias] = entry
+                    aliasKeys[alias] = key
+                }
+            }
+        }
+
+        for (key, entry) in aliasEntries where entries[key] == nil {
+            entries[key] = entry
+            keys[key] = aliasKeys[key]!
+        }
+        return (entries, keys)
+    }
+
+    /// **只给 selftest 用**:直接灌入一组条目,用于覆盖 lookup / sourceInfo / platformLinks / resolvedKey 等测试。
+    /// 传 nil 时清空,恢复正常读盘。
+    public static func setEntriesForTesting(_ entries: [String: EnrichCacheEntry]?) {
+        cachedMTime = entries != nil ? Date() : nil
+        cachedEntries = entries
+        cachedCoverIndex = nil
+        cachedLooseIndex = nil
+        cachedEntryIndex = nil
+        cachedResolvedKeyIndex = nil
+        cachedAliasTables = nil
+        aliasTablesGeneration += 1
+    }
+
     /// 本机推断的两张别名表(2026-09-04):歌手写法归并(LocalArtistAliases.derive,证据 = collector 的
     /// MusicBrainz 缓存 + 共享歌曲 id)与「英文歌名 → 中文歌名」(EnrichTitleAliases.derive,证据 = 同歌曲
     /// id / 时长 + 歌词)。歌手表先推、歌名表按新歌手表分桶 —— 两张表之间有依赖,必须一起算。
@@ -665,6 +843,8 @@ public enum EnrichCacheReader {
             cachedEntries = nil
             cachedCoverIndex = nil
             cachedLooseIndex = nil
+            cachedEntryIndex = nil
+            cachedResolvedKeyIndex = nil
             cachedAliasTables = nil; aliasTablesGeneration += 1
             return
         }
@@ -694,6 +874,8 @@ public enum EnrichCacheReader {
             cachedEntries = nil
             cachedCoverIndex = nil
             cachedLooseIndex = nil
+            cachedEntryIndex = nil
+            cachedResolvedKeyIndex = nil
             cachedAliasTables = nil; aliasTablesGeneration += 1
             return
         }
@@ -730,6 +912,8 @@ public enum EnrichCacheReader {
         cachedEntries = entries
         cachedCoverIndex = nil  // 内容换了,派生索引跟着作废,下次要用时按新内容重建
         cachedLooseIndex = nil
+        cachedEntryIndex = nil
+        cachedResolvedKeyIndex = nil
         cachedAliasTables = nil; aliasTablesGeneration += 1
         if notify { onContentAdopted?() }
     }
@@ -753,6 +937,8 @@ public enum EnrichCacheReader {
                 cachedEntries = nil
                 cachedCoverIndex = nil
                 cachedLooseIndex = nil
+                cachedEntryIndex = nil
+                cachedResolvedKeyIndex = nil
                 cachedAliasTables = nil; aliasTablesGeneration += 1
             }
         }
