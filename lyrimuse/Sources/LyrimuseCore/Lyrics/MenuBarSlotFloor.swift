@@ -33,6 +33,13 @@ public struct MenuBarSlotFloor: Sendable, Equatable {
     /// Indicates whether the floor was reset due to a track transition during the last call.
     public private(set) var didResetOnLastCall = false
 
+    /// Explicitly resets the floor value and track key.
+    public mutating func reset() {
+        trackKey = nil
+        floor = 0
+        didResetOnLastCall = true
+    }
+
     /// Current floor value (0 if uninitialized).
     public var currentFloor: CGFloat { floor }
 }

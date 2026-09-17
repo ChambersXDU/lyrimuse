@@ -640,17 +640,19 @@ final class MenuBarStatusItem: NSObject {
                 logger.debug("slot rebuild deferred \(delay, privacy: .public)s: \(self.displayClass, privacy: .public) -> \(cls, privacy: .public)(\(length, privacy: .public))")
                 // 推迟的只是**几何**,内容不等:目标是图标就把图标画进还没变的槽里;
                 // 目标是歌词就按当前槽宽先画一版过渡。
+                var nextWake = delay
                 if let button = statusItem?.button {
                     if cls == "icon" {
                         let heldFor = collapseObserveBegan.map { now.timeIntervalSince($0) } ?? .infinity
                         if heldFor >= Self.iconContentHoldSecs { render(button) }
+                        else { nextWake = min(delay, max(0.01, Self.iconContentHoldSecs - heldFor)) }
                     } else {
                         interim?(button)
                     }
                 }
                 let work = DispatchWorkItem { [weak self] in self?.refresh() }
                 pendingRefresh = work
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.05, execute: work)
+                DispatchQueue.main.asyncAfter(deadline: .now() + nextWake + 0.05, execute: work)
                 return
             }
         }

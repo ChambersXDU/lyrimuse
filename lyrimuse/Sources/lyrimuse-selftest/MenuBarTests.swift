@@ -1089,11 +1089,7 @@ func runMenuBarTests() {
         }
     }
 
-    // ---- 离开图标槽前先让行落定(2026-09-16,查「句中重建」查出来的)----
-    //
-    // 边界(图标槽 ↔ 歌词槽)上,播放状态和歌词引擎是两条链路:前者一变 refresh() 立刻跑,
-    // 后者要等 20Hz fastTick 下一拍。实测那次抢跑只差 **17ms**,却让正确的宽度推迟 2.97s
-    // 才落地、正好落在句中,还会级联(推迟落地把节流起点往后拖,连累后面本来合格的几次)。
+    // ---- 菜单栏状态项防抖与落定窗口 (upstream 761df776) ----
     do {
         let item = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -1103,46 +1099,36 @@ func runMenuBarTests() {
                         "落定窗: 120ms ≈ fastTick 两拍多(实测抢跑只差 17ms / 46ms)")
             expectEqual(text.contains("displayClass == \"icon\" || targetIsProvisional"), true,
                         "落定窗: 两处赛跑都盖住 —— 离开图标槽 + 目标还不作数(占位)")
-            // 换歌那一下:「♪ 歌名」占位先按自己的宽建一次,22ms 后下一句的宽才知道,
-            // 于是第二次撞进节流窗、3 秒后才跳到位(实测 21:49:01 → 21:49:04)。
-            // 占位内容同样等落定窗,就只建一次。
+            // 换歌过渡阶段目标尚未稳定，等待落定窗口避免多余重建。
             expectEqual(text.contains("let provisional = placeholderNow || slotFloor.didResetOnLastCall"), true,
                         "落定窗: 占位内容**和换歌重置**都算「目标还不作数」")
             let provisional = text.components(separatedBy: "targetIsProvisional: provisional").count - 1
             expectEqual(provisional, 2, "落定窗: 自适应那两条 present 调用都传了,实际 \(provisional)")
-            // ⚠️ 窗口一旦开了就得粘住:开窗那一拍目标不作数,下一拍往往已经作数,
-            // 只看当拍的 provisional 会让窗口第二拍就失效、立刻建一次 = 等于没等。
-            // 实测那一幕:14.980 建、14.996 开窗、15.132 就又建了。
+            // 粘性落定窗口开启后在窗口期内保持生效。
             expectEqual(text.contains("let settleOpen = iconExitSettleBegan != nil"), true,
                         "落定窗: 开了就粘住,不看当拍的 provisional")
             expectEqual(text.contains("|| targetIsProvisional || settleOpen"), true,
                         "落定窗: 粘性条件接进判据")
-            // ⚠️ 收进图标槽那条**不许**也标成 provisional —— 它有自己的收缩观察窗,
-            // 两个窗叠上去会让"暂停后多久收回图标"变得没法解释。
+            // 图标槽几何释放具备独立的延迟窗口，不重叠落定窗。
             expectEqual(text.contains("collapseDelay: settings.showLyricsInMenuBar ? Self.slotReleaseSecs : 0,\n                    targetIsProvisional"), false,
                         "落定窗(反例): 图标那条不叠落定窗")
-            // 固定窗,不因目标变化重新计时 —— 重新计时的话目标一直在变就永远建不出来。
+            // 落定窗口基于既有起点单调递减，防止频繁重置导致饿死。
             expectEqual(text.contains("let began = iconExitSettleBegan ?? now"), true,
                         "落定窗(反例): 起点取既有值,不是每次调用都重置")
             expectEqual(text.contains("iconExitSettleBegan = now\n"), false,
                         "落定窗(反例): 不许写成无条件重置起点(那会饿死,目标一变就永远到不了点)")
-            // ⚠️ 记录一条**被否掉的**修法:把 lastRebuildAt 改成「原本该重建的时刻」。
-            // 那样两次**真实重建**就可能落在 3 秒以内,而 3 秒静默窗存在的唯一理由正是
-            // 「两次重建相隔 ~1s 会把邻居像素晾在旧位置且不自愈」那个 AppKit bug
-            // (见 present 头注铁律 2)。为了修抖动去捅那个洞不划算,何况落定窗修好之后
-            // 那次多余的重建根本不会发生,级联自然消失。
+            // 静默窗口起点基于实际执行时刻。
             expectEqual(text.contains("lastRebuildAt = Date()"), true,
                         "静默窗起点仍是**执行时刻**(别改成「原本该重建的时刻」,见此处注释)")
+            // 内容保持期在几何释放前提前唤醒重绘图标。
+            expectEqual(text.contains("min(delay, max(0.01, Self.iconContentHoldSecs - heldFor))"), true,
+                        "内容保持: 图标保持期内提前唤醒刷新,不硬等几何释放")
         } else {
             expectEqual(true, false, "落定窗: 读不到 MenuBarStatusItem.swift(路径挪了?)")
         }
     }
 
-    // ---- 同一首歌内只涨不缩(2026-09-16,用户要「视觉效果也要好,不能跳来跳去」)----
-    //
-    // 自适应模式每次槽宽变化都是一次整项重建、左边所有图标跟着挪一次。实测 25 分钟仍有 94 次
-    // 放行(平均 16 秒一次),而且方向来回摆 —— 抓到过 106.1 → 113.1 → 106.1 三秒内一个来回。
-    // 只涨不缩之后「缩了又扩」从根上不存在,重建只剩"出现了更长的句子"那几次,永远同一个方向。
+    // ---- 同曲目单调槽宽地板 (MenuBarSlotFloor, upstream 761df776) ----
     do {
         typealias F = MenuBarSlotFloor
         var f = F()
@@ -1150,7 +1136,7 @@ func runMenuBarTests() {
         expectEqual(f.width(target: 80, trackKey: "A"), 100, "地板: 同曲内更窄的句子不缩")
         expectEqual(f.width(target: 130, trackKey: "A"), 130, "地板: 更宽就涨")
         expectEqual(f.width(target: 90, trackKey: "A"), 130, "地板: 涨上去之后仍然不缩")
-        // 这一条正是实测抓到的那个乒乓:106 → 113 → 106,改后第三步不再重建。
+        // 目标宽变化为更小值时不缩回。
         var pingpong = F()
         _ = pingpong.width(target: 106.1, trackKey: "S")
         _ = pingpong.width(target: 113.1, trackKey: "S")
@@ -1160,8 +1146,7 @@ func runMenuBarTests() {
         expectEqual(f.width(target: 70, trackKey: "B"), 70, "地板: 换歌重置成新歌第一句的宽")
         expectEqual(f.width(target: 60, trackKey: "B"), 70, "地板: 新歌内照样只涨不缩")
         expectEqual(f.currentFloor, 70, "地板: currentFloor 跟得上")
-        // 换歌那一刻的目标是过渡值(currentLineIndex 已清空、currentLine 还停在旧值),
-        // 所以地板要把「这次是重置」报出来,让调用方等一个落定窗再建。
+        // 换歌首句报告重置状态以通知上层落定。
         var r = F()
         _ = r.width(target: 100, trackKey: "X")
         expectEqual(r.didResetOnLastCall, true, "地板: 第一次(没有历史)也算重置")
@@ -1171,14 +1156,21 @@ func runMenuBarTests() {
         expectEqual(r.didResetOnLastCall, false, "地板: 同曲内被地板挡住也不算重置")
         _ = r.width(target: 90, trackKey: "Y")
         expectEqual(r.didResetOnLastCall, true, "地板: 换歌才算重置")
-        // ⚠️ 重置判的是**换歌**不是换行:同一首歌里任何时候都不缩,包括间奏 / 暂停回来 /
-        // 「♪ 歌名」占位 —— 那几档正是老写法里"缩了又扩"的来源。
+        // 同曲目内暂停与间隙不缩减槽宽。
         var gap = F()
         _ = gap.width(target: 150, trackKey: "T")
         expectEqual(gap.width(target: 38.5, trackKey: "T"), 150,
                     "地板: 同曲内即使目标缩到图标宽也不缩(暂停/间隙期间零重建的依据)")
 
-        // 接线契约:只套在**自适应**那条分支上,固定宽度模式的槽宽本来就是常量。
+        // 显式重置 API
+        var resetFloor = F()
+        _ = resetFloor.width(target: 120, trackKey: "T")
+        expectEqual(resetFloor.currentFloor, 120, "地板: 初始设定")
+        resetFloor.reset()
+        expectEqual(resetFloor.currentFloor, 0, "地板: 显式重置后 floor 归零")
+        expectEqual(resetFloor.didResetOnLastCall, true, "地板: 显式重置后 didResetOnLastCall 为真")
+
+        // 接线契约: 自适应宽度模式接入 slotFloor。
         let item = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/lyrimuse/MenuBar/MenuBarStatusItem.swift")

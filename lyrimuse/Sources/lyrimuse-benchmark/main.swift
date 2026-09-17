@@ -152,7 +152,7 @@ struct MenuBarStabilityBenchmark {
         var currentTrack: String = ""
         var totalRebuilds = 0
         var withinSongShrinks = 0
-        let fakePauseCollapses = 0
+        var fakePauseCollapses = 0
         var history: [CGFloat] = []
 
         for e in events {
@@ -161,12 +161,14 @@ struct MenuBarStabilityBenchmark {
             if isNewTrack { currentTrack = trackKey }
 
             if e.isPause {
-                // Geometry holds for 8.0s (slotReleaseSecs)
+                // Geometry holds for 8.0s (slotReleaseSecs upstream 761df776)
                 if e.pauseDuration >= 8.0 {
                     if currentLength != 38.0 {
                         currentLength = 38.0
                         totalRebuilds += 1
                     }
+                } else if currentLength == 38.0 && !history.isEmpty && (history.last ?? 38.0) > 38.0 {
+                    fakePauseCollapses += 1
                 }
             } else {
                 let target = floor.width(target: e.lineLength, trackKey: trackKey)
