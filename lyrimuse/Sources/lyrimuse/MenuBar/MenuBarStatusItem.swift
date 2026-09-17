@@ -442,6 +442,12 @@ final class MenuBarStatusItem: NSObject {
     /// 两次重建之间的最小静默间隔,兼作歌词间隙的收缩观察窗(见 present 头注)。
     /// 卡死的那次实测两发相隔 1.1s,取 3s 留余量。
     private static let rebuildQuietSecs: TimeInterval = 3
+    /// Delay before releasing the status bar slot width geometry (upstream 761df776).
+    private static let slotReleaseSecs: TimeInterval = 8
+    /// Duration to hold previous lyrics content before switching to the icon (upstream 761df776).
+    private static let iconContentHoldSecs: TimeInterval = 3
+    /// Settle duration before rebuilding the status item when leaving the icon slot or handling provisional targets.
+    private static let iconExitSettleSecs: TimeInterval = 0.12
     private var lastRebuildAt = Date.distantPast
     private var pendingRefresh: DispatchWorkItem?
 
@@ -465,6 +471,10 @@ final class MenuBarStatusItem: NSObject {
     /// 顺延 —— 暂停后槽永远缩不回去(实现当天差点带着这个 bug 部署)。
     /// 目标不再是收缩(歌词回来了 / 几何已一致 / 用户手动关开关)时清零。
     private var collapseObserveBegan: Date?
+    /// Start timestamp of the settle window when exiting the icon slot or during provisional targets (upstream 761df776).
+    private var iconExitSettleBegan: Date?
+    /// Per-song monotonic slot floor in adaptive mode to eliminate oscillation (upstream 761df776).
+    private var slotFloor = MenuBarSlotFloor()
 
     /// 把"形态 cls、槽宽 length、内容 render"呈现到状态栏上。macOS 26 菜单栏的两条
     /// 实测铁律(2026-08-19,六轮排查 AX 全图 + 像素截图坐实):
@@ -490,6 +500,7 @@ final class MenuBarStatusItem: NSObject {
     /// && category == "menubar-item"'` 能对出完整时间线。
     private func present(class cls: String, length: CGFloat, collapseDelay: TimeInterval,
                          dwellSeconds: TimeInterval? = nil,
+                         targetIsProvisional: Bool = false,
                          interim: ((NSStatusBarButton) -> Void)? = nil,
                          render: (NSStatusBarButton) -> Void) {
         // 每次都从最新状态重算目标,历史挂起的目标一律作废。
@@ -590,6 +601,26 @@ final class MenuBarStatusItem: NSObject {
             return
         }
 
+        let settleOpen = iconExitSettleBegan != nil
+        if statusItem != nil, displayClass == "icon" || targetIsProvisional || settleOpen,
+           lyricSlotClasses.contains(cls) {
+            let now = Date()
+            let began = iconExitSettleBegan ?? now
+            iconExitSettleBegan = began
+            let remaining = Self.iconExitSettleSecs - now.timeIntervalSince(began)
+            if remaining > 0 {
+                logger.debug("""
+                    slot icon-exit settling \(remaining, privacy: .public)s: \
+                    -> \(cls, privacy: .public)(\(length, privacy: .public))
+                    """)
+                let work = DispatchWorkItem { [weak self] in self?.refresh() }
+                pendingRefresh = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + remaining + 0.01, execute: work)
+                return
+            }
+        }
+        iconExitSettleBegan = nil
+
         if statusItem != nil {
             let now = Date()
             let observeRemaining: TimeInterval
@@ -607,15 +638,12 @@ final class MenuBarStatusItem: NSObject {
                 // 都走到,notice 级会让它逐句落盘。错位排查真正要对时间线的是"重建何时
                 // 执行"(下面那条,3s 至多一次,保持 notice);推迟细节要看时开 debug 采集。
                 logger.debug("slot rebuild deferred \(delay, privacy: .public)s: \(self.displayClass, privacy: .public) -> \(cls, privacy: .public)(\(length, privacy: .public))")
-                // 推迟的只是**几何**,内容不等(2026-08-19 用户反馈"3s 延迟之后歌词
-                // 有时不及时更新"——自适应模式逐句都是几何变化,内容跟着几何一起等
-                // 就是逐句都可能晚 3s):目标是图标就把图标画进还没变的槽里(图标在
-                // 任意槽宽下都居中,见 showIcon);目标是歌词就按**当前槽宽**先画一版
-                // 过渡(interim,装得下居中静止、装不下就地滚),槽宽跟上后 refresh
-                // 会按目标重画。
+                // 推迟的只是**几何**,内容不等:目标是图标就把图标画进还没变的槽里;
+                // 目标是歌词就按当前槽宽先画一版过渡。
                 if let button = statusItem?.button {
                     if cls == "icon" {
-                        render(button)
+                        let heldFor = collapseObserveBegan.map { now.timeIntervalSince($0) } ?? .infinity
+                        if heldFor >= Self.iconContentHoldSecs { render(button) }
                     } else {
                         interim?(button)
                     }
@@ -1021,7 +1049,7 @@ final class MenuBarStatusItem: NSObject {
         guard settings.showLyricsInMenuBar, lyricsActive else {
             let iconWidth = MenuBarIconStyle.cachedImage(for: settings.menuBarIconStyle).size.width
             present(class: "icon", length: iconWidth + Self.fixedSlotPadding,
-                    collapseDelay: settings.showLyricsInMenuBar ? Self.rebuildQuietSecs : 0) {
+                    collapseDelay: settings.showLyricsInMenuBar ? Self.slotReleaseSecs : 0) {
                 showIcon($0)
             }
             return
@@ -1063,7 +1091,10 @@ final class MenuBarStatusItem: NSObject {
             let textW = MenuBarSlotPolicy.slotWidth(
                 naturalWidth: naturalW, upcomingWidth: upcomingW,
                 isPlaceholder: placeholderNow, maxWidth: settings.menuBarLyricsWidth)
-            let w = textW + reserved + Self.fixedSlotPadding
+            let w = slotFloor.width(
+                target: textW + reserved + Self.fixedSlotPadding,
+                trackKey: coordinator.title + "\u{1F}" + coordinator.artist)
+            let provisional = placeholderNow || slotFloor.didResetOnLastCall
             let fillPath = visible == text ? karaokeFillPath(for: text) : nil
             if fillPath != nil || icon != nil || rowState.twoRows {
                 // 逐字染色画不进 button.title(那条路是 AppKit 自绘的单色文字,没有图层
@@ -1073,14 +1104,14 @@ final class MenuBarStatusItem: NSObject {
                 // 半染色的图标同样塞不进 button.title/image 那条 AppKit 自绘的路。
                 // ⚠️ 2026-09-06 起**双排也走**:button.title 只能画一行。
                 present(class: "text", length: w, collapseDelay: 0,
-                        dwellSeconds: dwell,
+                        dwellSeconds: dwell, targetIsProvisional: provisional,
                         interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
                     showFixedWidth($0, text: text, windowWidth: textW,
                                    pacing: nil, fillPath: fillPath, icon: icon)
                 }
             } else {
                 present(class: "text", length: w, collapseDelay: 0,
-                        dwellSeconds: dwell,
+                        dwellSeconds: dwell, targetIsProvisional: provisional,
                         interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
                     showStaticText($0, visible: visible, full: text)
                 }
