@@ -446,7 +446,7 @@ final class MenuBarStatusItem: NSObject {
     private static let slotReleaseSecs: TimeInterval = 8
     /// Duration to hold previous lyrics content before switching to the icon (upstream 761df776).
     private static let iconContentHoldSecs: TimeInterval = 3
-    /// Settle duration before rebuilding the status item when leaving the icon slot or handling provisional targets.
+    /// Settle duration before rebuilding the status item when leaving the icon slot or handling provisional targets (upstream 761df776).
     private static let iconExitSettleSecs: TimeInterval = 0.12
     private var lastRebuildAt = Date.distantPast
     private var pendingRefresh: DispatchWorkItem?
@@ -569,6 +569,7 @@ final class MenuBarStatusItem: NSObject {
         }
         guard needsRebuild else {
             collapseObserveBegan = nil
+            iconExitSettleBegan = nil
             // 形态变了但没重建时也要把缓存键跟上:`displayClass` 还被 renderInterimLyrics、
             // 悬浮控件门控等处当"屏幕上现在是歌词槽还是图标槽"读(见那几处的 guard),停在
             // 旧值会误判。这里更新它只会让它更准 —— 上面那条 skipsResize 早退里刻意保留的

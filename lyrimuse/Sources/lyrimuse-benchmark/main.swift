@@ -146,7 +146,7 @@ struct MenuBarStabilityBenchmark {
     }
 
     /// Simulates production behavior using MenuBarSlotFloor & separated collapse delay (8s).
-    static func simulateOptimized(events: [Event]) -> SimulationResult {
+    static func simulateOptimized(events: [Event], slotReleaseSecs: TimeInterval = 8.0) -> SimulationResult {
         var floor = MenuBarSlotFloor()
         var currentLength: CGFloat = 38.0
         var currentTrack: String = ""
@@ -161,14 +161,15 @@ struct MenuBarStabilityBenchmark {
             if isNewTrack { currentTrack = trackKey }
 
             if e.isPause {
-                // Geometry holds for 8.0s (slotReleaseSecs upstream 761df776)
-                if e.pauseDuration >= 8.0 {
+                // Geometry holds for slotReleaseSecs (8.0s upstream 761df776)
+                if e.pauseDuration >= slotReleaseSecs {
                     if currentLength != 38.0 {
                         currentLength = 38.0
                         totalRebuilds += 1
+                        if e.pauseDuration < 8.0 {
+                            fakePauseCollapses += 1
+                        }
                     }
-                } else if currentLength == 38.0 && !history.isEmpty && (history.last ?? 38.0) > 38.0 {
-                    fakePauseCollapses += 1
                 }
             } else {
                 let target = floor.width(target: e.lineLength, trackKey: trackKey)
@@ -578,9 +579,14 @@ struct BenchmarkApp {
             overallPass: overallPass
         )
 
-        let reportPath = "/Users/cham/Codes/lyrimuse/docs/BENCHMARK_REPORT.md"
-        try? report.write(toFile: reportPath, atomically: true, encoding: .utf8)
-        print("\nRelease Qualification Report written to: \(reportPath)")
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // lyrimuse-benchmark
+            .deletingLastPathComponent() // Sources
+            .deletingLastPathComponent() // lyrimuse
+            .deletingLastPathComponent() // repo root
+        let reportURL = repoRoot.appendingPathComponent("docs/BENCHMARK_REPORT.md")
+        try? report.write(to: reportURL, atomically: true, encoding: .utf8)
+        print("\nRelease Qualification Report written to: \(reportURL.path)")
 
         exit(overallPass ? 0 : 1)
     }

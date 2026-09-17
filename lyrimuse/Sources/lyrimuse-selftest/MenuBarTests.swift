@@ -1050,29 +1050,22 @@ func runMenuBarTests() {
             expectEqual(text.contains("collapseDelay: settings.showLyricsInMenuBar ? Self.slotReleaseSecs : 0"), true,
                         "间隙不闪: 开关开着才给观察窗;用户手动关掉是明确意图,传 0 立刻收")
 
-            // ---- 内容 / 几何两个保持时长必须**拉开**(2026-09-16,issue #8 的正解)----
+            // ---- 内容保持与几何释放解耦 (upstream 761df776) ----
             //
-            // 实测媒体层会**凭空报假暂停**:`pause transition` 之后几秒又 `resume transition`,
-            // 而 resume 那行的 `delta` 显示播放位置按墙钟**照样前进了** = 音乐从头到尾没停过。
-            // 12 小时日志抓到 5 次:1.88 / 1.92 / 4.11 / 6.46 / 6.53 秒。
-            // 两个数共用 3 秒时,后三次必然「缩一次再弹回来」—— 那正是 issue #8 报的现象。
-            // 拉开之后:槽宽 8 秒不缩 → 恢复那一刻目标宽度跟原来相同 → needsRebuild 为假 →
-            // 整个假暂停期间**零重建**,邻居一个像素都不动。
+            // 媒体层偶发瞬态暂停 (1.9s~6.5s) 恢复后播放位置保持连续。
+            // 将几何释放推迟至 8.0s (slotReleaseSecs) 可使几何保持稳定，
+            // 避免频繁重建 status item 导致邻近菜单项抖动。
             expectEqual(text.contains("static let slotReleaseSecs: TimeInterval = 8"), true,
-                        "内容/几何分离: 槽宽保持 8s(覆盖实测最长那次假暂停 6.53s 还有余量)")
+                        "内容/几何分离: 槽宽几何保持 8s (upstream 761df776)")
             expectEqual(text.contains("static let iconContentHoldSecs: TimeInterval = 3"), true,
-                        "内容/几何分离: 内容仍按用户 2026-09-16 选的 3s 换成图标")
+                        "内容/几何分离: 图标内容保持 3s (upstream 761df776)")
             expectEqual(text.contains("heldFor >= Self.iconContentHoldSecs { render(button) }"), true,
                         "内容/几何分离: 画不画图标看「窗口已开多久」,不看 observeRemaining")
             expectEqual(text.contains("if observeRemaining <= 0 { render(button) }"), false,
                         "内容/几何分离(反例): 旧判据会让内容跟着几何一起等满 8s,真暂停要 8 秒才看到图标")
             expectEqual(text.contains("static let rebuildQuietSecs: TimeInterval = 3"), true,
                         "内容/几何分离: 重建静默节流仍是 3s(它管的是另一件事 —— 邻居重排)")
-            // 反例哨兵:判据一旦从 observeRemaining 滑成 delay,上面那条源码串就不在了,
-            // 而"无条件画图标"这个老形状也不许回来。
-            // ⚠️ 结束锚点必须**从起点之后**再找:2026-09-16 加「离开图标槽的落定窗」时,
-            // 那里也有一句 `let work = DispatchWorkItem`,而它在文件里排在前面 ——
-            // 不限定搜索范围的话 end < start,`text[start..<end]` 当场崩(实测)。
+            // 结束锚点限定在 delay 声明之后，避免匹配到前面的 settle window 闭包。
             if let start = text.range(of: "let delay = max(observeRemaining"),
                let end = text.range(of: "let work = DispatchWorkItem",
                                     range: start.upperBound..<text.endIndex) {
@@ -1096,7 +1089,7 @@ func runMenuBarTests() {
             .appendingPathComponent("Sources/lyrimuse/MenuBar/MenuBarStatusItem.swift")
         if let text = try? String(contentsOfFile: item.path, encoding: .utf8) {
             expectEqual(text.contains("static let iconExitSettleSecs: TimeInterval = 0.12"), true,
-                        "落定窗: 120ms ≈ fastTick 两拍多(实测抢跑只差 17ms / 46ms)")
+                        "落定窗: 120ms 覆盖离开图标槽与过渡态防抖窗口 (upstream 761df776)")
             expectEqual(text.contains("displayClass == \"icon\" || targetIsProvisional"), true,
                         "落定窗: 两处赛跑都盖住 —— 离开图标槽 + 目标还不作数(占位)")
             // 换歌过渡阶段目标尚未稳定，等待落定窗口避免多余重建。
@@ -1141,7 +1134,7 @@ func runMenuBarTests() {
         _ = pingpong.width(target: 106.1, trackKey: "S")
         _ = pingpong.width(target: 113.1, trackKey: "S")
         expectEqual(pingpong.width(target: 106.1, trackKey: "S"), 113.1,
-                    "地板: 实测那个 106→113→106 的来回,第三步不再改宽")
+                    "地板: 目标宽度反复振荡时维持最大宽度不缩减 (upstream 761df776)")
         // 换歌重置 —— 不继承上一首的地板,新歌按它自己的第一句定宽。
         expectEqual(f.width(target: 70, trackKey: "B"), 70, "地板: 换歌重置成新歌第一句的宽")
         expectEqual(f.width(target: 60, trackKey: "B"), 70, "地板: 新歌内照样只涨不缩")
@@ -1169,6 +1162,8 @@ func runMenuBarTests() {
         resetFloor.reset()
         expectEqual(resetFloor.currentFloor, 0, "地板: 显式重置后 floor 归零")
         expectEqual(resetFloor.didResetOnLastCall, true, "地板: 显式重置后 didResetOnLastCall 为真")
+        expectEqual(resetFloor.width(target: 95, trackKey: "T"), 95, "地板: 显式重置后同名曲目也按首句重新定宽")
+        expectEqual(resetFloor.didResetOnLastCall, true, "地板: 显式重置后首次定宽报告重置")
 
         // 接线契约: 自适应宽度模式接入 slotFloor。
         let item = URL(fileURLWithPath: #filePath)
