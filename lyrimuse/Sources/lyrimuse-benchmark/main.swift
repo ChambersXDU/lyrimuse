@@ -193,12 +193,14 @@ struct MenuBarStabilityBenchmark {
         )
     }
 
-    static func run() -> (naive: SimulationResult, optimized: SimulationResult, pass: Bool) {
+    static func run() -> (naive: SimulationResult, optimized: SimulationResult, regressionDetected: Bool, pass: Bool) {
         let events = generateSession()
         let naive = simulateNaive(events: events)
         let optimized = simulateOptimized(events: events)
-        let pass = (optimized.withinSongShrinks == 0) && (optimized.fakePauseCollapses == 0)
-        return (naive, optimized, pass)
+        let regressed = simulateOptimized(events: events, slotReleaseSecs: 3.0)
+        let regressionDetected = regressed.fakePauseCollapses > 0
+        let pass = (optimized.withinSongShrinks == 0) && (optimized.fakePauseCollapses == 0) && regressionDetected
+        return (naive, optimized, regressionDetected, pass)
     }
 }
 
@@ -285,7 +287,7 @@ struct SyncEngineBenchmark {
 
             // 1. Tick query resolution
             let resolution = engine.tickQuery(atMs: simulatedTimeMs)
-            let activeLine = engine.activeLine(atMs: simulatedTimeMs)
+            let activeLine = engine.currentLine(at: simulatedTimeMs)
 
             // 2. Karaoke progress evaluation
             if let words = activeLine?.words {
@@ -514,7 +516,7 @@ struct BenchmarkApp {
 
         // 1. Menu Bar Stability Benchmark
         print("▶ Running Benchmark 1: Menu Bar Slot Stability & Anti-Jitter...")
-        let (naiveStability, optStability, stabilityPass) = MenuBarStabilityBenchmark.run()
+        let (naiveStability, optStability, regressionDetected, stabilityPass) = MenuBarStabilityBenchmark.run()
         if !stabilityPass { overallPass = false }
 
         print("  • Events Simulated:          \(optStability.totalEvents)")
@@ -522,6 +524,7 @@ struct BenchmarkApp {
         print("  • Optimized Rebuilds:        \(optStability.totalRebuilds) (reduction: \(String(format: "%.1f%%", Double(naiveStability.totalRebuilds - optStability.totalRebuilds) / Double(naiveStability.totalRebuilds) * 100)))")
         print("  • Within-Song Shrinks:       \(optStability.withinSongShrinks) (target: 0) -> [\(optStability.withinSongShrinks == 0 ? "PASS" : "FAIL")]")
         print("  • Fake Pause Collapses:      \(optStability.fakePauseCollapses) (target: 0) -> [\(optStability.fakePauseCollapses == 0 ? "PASS" : "FAIL")]")
+        print("  • Regression Sensitivity:    \(regressionDetected ? "Active (verified under naive 3.0s)" : "Inactive") -> [\(regressionDetected ? "PASS" : "FAIL")]")
         print("  • Slot Stability Status:     [\(stabilityPass ? "QUALIFIED" : "DISQUALIFIED")]\n")
 
         // 2. Sync Engine Tick Latency Benchmark

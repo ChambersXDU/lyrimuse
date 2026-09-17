@@ -1165,6 +1165,11 @@ func runMenuBarTests() {
         expectEqual(resetFloor.width(target: 95, trackKey: "T"), 95, "地板: 显式重置后同名曲目也按首句重新定宽")
         expectEqual(resetFloor.didResetOnLastCall, true, "地板: 显式重置后首次定宽报告重置")
 
+        // 异常数值防护: 负数与 NaN 目标宽度安全防御
+        var safeFloor = F()
+        expectEqual(safeFloor.width(target: -20, trackKey: "N"), 0, "地板: 负数目标宽度钳制为 0")
+        expectEqual(safeFloor.width(target: .nan, trackKey: "N"), 0, "地板: NaN 目标安全忽略")
+
         // 接线契约: 自适应宽度模式接入 slotFloor。
         let item = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

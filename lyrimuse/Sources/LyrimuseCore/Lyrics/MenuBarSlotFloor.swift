@@ -19,14 +19,16 @@ public struct MenuBarSlotFloor: Sendable, Equatable {
     /// When `trackKey` changes, resets floor to `target` and flags `didResetOnLastCall`.
     /// Otherwise, maintains monotonic expansion by returning `max(floor, target)`.
     public mutating func width(target: CGFloat, trackKey: String) -> CGFloat {
+        guard !target.isNaN else { return floor }
+        let clampedTarget = max(0, target)
         if trackKey != self.trackKey {
             self.trackKey = trackKey
-            floor = target
+            floor = clampedTarget
             didResetOnLastCall = true
         } else {
             didResetOnLastCall = false
         }
-        floor = max(floor, target)
+        floor = max(floor, clampedTarget)
         return floor
     }
 

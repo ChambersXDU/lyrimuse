@@ -1118,5 +1118,8 @@ func runSyncEngineTests() {
         let newLine = engine.activeLine(atMs: 2500)
         expectEqual(newLine?.plainText, "新歌曲第一行", "换歌作废: load 后同时间点获取到新曲内容")
         expectEqual(oldLine?.plainText != newLine?.plainText, true, "换歌作废: 不遗留旧歌缓存")
+
+        // 5. currentLine(at:) API 等价性校验 (upstream 761df776)
+        expectEqual(engine.currentLine(at: 2500)?.plainText, engine.activeLine(atMs: 2500)?.plainText, "currentLine(at:): 与 activeLine(atMs:) 查询结果一致")
     }
 }

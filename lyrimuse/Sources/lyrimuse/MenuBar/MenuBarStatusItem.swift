@@ -542,6 +542,7 @@ final class MenuBarStatusItem: NSObject {
             // observeRemaining 已经被算成 0,收缩当场就发生 —— 观察窗(专治"缩了又扩"
             // 那对重建)等于白设。
             collapseObserveBegan = nil
+            iconExitSettleBegan = nil
             // 内容照常实时画进当前这个(偏宽的)槽里 —— 收缩跳过的只是几何。
             interim(button)
             return

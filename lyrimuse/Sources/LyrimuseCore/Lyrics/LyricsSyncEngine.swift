@@ -1219,6 +1219,12 @@ public final class LyricsSyncEngine {
         lineAt(activeIndexCorrected(rawPosMs + effectiveOffsetMs))
     }
 
+    /// Queries the active lyric line at the specified millisecond position (upstream 761df776).
+    @inlinable
+    public func currentLine(at rawPosMs: Int) -> SyncedLyricLine? {
+        activeLine(atMs: rawPosMs)
+    }
+
     /// activeLine 的按下标查询本体。
     private func lineAt(_ idx: Int) -> SyncedLyricLine? {
         if idx == cachedActiveIdx { return cachedActiveLine }

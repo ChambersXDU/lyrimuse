@@ -1,6 +1,6 @@
 # Lyrimuse Release Qualification & UX Benchmark Report
 
-**Date:** 2026-09-17T06:05:55Z
+**Date:** 2026-09-17T06:14:02Z
 **Status:** ✅ RELEASE QUALIFIED (All Invariants Passed)
 
 ## 1. Menu Bar Slot Stability & Anti-Jitter
@@ -24,8 +24,8 @@
 
 | Workload | Avg Latency | P50 Latency | P95 Latency | P99 Latency | Max Latency | Frame Drops | Target (< 0.2ms) |
 |---|---|---|---|---|---|---|---|
-| **20Hz Clock** (50ms interval) | 0.0050 ms | 0.0052 ms | 0.0055 ms | 0.0064 ms | 0.0857 ms | 0 | ✅ Passed |
-| **60Hz Clock** (16.67ms interval) | 0.0054 ms | 0.0053 ms | 0.0056 ms | 0.0081 ms | 0.1369 ms | 0 | ✅ Passed |
+| **20Hz Clock** (50ms interval) | 0.0051 ms | 0.0053 ms | 0.0054 ms | 0.0065 ms | 0.0260 ms | 0 | ✅ Passed |
+| **60Hz Clock** (16.67ms interval) | 0.0051 ms | 0.0052 ms | 0.0053 ms | 0.0057 ms | 0.0399 ms | 0 | ✅ Passed |
 
 ---
 
@@ -33,9 +33,9 @@
 
 | Tier | Strategy | Throughput | Avg Latency | P95 Latency | Max Latency | Match Accuracy | Status |
 |---|---|---|---|---|---|---|---|
-| **Tier 1** | Exact `artist\|title\|album` hash match | 41463 ops/s | 22.432 µs | 29.834 µs | 18253.458 µs | 100.00% | ✅ Passed |
-| **Tier 2** | Case / whitespace loose match | 28135 ops/s | 33.824 µs | 49.250 µs | 13756.625 µs | 100.00% | ✅ Passed |
-| **Tier 3** | Mismatched / empty album fallback | 26251 ops/s | 36.589 µs | 50.375 µs | 350.042 µs | 100.00% | ✅ Passed |
+| **Tier 1** | Exact `artist\|title\|album` hash match | 39138 ops/s | 23.605 µs | 30.833 µs | 30841.667 µs | 100.00% | ✅ Passed |
+| **Tier 2** | Case / whitespace loose match | 27727 ops/s | 34.426 µs | 46.750 µs | 21453.708 µs | 100.00% | ✅ Passed |
+| **Tier 3** | Mismatched / empty album fallback | 26589 ops/s | 36.156 µs | 49.958 µs | 332.125 µs | 100.00% | ✅ Passed |
 
 ---
 
