@@ -281,12 +281,9 @@ private final class LyricsWindowController: ObservableObject {
     /// 红绿灯默认位置(AppKit 坐标,标题栏容器内),首次 attach 时记录。
     private var trafficLightDefaultY: CGFloat?
     private var trafficLightDefaultXs: [NSWindow.ButtonType.RawValue: CGFloat] = [:]
-    /// 红绿灯下移量(2026-08-22 第二轮对拍,用户给的 AM 整窗参考图逐像素量出:红点
-    /// 中心 y=25.75pt,此前 22 仍偏高):默认中心窗内 16pt,下移 10 → 26pt,与右上
-    /// 胶囊行(offset −safeTop+10)同心。
+    /// 红绿灯下移量：默认中心 16pt，下移 10pt 至 26pt 与右上胶囊同心。
     private static let trafficLightDownshift: CGFloat = 10
-    /// 红点(close)目标中心 x(2026-08-21 第二轮:用户报"过于靠边",AM 整窗截图量出
-    /// 红点中心 x=25.8pt);整组随 close 平移,保留系统自己的按钮间距。
+    /// 红点(close)目标中心 x(26pt)，整组平移保持系统按钮间距。
     private static let trafficLightCloseCenterX: CGFloat = 26
     /// 系统每次标题栏布局都会把按钮拉回默认位,跟 collectionBehavior 一样要持续钉——
     /// 搭同一个 didUpdate 观察者的车,不等才写不自激。原生全屏中标题栏由系统全权
@@ -818,43 +815,13 @@ struct LyricsWindowView: View {
                     // 窗口动作胶囊在 AM 是左上 X/画中画那颗 —— 置顶/全屏挪去左上同位,
                     // 见下一个 overlay)。
                     //
-                    // 2026-08-25 用户报"停播页不该有这个音量胶囊"—— 这里原来没有 `!isIdle`
-                    // 判断,跟紧挨着的翻译键/歌词队列胶囊(下面那个 overlay 里
-                    // `if !isIdle`)不是同一套判据,是漏加的。根因不只是"忘了判":
-                    // `PlaybackCoordinator.soundVolume` 读的是 `LocalPlaybackSource.
-                    // lastResolvedBundleID`,而那个字段读的是 `lastSnapshot?.bundleIdentifier`
-                    // —— `lastSnapshot` **真正停播后也从不清空**(SettingsView.offsetScope
-                    // 那条注释也踩过同一个坑),所以就算歌词窗已经判定 isIdle=true、切进了
-                    // 「停播页」,`soundVolume` 依然吐着 Apple Music 最后一次播放时的音量值,
-                    // 胶囊因此照常渲染。不改底层那个"从不清空"的字段(它另有存在理由,
-                    // 见自身注释),只在这一个消费点上补上 isIdle 判断。
+                    // 仅在非停播态渲染音量胶囊，避免停播欢迎页残留上一曲音量。
                     if !isIdle {
                         WindowVolumeCapsule(onArtwork: hasArtworkBackground,
                                             showsOutputMenu: $showsOutputMenu,
                                             isExternalOutput: isExternalOutput)
-                        // 贴右缘 5pt(2026-08-22 第二轮对拍:AM 胶囊亮缘离窗缘 8px@2x,
-                        // 布局缘取 5 让亮缘落到同位)。
                         .padding(.trailing, 5)
-                        // ⚠️ 2026-08-22 用户实测报"拖音量键把窗口一起拖走"、两轮修复后仍在:
-                        // 根因是 hiddenTitleBar 窗口顶部那一段 safe-area 高度(geo.safeAreaInsets.top,
-                        // 与真实 NSTitlebarContainerView 等高)在系统层面**无条件**认领拖动 ——
-                        // 不是 isMovableByWindowBackground,也不是"谁的 mouseDownCanMoveWindow
-                        // 返回什么":实测挂 NSViewRepresentable 覆写 mouseDownCanMoveWindow、
-                        // 直接 addSubview 到 contentView 绕开 SwiftUI 树、自定义 NSWindow 子类
-                        // 覆写 sendEvent 整段吞掉再手动转发、同步 nextEvent tracking loop(仿
-                        // NSControl 内部机制)——五种技术方案在独立 harness 里逐一验证,只要
-                        // 起手点的 y 落在这段区间内,拖动就会被 WindowServer 直接接管挪窗口,
-                        // 应用进程收到的 NSEvent 序列完全不受影响,没有任何应用层介入点。唯一
-                        // 能验证有效的办法是**不落在这段区间里**:同一批 harness 测试里,y 越过
-                        // 这段高度的那一刻,挪窗口行为不多不少精确消失。旁边的置顶/全屏/静音/
-                        // AirPlay 键不受影响,是因为它们是**点按**、没有拖动位移,与这条区间
-                        // 无关(纯点击不会被系统认作拖动手势,不管点在哪)。
-                        //
-                        // 因此**不再**做"减去 safeAreaInsets.top 再加 8 去对齐红绿灯"这套——
-                        // 那正是把胶囊往危险区间里怼。现在让胶囊留在 safe-area 自然让出的位置
-                        // (= 危险区间正下方)之后只再下移 8pt 留个观感缓冲,牺牲"与红绿灯同一行"
-                        // 的对齐(AM 参考图是这样,但那条约束与"拖动不能挪窗口"这条硬约束冲突,
-                        // 后者优先)。
+                        // 避免落入顶部 safe-area 触发系统级窗口拖动拦截，放置在 safe-area 正下方偏移 8pt。
                         .offset(y: 8)
                     }
                 }
@@ -1252,18 +1219,7 @@ struct LyricsWindowView: View {
     @ViewBuilder
     private func rightPane(leading: CGFloat, trailing: CGFloat) -> some View {
         if playback.isRadioTalkBreak {
-            // 口白期间不显示任何歌词(2026-09-11 用户报「电台曲和曲之间穿插口白的时候,歌词窗口
-            // 没有改过来,还是上一首歌的歌词」,附图:标题与封面都已经换成台名台标,只有这一栏还在
-            // 滚 Dolly Parton《Blue Smoke》)。
-            //
-            // ⚠️ 这道闸必须排在 `allLines.isEmpty` **之前**。09-11 第一轮只改了 emptyStateSpec,
-            // 那是「一行歌词都没有」时的占位 —— 而口白期间上一首的 allLines 原封不动地留着,
-            // 压根走不到空状态,所以那次改动在这个展示面上等于没做。灵动岛 / 悬浮窗只显示"当前这一行",
-            // 各自的 isRadioTalkBreak 分支天然盖住了;只有这里是整段列表,得单独挡。
-            //
-            // 复用 emptyState:它的文案与图标本来就由 emptyStateSpec 按同一个判据给出「口白」+
-            // `dot.radiowaves.left.and.right`,不另写一套。纯文本兜底(plainLyricsFallback)一并挡掉 ——
-            // 那同样是上一首的词。
+            // 口白期间不显示任何歌词，展示占位空状态，优先于歌词列表渲染。
             emptyState
         } else if playback.allLines.isEmpty {
             // 没有能同步显示的版本,但用户在「搜索候选歌词」里采纳过一条纯文本兜底
@@ -1567,14 +1523,7 @@ struct LyricsWindowView: View {
             // 放不下就滚,不再直接截断成 "Automatic (Remastered 20…" —— 这两行是这一栏
             // 唯一说明"现在放的是哪一版"的地方,截掉的恰好是版本后缀。
             // 显式给行高:MarqueeText 内部是 GeometryReader,纵向贪心,不定高会把整栏撑开。
-            // 广告插播:歌名位写「广告中」,跟灵动岛(NotchLyricsView)和下面歌词区的空状态
-            // (emptyStateSpec)用同一个判据、同一句文案。2026-08-19 用户报的就是这里 ——
-            // 那两处早就处理了,只有这一行还在原样显示 Spotify 给的占位标题「—」,配上没有
-            // 封面的占位图,整张卡看起来像是坏了。
-            //
-            // ⚠️ MarqueeText 的 id 必须用**显示串**而不是 playback.title:切进/切出广告时要
-            // 重置跑马灯,用原标题的话 id 不变、滚动位置会带着上一条的进度(灵动岛那边
-            // 同一个理由,见 NotchLyricsView 那段注释)。
+            // 广告插播状态下标题显示「广告中」，id 绑定显示串以在状态切换时及时重置跑马灯进度。
             MarqueeText(id: displayTitle) {
                 Text(displayTitle)
                     .font(.system(size: 17, weight: .semibold))
@@ -1607,12 +1556,7 @@ struct LyricsWindowView: View {
                 .buttonStyle(.plain)
                 .help(L10n.t(favorited ? "取消喜欢" : "喜欢"))
             }
-            // 2026-08-21 从系统 Menu 换成自绘面板(moreMenuPanel,窗级 overlay 定位),
-            // 一次解决三件事:① 样式对齐 AM(深色玻璃圆角白字,系统 NSMenu 是浅色小面板,
-            // 用户对照截图要求换);② 热区 —— Menu(.borderlessButton) 的实际可点范围只有
-            // label 固有尺寸那一点(用户报"只有点按钮中心才有效"),普通 Button + circleIcon
-            // 的 contentShape(Circle()) 整圆都是热区,跟星星一致;③ 永久摆脱 Menu 压平
-            // 自定义 label 的机制(圆底/白点两轮翻车,见 docs 已知坑 11)。
+            // 自绘更多面板，支持整圆热区交互与风格统一。
             Button {
                 withAnimation(.easeOut(duration: 0.12)) { showsMoreMenu.toggle() }
             } label: {
@@ -2649,24 +2593,10 @@ struct LyricsWindowView: View {
                     + PlaybackCoordinator.shared.currentLyricsOffsetMs
                 let span = max(1, marker.endMs - marker.startMs)
                 let progress = min(1, max(0, Double(pos - marker.startMs) / Double(span)))
-                // 呼吸(2026-08-23 第三次修正,真机对拍 AM 后订正节奏):AM 的三点是
-                // **整体同步**放大缩小——同一帧一起到最大、同一帧一起到最小,不是错峰的
-                // 打字提示器波浪(第一版猜错方向);**暂停播放时呼吸整个冻结**,不是独立
-                // 于播放进度的 wall-clock 循环,所以共享同一个由 `pos`(跟点亮进度同一套
-                // 外推时间基准,暂停时天然冻结)算出来的值,不再各开一份 State/Animation——
-                // 共享同一个数就是同步本身。周期 7~8 秒是拿时间戳标定连拍量出来的,且不是
-                // 匀速正弦:约 44% 的周期停在小尺寸附近几乎不怎么变,鼓到最大再落回去只占
-                // 中间那一小段,是"停留久、鼓得快"的心跳感,不是均匀呼吸。用 raised-cosine
-                // 的平方去逼近这个"多数时间贴地、中段快速隆起"的形状(指数越大,贴在低点的
-                // 时间占比越大)。振幅原为对称 ±28%(阈值化的像素计数本来就会低估真实边缘的
-                // 缩放量),2026-08-27 改成不对称的 0.90~1.28,理由见下面 breathe 那行注释。
+                // 间奏圆点呼吸动画：三点同步非对称缩放(周期 7s，振幅 0.90~1.28)，暂停时随时间轴冻结。
                 let breathePeriodMs = 7000.0
                 let breathePhase = Double(pos).truncatingRemainder(dividingBy: breathePeriodMs) / breathePeriodMs
                 let breatheRaised = pow(0.5 - 0.5 * cos(2 * .pi * breathePhase), 2)
-                // 2026-08-27 用户反馈"最小的状态太小了,最大状态不变"——原来振幅是对称的
-                // ±28%(0.72~1.28),现在只抬最低点、封顶仍然钉在 1.28 不动:0.90~1.28。
-                // 呼吸曲线本身(raised-cosine 平方、周期 7s)和最大值都没变,只是把停留最久
-                // 的那段"贴地"抬高了一截,原来在这个尺寸的点几乎看不清是个圆。
                 let breathe = reduceMotion ? 1 : 0.90 + 0.38 * breatheRaised
                 HStack(spacing: lyricFontSize * 0.3) {
                     ForEach(0 ..< 3, id: \.self) { i in
@@ -3026,34 +2956,21 @@ private struct LyricsLineRow: View, Equatable {
         }
     }
 
-    /// 这一行能不能把罗马音标到每个词底下:开着「显示罗马音」且引擎给这一行分出了词组
-    /// (日文靠分词器、中文/粤语靠字数对音节数,见 LyricsOverlayView 同名属性)。
-    /// **不看 isActive**(2026-09-10):非当前行同样逐词标。原来只给当前行逐词、其它行退回
-    /// 正文下方一整行罗马音,用户报「当前行的罗马音在对应的字底下没问题,滚到上面之后位置就
-    /// 重置了,对不上了」—— 同一句话唱完往上一滚读音就换一种排法,是把行与行之间的"景深"
-    /// 差异做成了"内容"差异。见 07 章决策 #21。
+    /// 这一行能不能把罗马音标到每个词底下:开着「显示罗马音」且引擎给这一行分出了词组。
+    /// 不论是否为当前行均逐词标注，保证滚动时行内排版稳定。
     private var usesPerWordRomanization: Bool {
         showRomanization && item.line.wordGroups?.isEmpty == false
             && item.line.words != nil
     }
 
-    // Apple Music 歌词页的景深(2026-08-21 第五版:不再目测,直接从 AM 截图**拟合**)。
-    // 方法:AM 整窗截图里同一句「无敌铁金刚」出现在 d0/d1/d2/d3 多个距离上,同文行的
-    // 墨量总和(∑亮度-背景)是高斯模糊的不变量,比值就是不透明度;特写图里再拿 d0 行
-    // 人工加 σ 扫描去逐像素拟合各距离行,解出每档的 σ。
-    // 量出:α d1≈0.42、d2≈0.41、d3≈0.28、d4≈0.23 —— 近两档几乎不衰减,d3 起掉得快。
+    // Apple Music 歌词景深的不透明度曲线：距离 d=0 时为 1.0，近距离行略微衰减，d≥3 后快速降低。
     private var lineOpacity: Double {
         guard let d = distance else { return 0.45 }
         if d == 0 { return 1 }
         return max(0.22, 0.42 - 0.10 * Double(max(0, d - 2)))
     }
 
-    // 模糊量:同一次拟合解出 σ(d1)=3.0px、σ(d2)=4.5px、σ(d4)=7.5px —— 严格线性
-    // σ = 1.5×(d+1)px,除以字号 101px 得 **0.0148×(d+1) 字号**(d1≈3%、d4≈7.4%,
-    // distance 本身封顶 4,不需要另设上限)。历史:08-04 固定 1.6pt/行"远行失真"→
-    // 1.1pt/行"不够糊"→ 08-21 按特写目测 9%/22%"太糊"→ 回收 6%/15%"还是有点糊"
-    // ——前四版都在猜,这版是从截图解出来的,d1 比 6% 那版整整轻一半。
-    // SwiftUI 的 .blur() 本身是可动画属性,复用调用点已有的 .animation(value: distance)。
+    // 景深模糊量：随距离 d 线性增长为 0.0148 * (d + 1) * fontSize。
     private var lineBlur: CGFloat {
         guard let d = distance else { return fontSize * 0.03 }
         if d == 0 { return 0 }
@@ -3133,21 +3050,12 @@ private struct LyricsLineRow: View, Equatable {
         // 有封面背景时这个"同色"是白色;没有封面时退回系统 .primary(白字在浅色外观的
         // 默认窗口背景上不可读,正确性优先),远近区分交给 lineOpacity。
         let base: Color = onArtwork ? .white : .primary
-        // 有逐字时间轴的行**不论活跃与否都走 KaraokeLineText**(2026-08-21):原来非活跃走
-        // 单个 Text、激活瞬间整棵子树换成 WrapLayout+逐词结构,SwiftUI 对结构替换只能淡出
-        // 淡入,叠上行级 blur/opacity 动画,观感就是用户报的"新行有一个虚化重新构建的
-        // 过程"(纯行级歌词两个状态都是 Text,没这问题——正好解释"有时候")。统一结构后
-        // 只有参数在变,无替换。非活跃行:词强制全填色(视觉=原来的全色 Text)、粗/细时钟
-        // 全停、字不上浮 —— 静态成本只是"多几个 Text + 一次 WrapLayout 布局",没有逐帧
-        // 失效(性能红线见 KaraokeLineText.body 的实测记录)。
-        // 逐词读音(groups)也**不论活跃与否**都挂(2026-09-10,决策 #21):2026-08-21 统一
-        // 结构时曾把它留作例外("非活跃行渲染读音占位会撑高行高"),但开着罗马音的非活跃
-        // 行本来就在下面另画一整行读音,占位早就在;留这个例外只换来"当前行逐词、一滚上去
-        // 就变回整行"的排法跳变(用户报"位置重置了、对不上了"),以及激活瞬间一次真正的
-        // 结构替换(WrapLayout+整行 Text ↔ 带读音的 WrapLayout)—— 正是统一结构想消灭的。
+        // 逐字歌词行不论是否活跃均采用统一的 KaraokeLineText，消除激活瞬间整树替换导致的重构闪烁。
+        // 非活跃行定格全填色、粗/细时钟全停、字不上浮。
         if let words = item.line.words {
             KaraokeLineText(
                 words: words,
+                plainText: item.line.plainText ?? "",
                 groups: usesPerWordRomanization ? item.line.wordGroups : nil,
                 base: base,
                 isActive: isActive,
@@ -3167,55 +3075,31 @@ private struct LyricsLineRow: View, Equatable {
     }
 }
 
-// 当前行的逐字填色。
-//
-// ---- 驱动方式的定稿(2026-08-21 五轮,别再翻烧饼)----
-//
-// 逐帧重算(TimelineView 叶子时钟)是**实测后的终点**,不是没试过更"先进"的:同日第三轮
-// 性能架构曾整体改成排程式(fillFraction 对时间线性 → 一次性排 .linear 显式动画交给
-// 渲染管线插值,这类歌词渲染的常规架构),CPU 上确实是零逐帧代码 —— 但 SCK 逐帧探针实测
-// **macOS 只以 ~20Hz 提交这些动画**(系统对长时程慢动画自动降档,无 API 干预;对照组
-// 悬浮歌词的 TimelineView 30Hz 准点投递),20Hz×14px 的边缘步进正是用户报的"卡顿感"。
-// TimelineView 的频率受控、实测准点,所以回到逐帧重算,档位开到面板满刷新率
-// (WordKaraokeGradient.windowRefreshInterval = 60Hz)。
-//
-// 逐帧的开销结构此前两轮已经修到位(实测记录保留在此,别退回去):
-// * 08-14:TimelineView 包在 WrapLayout 外面=每帧重排版(主线程 91% 忙,67% 在
-//   LayoutEngineBox.sizeThatFits)→ 时钟下沉到**字级叶子**,布局每帧不再被推翻。
-// * 08-17:一行十几个相位不齐的满速字时钟并集盖满每个显示帧(85.8% 忙)→ 行级 4Hz
-//   粗时钟只判"哪个字正在扫",只有那个字保留满速细时钟。
-// * 08-20:WrapLayout contentKey 缓存(粗 tick 不再整行重测宽)、Palette 纯色渐变
-//   跨帧复用(静态词不再每 tick 重建 AnyShapeStyle)。
-// 排程式那轮真正留下的三个修复也都保留:①激活瞬间取值跳变被行级 .animation(value:)
-// 插值成"全亮再褪色"→ 叶子挂 .transaction 禁掉外来动画;②forceFilled 用 fraction=1.0
-// 走不到纯色快路径、右缘 band 段被淡到半强度 → 定格值 1+band;③上浮参数(幅度 0.05em、
-// 时长 min(词长,1000ms) —— 两头的取舍见 riseWindowMs 注释)。
+// 当前行的逐字填色渲染视图。
+// 架构要点：
+// 1. 采用 TimelineView 驱动逐帧细时钟(60Hz)保证平滑填色，粗时钟(4Hz)判定活跃词。
+// 2. WrapLayout contentKey 缓存避免布局阶段每帧重新测宽。
+// 3. 复用 pre-joined plainText，彻底消除每帧拼接字符串的内存分配开销。
 private struct KaraokeLineText: View {
     let words: [SyncedLyricWord]
+    let plainText: String
     let groups: [SyncedLyricWordGroup]?
     let base: Color
-    /// 是不是当前行(2026-08-21 统一结构):非活跃行也渲染这套 WrapLayout+逐词结构
-    /// (消灭激活瞬间的整树替换),但词强制全填色、粗/细时钟全停、字不上浮。
+    /// 是不是当前行: 非活跃行全填色、时钟全停、字不上浮。
     let isActive: Bool
     let isPlaying: Bool
-    /// 整行填色已定格(所有词/组越过过渡带)。true 时粗时钟停表、isLive 全灭,行尾/间奏/
-    /// 曲末不再重排版。⚠️ 必须同时喂给 isLive:只停粗时钟的话 isLive 会冻结在 true,最后
-    /// 一个字的细时钟反而在整段间奏/outro 永动。
+    /// 整行填色已定格: 停掉粗时钟与细时钟，行尾/间奏避免重排版。
     let fillSettled: Bool
     let fontSize: CGFloat
     let romaFontSize: CGFloat
     let reduceMotion: Bool
     let displayScale: CGFloat
-    /// 对唱分栏:换行时行内也要跟着靠左/靠右/居中,否则右侧那句折下来的第二行会飘回左边。
     var rowAlignment: WrapLayout.RowAlignment = .leading
 
-    /// WrapLayout 的内容身份(2026-08-20 性能审计):行文本/字号/罗马音形态都没变时,
-    /// 布局回合跳过整行 CoreText 重新测宽(见 WrapLayout.Cache 守卫注释)。这里的
-    /// 字体是 .system(size:weight:.bold) 固定族,fontSize/romaFontSize 就是完整字体身份;
-    /// 文本身份用 words 拼接(低频:只在行内容/字号变化时走到)。
+    /// WrapLayout 的内容身份缓存键：基于 plainText 与字号，避免高频 CoreText 重测宽。
     private var lineLayoutKey: AnyHashable {
         AnyHashable(WindowLineKey(
-            text: words.map(\.text).joined(),
+            text: plainText,
             hasGroups: groups?.isEmpty == false,
             fontSize: fontSize,
             romaFontSize: romaFontSize))
@@ -3542,41 +3426,8 @@ private struct WindowProgressSection: View {
                         // 缩放窗口时 g.size.width 变了,而这次宽度变化恰好落在每秒一次的
                         // 动画事务里,于是整条也跟着平移。现在这两种情况都直接赋值、不补间。
                         //
-                        // ⚠️ 2026-08-17:这里原来是 `.frame(width: g.size.width * shownFraction)`,
-                        // 也就是让**布局属性**跟着每秒一次的线性补间走 —— 补间是按显示帧
-                        // 插值的,于是每一帧都要把整个 NSHostingView 重新布局一次。实测
-                        // (歌词窗口开着、正在播放)这一条就吃掉了主线程的一大半:
-                        //   双列(有这条进度条)61.4% 忙 / 单列(窄窗,播放器面板整块不显示)9.4% 忙
-                        // 改成整条满宽 + 只让**渲染变换**随进度走:变换不参与布局,补间
-                        // 只落在变换矩阵上。
-                        //
-                        // ⚠️ 但那一版的变换用的是 `.scaleEffect(x: f)`,还附了一句"视觉上
-                        // 等价:圆头被压成 x 半径 (h/2)·f 的椭圆,这么矮的条上看不出来"——
-                        // **那句是错的,而且就是用户报的 bug**(2026-08-22「进度条有时候
-                        // 变成方的,不是弧形」)。它只在 f 接近 1 时成立:横向缩放把圆头一起
-                        // 压扁,f 越小越扁,小到一定程度圆头直接没了、变成直角。离线渲染
-                        // 逐列量覆盖高度坐实(条高 48px,数字=该列有色行数,取右端 12 列):
-                        //   f=1.00 → 42,40,38,36,36,34,30,28,26,22,16,10   正常圆头
-                        //   f=0.50 → 48,48,46,46,44,42,40,38,34,30,24,14   已明显压扁
-                        //   f=0.02 → 48,48,48,48,48,48,48,48,48,48,48,48   纯矩形
-                        // 一首 3 分钟的歌播到 0:04 就是 f≈0.02,所以现象是"进度靠前时方、
-                        // 靠后才圆",不是随机 —— 别按"偶发"去找竞态。
-                        //
-                        // 现在改成 offset + clipShape:满宽胶囊整条**向左移出** (1-f)·w,
-                        // 外面再按固定的满宽胶囊裁一次。两端的圆各有出处 —— 左端来自
-                        // clipShape 那个胶囊的左圆头(裁剪框不随 f 动、只有内容在动),右端
-                        // 来自填充自己的右圆头(被 offset 平移到 f·w 处)。圆头形状因此跟 f
-                        // 完全无关:同一份离线测量里 f 从 0.02 到 1.00,右端剖面恒为
-                        // 42,40,38,36,36,34,30,28,26,22,16,10。
-                        //
-                        // ⚠️ 性能约束没有放松,别为了圆头改回去:随 f 变的只有 `.offset`,
-                        // 跟 scaleEffect 一样是不参与布局的渲染变换,上面那 61.4% 的教训
-                        // 依然成立 —— **绝不能**把宽度写回 `.frame(width: w * f)`。
-                        //
-                        // 移出量算在 Core 里(ProgressFillGeometry,含下限/退化窗口的夹值
-                        // 和两轮返工的完整来由),这里只负责把它接到 offset 上 —— 分层理由
-                        // 见 AGENTS.md「XxxxView.swift 里不放几何/数学」,而这条填充正是
-                        // 那条纪律的活教材:两轮 bug 全出在几何判断上。
+                        // 满宽胶囊配合 offset 平移裁剪（ProgressFillGeometry.leadingOffset），
+                        // 依赖渲染变换而不改变布局尺寸（避免逐帧重排），同时确保两端始终保持圆角。
                         .frame(width: g.size.width, height: scrubberHeight)
                         .offset(x: -ProgressFillGeometry.leadingOffset(
                             containerWidth: g.size.width, fraction: shownFraction))
@@ -3592,20 +3443,7 @@ private struct WindowProgressSection: View {
             .onChange(of: fraction) { _, f in
                 let smooth = progressPrimed && !reduceMotion && scrubbingFraction == nil
                 if smooth {
-                    // 正常推进:1 秒一档,配 .linear 补间在视觉上就是连续的。
-                    //
-                    // ⚠️ 补间的终点必须是**一秒之后**的位置,不是刚算出来的这个当前位置。
-                    // 2026-08-10 用户报"进度比 Apple Music 慢不到 1 秒",根因就在这里:
-                    // 原来是 `shownFraction = f`,即用一秒时间从上一档"走到"刚拿到的这一档,
-                    // 于是走到位的那一刻这个值已经旧了整整一秒 —— 稳态下 t+s 时刻条上显示的
-                    // 是 pos(t-1+s),**恒定落后 1 秒**。这是把插值当外推用的经典错误:两档
-                    // 采样之间做线性插值,画出来的永远是过去。
-                    //
-                    // 改成终点取 pos(t+1) 之后,[t, t+1] 这一秒里线性走过去,每一刻显示的
-                    // 正好是 pos(t+s) —— 也就是当下的真实位置。
-                    //
-                    // 数据源本身不是问题:同一时刻实测 media-control 的 elapsedTimeNow 跟
-                    // Apple Music 播放头只差 36~50ms,位置伺服的校正门槛也只有 0.15s。
+                    // 线性补间目标定为下一秒位置 pos(t+1)，使得当前秒内每一时刻的展示与实际播放位置同步。
                     let step = durationMs > 0 ? advancePerSecondMs / Double(durationMs) : 0
                     withAnimation(.linear(duration: 1)) { shownFraction = min(1, max(0, f + step)) }
                 } else {
@@ -4443,24 +4281,8 @@ private struct ChartsPanelView: View {
     @State private var kind: LastfmStatsService.ChartKind = .tracks
     @State private var period: LastfmStatsService.Period = .week
 
-    /// content 区域曾经渲染到过的最大高度(2026-08-25,用户报"加载时窗口先缩小再突然变大")。
-    ///
-    /// 根因:面板整体靠外层 `.fixedSize(vertical: true)` 跟着 content 的天然高度走,而
-    /// content 四态天差地别 —— 有数据时最多 10 行(~300+pt),loading/失败/无数据只是一个
-    /// spinner 或一行灰字(~50pt 出头)。切 kind/period 会触发 refreshChart 重新进入 loading
-    /// 那一档(哪怕只是一瞬间),面板跟着缩成 spinner 那么高,数据一到又弹回大尺寸 —— 就是
-    /// 用户截图想避免的"转圈时先缩小、突然变大"。
-    ///
-    /// 修法是"水位线":content 用 `.frame(minHeight:)` 兜住曾经量到过的最大高度,只会长
-    /// 不会缩;下面 `growMinHeight` 量的是 minHeight 生效**之后**的高度(即
-    /// max(旧水位,天然高度)),所以水位线只可能单调不减,不会因为"量到自己抬高后的高度"
-    /// 而失控增长。
-    ///
-    /// 落 @AppStorage 而不是纯 @State:同一个道理也适用于**这个 App 启动后第一次**打开
-    /// 这面板 —— 冷启动时水位线是 0,那一次没法靠"上一次量到的高度"兜。持久化把这个也
-    /// 解决了,下次开 App 直接用上次退出前那个高度起步。key 不用 "np:" 前缀 —— 那是配置
-    /// 导出白名单(见 SettingsView.offsetScope 同类注释),这是纯渲染测量值,换一台机器/
-    /// 换一次系统字体设置就该失效,不该跟着配置搬家。
+    /// 记录内容区域的最大历史高度（高水位线），避免切换分类/时段进入加载态时面板高度抖动缩小。
+    /// 通过持久化保存上次退出的高度，确保冷启动首次打开也能稳定维持尺寸。
     @AppStorage("settings:chartsPanelMinHeight") private var contentMinHeight: Double = 0
 
     var body: some View {

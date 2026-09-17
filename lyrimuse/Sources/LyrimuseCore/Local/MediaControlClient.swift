@@ -1175,13 +1175,8 @@ public enum MediaControlClient {
         // 观察到换歌的那一刻**而不是这一拍轮询的时刻 —— 差的那 0.4~1.8 秒会变成整首歌的恒定滞后,
         // 用户 2026-09-10 报的「歌词进度偏慢」就是它。换在这里而不是让下游各自判:
         // 这样 LocalPlaybackSource 的伺服 / 锚点 / 歌词引擎拿到的就是一份正常的单曲快照,一处也不用改。
-        //
-        // ⚠️ **duration 照旧原样传**(2026-09-10 当天第二轮,修一个我自己引入的回归)。第一版把电台的
-        // duration 置成 nil,想让它别被当成曲长用 —— 结果整档歌词停摆:`LocalPlaybackSource.apply` 里
-        // 建进度锚点那一整支的闸是 `if playing, let duration = snapshot.duration, duration > 0`,
-        // duration 一 nil 锚点就再也建不起来,歌词引擎没有钟可走,表现成"电台放到歌了却没有歌词"。
-        // 这一侧的 duration 只影响进度条分母(电台上本来就不准),**不会**写进歌词缓存(那是 collector 的
-        // 事,见 lyrimuse-collector/snapshot.go),所以留着它是纯粹的止损,没有副作用。
+        // ⚠️ duration 必须原样传递：LocalPlaybackSource.apply 创建进度锚点依赖 duration > 0，
+        // 若置 nil 将导致歌词进度锚点无法建立。电台场景下 duration 仅用于进度分母，不影响歌词解析。
         let isRadio = !(raw.radioStationHash ?? "").isEmpty
         Self.setRadioStationHash(isRadio ? raw.radioStationHash : nil)
         let radioPosition: Double? = isRadio

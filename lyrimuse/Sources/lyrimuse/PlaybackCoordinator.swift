@@ -25,17 +25,9 @@ final class WindowBackgroundLayers: Equatable {
         let scale: CGFloat         // scaledToFill 之上的额外放大
     }
     let poses: [GlowPose]
-    /// 背景均色的色相/饱和度(2026-08-21):左栏次级元素(副行/时间/进度已播段)要做
-    /// AM 式 vibrancy 染色 —— 从太阳之子截图逐通道反解,AM 的次级文字不是半透明白
-    /// (那样三通道等效 α 应相等,实测 r0.74/g0.58/b0.49),而是**背景色相的亮化低饱和
-    /// 版**。这里存烘焙后 base 的 CIAreaAverage(再乘 0.15 遮罩)转 HSB 的 h/s,亮度
-    /// 各元素自定。
+    /// 背景均色的色相/饱和度与亮度，用于次级文字元素的 vibrancy 自适应染色。
     let tintHue: Double
     let tintSaturation: Double
-    /// 背景均色的**亮度**(已含视图层 0.15 黑遮罩的 ×0.85,即屏幕见到的亮度)。
-    /// 2026-08-22 从"没人用的 v"转正:固定亮度档的 vibrancy 染色在亮封面(金色 bgV≈0.7)
-    /// 上会撞上背景亮度直接隐形,文字类调用要靠它做最小对比度自适应(见 amVibrantColor)。
-    /// 0 = 未知(取色失败),调用方按旧行为处理。
     let tintBrightness: Double
 
     init(base: NSImage, glows: [NSImage], poses: [GlowPose],
@@ -51,9 +43,7 @@ final class WindowBackgroundLayers: Equatable {
     static func == (l: WindowBackgroundLayers, r: WindowBackgroundLayers) -> Bool { l === r }
 }
 
-// 目前只有本地 media-control 一个数据源,这个类退化成 LocalPlaybackSource 的一层薄
-// 转发,但还是留着这一层不直接让 UI 碰 LocalPlaybackSource.shared——万一以后又要接
-// 别的数据源,UI 层不用跟着改。
+// 本地媒体控制数据源的薄转发层，解耦 UI 与 LocalPlaybackSource。
 @MainActor
 final class PlaybackCoordinator: ObservableObject {
     static let shared = PlaybackCoordinator()
@@ -62,36 +52,10 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var artist: String = ""
     @Published private(set) var album: String = ""
     @Published private(set) var isPlayingNow: Bool = false
-    // isPlayingNow 的"缓收版":开始播放立刻为 true,停止播放要**静默满宽限期**才变 false。
-    //
-    // 给"要不要把悬浮窗/灵动岛收起来"这类决策用,不给歌词显示用 —— 歌词该在暂停的一瞬间
-    // 就停住,而窗口不该。切歌间隙、seek、缓冲都会让 isPlayingNow 短暂掉 false,跟着它走
-    // 就会看到灵动岛缩回刘海再弹出来、悬浮窗闪一下,而用户从头到尾都在听同一首歌。
-    //
-    // 只延后"停",不延后"起":恢复播放必须立刻有反应,那是用户刚刚按下的操作。
-    //
-    // ⚠️ 2026-08-16 实测的一个约束:当前 media-control 路径是 2 秒轮询,而"恢复播放"要
-    // 等下一次轮询才被感知(实测 pause 被感知于 T,grace 于 T+2.0 到期,resume 直到 T+4.0
-    // 才感知到),所以"宽限期内恢复→取消收起"这条路**目前几乎走不到**。真正在起作用的是
-    // 另一半:切歌间隙/seek 这类 isPlayingNow 压根不掉 false 的抖动。等事件驱动
-    // (media-control stream / Spotify 分布式通知)把感知延迟降到亚秒,取消路径才会真正生效
-    // —— 到那时不必调这里的 2 秒,它本来就是按"用户感知得到的一口气"定的。
+    // isPlayingNow 的平滑版本：开始播放立刻为 true，停止播放延后宽限期才为 false。
+    // 用于悬浮窗/灵动岛收起隐藏，吸收切歌间隙、seek 和缓冲抖动。
     @Published private(set) var isPlayingSmoothed: Bool = false
-    // 0.5 秒。2026-08-17 从 2 秒压到这里(用户反馈"暂停后缩回去太慢,一暂停就该缩")。
-    //
-    // 2 秒当初是按"盖住换歌间隙和常见的 seek/缓冲"取的,但收起动画本身还有 0.45 秒,
-    // 加起来接近 2.5 秒 —— 用户按下暂停之后要盯着一个没在动的灵动岛等两秒多,明显像
-    // 卡住了。0.5 秒仍然能吸收掉亚秒级的抖动(播放器切歌那一下的空档),而人对这个量级
-    // 的延迟基本无感,观感就是"一暂停就收"。
-    //
-    // ⚠️ 别直接归零:归零意味着 isPlayingNow 任何一次瞬时 false 都会立刻触发收起/隐藏,
-    // 换歌、seek、缓冲时就会看到灵动岛缩回去再弹出来。真要再快,先确认那些抖动在你的
-    // 播放器上不存在。
-    //
-    // 2026-09-02 再从 0.5 压到 0.25:用户目验「暂停即隐藏」(先收起再 orderOut)后说
-    // "一秒太久"——那一秒 = 这里的 0.5 + 收起再隐藏的 0.5,要求各砍一半。0.25s 仍吸收
-    // 亚 1/4 秒的瞬时 false;若之后换歌/seek 时看到灵动岛缩一下又弹开,就是播放器的
-    // 空档超过了这个窗口,回 0.5 即可(只此一个常量)。
+    // 停止宽限期(0.25秒)，平衡抗抖动与收起响应速度。
     private static let stopGracePeriod: TimeInterval = 0.25
     private var stopGraceWork: DispatchWorkItem?
     /// userTogglePlayPause 乐观翻转后的对账定时(见那边注释)。
@@ -186,19 +150,10 @@ final class PlaybackCoordinator: ObservableObject {
     /// 面板拿到就是画起来只要 1~2ms 的小图。跟 `blurredArtworkImage` 同一个"到货时离线烘
     /// 一次、视图只铺静态图"的纪律。nil 的含义跟 highResArtworkImage 一致,同进退。
     @Published private(set) var highResArtworkThumbnail: NSImage?
-    /// 灵动岛 coverArt 背景用的**预烘焙模糊图**(2026-08-19 性能审计落地)。视图层原来
-    /// 直接挂 `.blur(radius: 20)` —— 那是合成期实时滤镜,而灵动岛窗口播放期间因逐字填色/
-    /// 音浪/跑马灯几乎永动,GPU 每次重合成都对同一张封面重算同一个模糊结果,封面每首歌
-    /// 才换一次。改成封面到货时离线烘焙一次(见 rebakeBlurredArtwork),视图直接铺静态图。
-    /// 源取 highResArtworkImage ?? artworkImage,跟视图层原来的取图口径一致;nil = 还没
-    /// 烘出来/没有封面,视图回落深色渐变。
+    /// 灵动岛 coverArt 背景用的预烘焙模糊图，避免实时渲染开销。
     @Published private(set) var blurredArtworkImage: NSImage?
-    /// 「歌词窗口」AM 式动画背景的一套预烘焙图层(2026-08-20 第四轮重做,按反向工程的
-    /// AM 真实架构替换此前的单张静态合成图,依据 Priva28 gist + AMLL,详见
-    /// docs/features/07):暗底 + 3 份封面**不同区域**取色的羽化光斑,视图层 lighten
-    /// (变亮)混合 + 慢速 GPU 旋转——lighten 让封面亮色区变成浮在暗底上的光斑(普通
-    /// 叠加会把亮暗平均掉,怎么调都"平"),动画让背景像 AM 一样缓慢流动。烘焙仍是
-    /// 离线一次,视图层只做变换动画,无合成期滤镜,性能纪律不破。
+    /// 「歌词窗口」动画背景的预烘焙图层：暗底 + 3 份基于封面不同采样区的羽化光斑。
+    /// 视图层采用 lighten 变亮混合与 GPU 慢速旋转实现流动感。
     @Published private(set) var windowBackgroundLayers: WindowBackgroundLayers?
     /// 上面那张高清替代的均值色(十六进制,格式同 LocalPlaybackSource.artworkAverageHex)。
     /// 有高清图时两个"跟随封面"强调色必须按它算:系统那份可能是网易云的灰底音符占位图,
@@ -946,7 +901,7 @@ final class PlaybackCoordinator: ObservableObject {
 
     private var blurBakeTask: Task<Void, Never>?
     // CIContext 创建不便宜且线程安全,进程级复用一个(只在下面的后台烘焙里用)。
-    nonisolated(unsafe) private static let blurBakeContext = CIContext()
+    private nonisolated static let blurBakeContext = CIContext()
 
     private func rebakeBlurredArtwork(from source: NSImage?) {
         blurBakeTask?.cancel()
@@ -982,32 +937,11 @@ final class PlaybackCoordinator: ObservableObject {
         return h
     }
 
-    /// 「歌词窗口」AM 式动画背景的图层烘焙(2026-08-21 第六轮:同封面同屏对拍定稿)。
-    /// 机理(五轮真机对照+一次同屏定量对拍逐步坐实):**AM 的背景 ≈ 封面的宏观色彩布局,
-    /// 但明度布局被抹平** —— 同一封面(破气球/100种生活)同屏对拍量出 AM 四采样区 V50 全在
-    /// 0.22~0.31(封面本身左暗右亮),色相却逐区各异;我们此前保留明度布局,表现为"左缘
-    /// 死黑 + 黄斑突兀"(黄斑区局部幅度 0.114 vs AM 0.043,左缘 V50 0.157 vs 0.306,
-    /// 调 EV 根本够不着)。固化的选择:
-    /// - 宏观场 = 6×6 面积平均降采样 + **逐格乘法亮度归一化**(RGB × mean/L,homog 0.55
-    ///   部分归一,系数夹 [0.4, 3.5] 防近黑格爆噪)再放大,σ35 高斯只融格边。乘法保
-    ///   色相/饱和 —— 加法提黑会灰掉(AM 暗区 S 仍有 0.62);纯高斯的老两难照旧:σ 大
-    ///   混泥、σ 小见人形,所以仍是"降采样出场、高斯只融边"。
-    /// - 逐格**饱和度**归一 + 少数派**色相**收拢(2026-08-22 Addison 亮封面五轮对拍,
-    ///   详见各段落内注释):S 抬到 p75×1.5(cap 0.95)防白纱/留白灰化;偏主色相(S²
-    ///   加权圆均值)>60° 的格子夹回 ±60°(青 logo 格→橄榄,AM 的场=一个主色系+近亲
-    ///   点缀);灰阶封面两步都自动 no-op。
-    /// - 成场后 CIVibrance 0.4 + **闭环饱和度乘子**(= satTarget ÷ 融合后场的实测均值 S,
-    ///   clamp [0.6, 2.2]):σ35 融合互混+光斑 lighten 会磨掉 ~30% 饱和,固定乘子对
-    ///   混合结构不同的封面不可能都对 —— 08-21 对拍量出 AM S50 0.42~0.72、定 0.85;
-    ///   08-22 亮封面上同一个 0.85 只到 0.50~0.65(AM 0.63~0.97)。闭环后鲜艳均匀
-    ///   封面乘子自动 <1(接管 0.85 的职责),灰化结构自动 >1。
-    /// - 底色 EV −0.15:旧 −1.2 是"保留明度布局"时代为压亮斑留的,归一化后只需轻压。
-    /// - 光斑仍锚**原始**最亮格(归一化前的亮度),羽化外沿 0.7W(旧 0.40 有可见轮廓,
-    ///   AM 没有独立光斑,只有柔和的色场渐变)。
-    /// - 视图层 3 层 lighten α0.25 摆动照旧(对拍显示 α 在归一化的平场上影响很小)。
-    /// 定量:四区 V5/V50/V95/S50/H50 加权 loss 从旧参数 1.41 → 0.79(工具 scratchpad
-    /// bgbake6 + sweep_pair6)。残余主要是 AM 各区内部还有 0.10~0.21 的柔和起伏(其动画
-    /// 瞬间的相位),我们单帧偏平 —— 由摆动动画在时间维上补。
+    /// 「歌词窗口」动画背景图层烘焙。
+    /// 1. 宏观场：6×6 面积平均降采样 + 逐格乘法亮度归一化(RGB × mean/L)，配合高斯滤波融合格边。
+    /// 2. 逐格饱和度归一与偏离主色相杂色收拢。
+    /// 3. 成场后结合 CIVibrance 与闭环饱和度乘子平衡整体鲜艳度。
+    /// 4. 提取原始高亮区域作为羽化光斑，辅以轻微旋转变换形成缓慢流动的背景层。
     nonisolated private static func bakeWindowBackgroundLayers(cgImage: CGImage, seed: UInt64) -> WindowBackgroundLayers? {
         let W: CGFloat = 720
         let frame = CGRect(x: 0, y: 0, width: W, height: W)
@@ -1041,12 +975,8 @@ final class PlaybackCoordinator: ObservableObject {
             }
             px[i * 4 + 3] = 255
         }
-        // 逐格**饱和度**归一化(2026-08-22,Addison 亮封面同帧对拍):AM 的背景饱和度
-        // 跟随封面的**鲜艳端**而不是面积均值 —— 白纱/留白参与 6×6 平均会把格子灰化
-        // (实测 AM 各区 S50 0.63~0.97,我们 0.13~0.65,左上区整个发灰)。与上面的亮度
-        // 归一化对称:各格 S 向全场 p75 鲜艳端部分归一(satHomog 0.6),保 H/V
-        // (c' = max−(max−c)×k 只放大与 max 的距离)。灰阶封面 p75 本身≈0 → 自动
-        // 不动,不伤黑白封面;中饱和封面 p75≈均值 → 变化很小,不动摇 08-21 的对拍校准。
+        // 逐格饱和度归一化：各格饱和度 S 向全场 p75 鲜艳端部分归一(satHomog 0.6)，保持 H/V。
+        // 灰阶封面 p75 趋于 0 则保持不变。
         var cellSat = [Double](repeating: 0, count: 36)
         for i in 0..<36 {
             let o = i * 4
@@ -1054,22 +984,8 @@ final class PlaybackCoordinator: ObservableObject {
             let mn = Double(min(px[o], min(px[o + 1], px[o + 2])))
             cellSat[i] = mx > 0 ? (mx - mn) / mx : 0
         }
-        // 少数派色相向主色相收拢(2026-08-22 五轮实拍):封面小块青色 logo 的格子被下面
-        // 的饱和归一放大成刺眼纯绿斑 —— AM 的场是"一个主色系 + 近亲色点缀",同帧对拍
-        // 它同区是暖橄榄绿。主色相 = S² 加权圆均值;偏离 >60° 的格子夹回主色相 ±60°
-        // (青→橄榄,保留点缀、不抹掉),S/V 不动。单色/灰阶封面各格本就贴着主色相或
-        // S≈0 被跳过,自动 no-op。
-        //
-        // ⚠️ 2026-08-22 用户实测反例推翻了当时"真双色封面被拉向均值,AM 的场本来就读作
-        // 一个色系"这条假设:圣米歇尔山封面(蓝天+暖色古堡+倒影,两大色系面积相当)被
-        // 拉成一片脏绿,AM 参考图是天空蓝到暖棕的自然过渡,并没有被拉成同一色系。离屏
-        // 复现实测坐实——hDom≈185°(蓝天,S² 权重占优),暖色城堡格(H22~41°)全部被夹到
-        // 124°(纯绿),因为"偏离 >60° 就夹"这条判据只看角度、不看这批离群格子占的权重
-        // 有多大:小块 logo 杂色天然只占总权重几个百分点,但这张封面的暖色区占了到
-        // ~27%——早就不是"少数派",是构图里第二个真实色系。加一道"离群到底占多少权重"
-        // 的判据:只有离群权重明显是小头(<20%)时才当杂色拉回来;逼近对半分的两大色系
-        // 直接放行,交给下面 σ35 高斯模糊做自然的空间过渡(蓝→绿→棕,而不是硬夹出一片
-        // 假色),这也更贴近圣米歇尔山这类反例里 AM 自己的观感。
+        // 少数派色相收拢：主色相采用 S² 加权圆均值。小权重离群格(偏离 >60° 且总权重 <20%)
+        // 夹回主色相 ±60°，避免放大刺眼杂色；真实双主色系(离群权重 ≥20%)则放行，交由高斯模糊自然过渡。
         func rgbToHSV(_ r: Double, _ g: Double, _ b: Double) -> (h: Double, s: Double, v: Double) {
             let mx = Swift.max(r, g, b), mn = Swift.min(r, g, b), d = mx - mn
             var h = 0.0
@@ -1093,20 +1009,8 @@ final class PlaybackCoordinator: ObservableObject {
             default: return (v, p, q)
             }
         }
-        // 近黑格的饱和度读数不可信(2026-08-27 第十一轮,Random Access Memories 等
-        // "大面积纯黑+一小块铬合金反光"封面坐实):肉眼看着纯黑的一大片背景,原始 RGB
-        // 往往不是正好 (0,0,0),而是带一丝几乎不可见的偏色(摄影黑位/JPEG 压缩常见)。
-        // 这个偏色的**比值**(HSV 饱和度)在近黑处可以量出跟中高亮度区域一样高的数字,
-        // 但那只是分母(亮度)极小时比值被放大的假象——`--verbose` 实测 Random Access
-        // Memories 有 8/36 格(22%)原始亮度 ≈0.047 却读出 s=0.36,把整张图的主色相都
-        // 拖偏(hDom 算成蓝色,而实际是黑底+金属高光,几乎无色);上面的亮度归一化会把
-        // 这片近黑背景等比放大到看得见的亮度(homog 设计本就要抹平明暗布局,这一步不
-        // 能去掉),但放大只保留原有比值、不产生新色相——所以问题根子不在放大,而在
-        // "多暗才算暗到不该信它的颜色"这道判据一直没有,导致这类噪声跟真实色块权重相同
-        // 地参与 hueDom/satP75/satTarget 的计算。用**归一化前**的原始格亮度(`cellLuma`,
-        // 光斑锚点也用它,同一份数据)设一道下限:低于它的格子不参与色相判定与 p75 统计,
-        // 也不参与下面把欠饱和格子拉向 satTarget 的那次修正——0.08 是从这批实测(伪影格
-        // ≈0.047、正常调用中合理暗色内容普遍 >0.1)取的经验值,不是精确阈值。
+        // 近黑格过滤：极暗像素的 HSV 饱和度读数容易因微弱噪声产生伪高饱和，
+        // 设定 darkLumaFloor 阈值(0.08)，低于该亮度的像素不参与色相与 p75 统计。
         let darkLumaFloor = 0.08
         var hueSin = 0.0, hueCos = 0.0
         for i in 0..<36 where cellSat[i] > 0.05 && cellLuma[i] > darkLumaFloor {
@@ -1115,21 +1019,12 @@ final class PlaybackCoordinator: ObservableObject {
             hueSin += sin(h * .pi / 180) * s * s
             hueCos += cos(h * .pi / 180) * s * s
         }
-        // 1 = 色相一致、正常走既有的饱和度放大;越接近 0 越是"噪声凑巧不为零",
-        // 下面 satTarget/satMul/CIVibrance 按它收着放大,见下方大段注释。
+        // 1 = 色相一致、正常走既有的饱和度放大; 接近 0 则收敛放大倍率。
         var hueCoherenceScale = 1.0
         if hueSin != 0 || hueCos != 0 {
             let hDom = atan2(hueSin, hueCos) * 180 / .pi
-            // 色相一致度(2026-08-22,窦靖童《春游》灰阶反例坐实):S² 加权圆均值向量的
-            // 合成模长 / 总权重——多格色相互相印证(同一色系)时接近 1,多格色相彼此
-            // 抵消(蓝天一点、暖灰一点,方向各异)时接近 0。上面这套 hDom/offHueFraction
-            // 只管"要不要把离群格子夹回来",没管"这个 hDom 本身有多可信"——一张几乎
-            // 无彩的封面(几格发蓝、多格发暖灰,S 全在 0.06~0.22)也能算出一个看似成立
-            // 的 hDom,但那只是噪声方向凑巧不为零,不代表真有这个颜色。实测这张灰阶
-            // 鹅照 coherence≈0.27,远低于圣米歇尔山(两大真实色系)的 0.47 和 MJ 红棕
-            // 封面(单一色系)的 0.59——三者离屏复现坐实这条线能分开"真的没有主色"和
-            // "有两个/一个真主色"。低于参考值时按比例收着后面的饱和度放大,别把噪声级别
-            // 的偏色也当真色去放大(下面 satTarget/satMul/CIVibrance 三处一起收)。
+            // 色相一致度：S² 加权圆均值向量的合成模长/总权重。
+            // 趋近 1 表示统一色系，接近 0 表示无序分布，按比例抑制后续的饱和度放大。
             var totalHueWeight = 0.0, offHueWeight = 0.0
             for i in 0..<36 where cellSat[i] > 0.05 && cellLuma[i] > darkLumaFloor {
                 let o = i * 4
@@ -1156,16 +1051,7 @@ final class PlaybackCoordinator: ObservableObject {
                     var d = h - hDom
                     while d > 180 { d -= 360 }
                     while d < -180 { d += 360 }
-                    // 上限 120°(2026-08-23 用户截图坐实的第二个反例):《你瞒我瞒》雪山蓝天
-                    // (离主色相约 150~156°,offHueFraction 算出 19.8%——刚好卡在 20% 那条
-                    // 线内侧一点点,仍然触发了collapse)被 ±60 硬夹成刺眼的桃红/紫红——
-                    // "偏离 60°就等距拉近 60°"这套位移量本来是照着"小块 logo 杂色"标定的
-                    // (原注释的例子是青色 logo 拉成暖橄榄绿,两者本就是同一色系的近亲,
-                    // 相隔本该不远);对色轮对面的真补色(蓝 vs 暖棕,>120°)套用同一个
-                    // 固定位移,新色相落在哪全看 d 的正负号,跟原色、跟主色相都不沾边,
-                    // 输出的是一个随机撞上的颜色,不是"往回拉近"。只处理 60°~120° 这个
-                    // "近似色被饱和归一放大跑偏"的窗口,超过 120° 的真补色原样放行,交给
-                    // σ35 高斯模糊做自然过渡(跟 offHueFraction≥20% 那条分支一个道理)。
+                    // 仅收拢 60°~120° 的近似色；真补色(>120°)原样放行，交由高斯模糊自然过渡。
                     guard abs(d) > 60, abs(d) <= 120 else { continue }
                     let (r, g, b) = hsvToRGB(hDom + (d > 0 ? 60 : -60), s, v)
                     px[o] = UInt8(min(255, max(0, r * 255)))
@@ -1174,10 +1060,7 @@ final class PlaybackCoordinator: ObservableObject {
                 }
             }
         }
-        // satP75 同样排除近黑格(见上面 darkLumaFloor 的注释)——不然"大面积纯黑+一角
-        // 高光"这类封面,近黑格的伪饱和度会直接顶到排序里的 p75 位置,把 satTarget 算
-        // 得远高于封面实际观感。样本太暗、亮格不够 9 个(排序后 p75 位置会落空/退化)时
-        // 退回全 36 格——这类封面本来就该给低 satTarget,不筛也没问题。
+        // 排除近黑格后的饱和度 p75 分位数。样本过暗不足 9 格时回退全 36 格。
         let brightIdx = (0..<36).filter { cellLuma[$0] > darkLumaFloor }
         let satP75: Double
         if brightIdx.count >= 9 {
@@ -1186,81 +1069,8 @@ final class PlaybackCoordinator: ObservableObject {
         } else {
             satP75 = cellSat.sorted()[26]
         }
-        // ⚠️⚠️ 2026-08-23 推翻重标:上面这些"×1.5"系的注释、以及为了压住它反复打的三个
-        // 补丁(少数派色相收拢/角度上限/hueCoherenceScale)全都是在给一个**方向错了**的
-        // 基础倍率止血。真根因直到这天才找到——用户要求"自己去多播几首歌,把 Apple
-        // Music 原生「播放中」窗口的背景跟我们的取色结果对比着截图",于是这轮直接控制
-        // 真机 Music.app(菜单「窗口→播放中」能调出跟 AM 一模一样的原生沉浸态)播了 5 首
-        // 色彩特征完全不同的歌(你瞒我瞒/黑夜/Get on the Boat/Earth Song/The Beautiful
-        // Ones),把 AM 真实截图和这份 6×6 算法各自跑出来的饱和度做了正面比对:
-        //
-        //   封面           源图 satP75   AM 真实输出 p75    比值(AM÷源)
-        //   你瞒我瞒         0.236         0.14              0.593
-        //   黑夜             0.577         0.25              0.433
-        //   Get on the Boat  0.769         0.51              0.663
-        //   Earth Song       0.458         0.21              0.459
-        //   Beautiful Ones   0.380         0.24              0.632
-        //                                            均值 ≈ 0.56
-        //
-        // AM 的背景饱和度是源图鲜艳端的**一半左右**,不是 1.5 倍——"×1.5"这个方向从
-        // 一开始就反了,这也是本条注释历史上四次打补丁(发绿→发粉→夹错色相→依然偏
-        // 鲜艳)始终按下葫芦浮起瓢的原因:补丁全在压一个基数过大 3 倍的放大器,压得住
-        // 一张封面就压不住下一张。
-        //
-        // ⚠️ 上面那版比值(均值 0.55)是拿"整张背景的**单点面积均值**"(CIAreaAverage,
-        // 一张图揉成一个色)去跟 AM 截图的均值比;换成跟人眼实际观感更接近的**网格
-        // 采样**(在 AM 截图和我们自己烘焙的图上各打 25 个点算 p75)重新核对,发现
-        // 0.55 仍然让个别封面(你瞒我瞒、Beautiful Ones)的网格 p75 比 AM 真实值高
-        // 出 1.5~2 倍——单点均值天然会被"两个色系互相稀释"拉低,不能代表人眼真正
-        // 盯着看的那一小片区域有多鲜艳。改用网格 p75 重新拟合,并统一把下面 satMul
-        // 的上下限也按同一幅度收下来(0.6~2.2 → 0.35~1.6,那两个数同样是照着旧的
-        // ×1.5 基线定的,基数变了它们也该跟着变,不然只压这一处、卡在 satMul 那道
-        // 上下限里的封面照样纹丝不动)。0.35 是 5 组真实封面网格比对后取的折中值——
-        // 单一参数拟合不出每张封面的精确比例(源图饱和度与 AM 输出并非严格线性,
-        // 越浓烈的封面 AM 相对给得越足),折中值让 5 张里 4 张落在 AM 真实值的
-        // 0.8~1.5 倍以内,只有你瞒我瞒因为下面高斯模糊在蓝棕两色交界处生成的过渡色
-        // (structural 问题,不是这个系数能治的)仍偏高一截。灰阶封面 satP75≈0 → 目标
-        // 仍≈0,这条 no-op 性质不变。
-        //
-        // ⚠️⚠️⚠️ 2026-08-23 第九轮,固定倍率 0.35 本身又被推翻——用户这轮批量拉了
-        // 23 组真机 AM×我们 的同封面对拍截图并逐组给"差别大/还好/可以接受"判断,
-        // 对每组用同一条左侧背景取样带(避开封面卡片与歌词文字)做网格 p75 定量,
-        // 结果坐实:被判"差别大"的 7 组里有 5 组(P. Control/Babygirl/谁稀罕/Sign O'
-        // The Times/小镇姑娘)根子不在色相、就是纯饱和度差——这 5 组源图 satP75 全在
-        // 0.65~0.96(封面本身极浓烈),AM 真机输出 p75 也跟着到 0.76~1.00(AM 几乎
-        // **不怎么压**这类封面,AM/源 比值 0.98~1.20,不是"减半"是"原样甚至更浓"),
-        // 而固定 0.35 倍无论源图多浓都只给 0.23~0.34,砍掉了七成还多,肉眼看就是"浓烈
-        // 橙红→浑浊灰棕"。全部 23 组按 (源 satP75, AM 真机 p75) 作对数-对数回归得
-        // 幂函数 AM_p75 ≈ 0.94 × satP75^1.45(R²≈0.77)——固定倍率模型的本质缺陷是
-        // "把 AM 的处理看成线性缩放",而真机数据是一条**凸曲线**:源图越浓烈,AM 保留
-        // 的比例反而越高,不是越低。换成这条幂函数重新烘焙同一批 23 张封面,7 组"差别
-        // 大"里那 5 组纯饱和度问题的(网格 p75 target vs 实测)误差从均值 0.39 收到
-        // 0.13(P. Control 0.41→0.03,小镇姑娘 0.58→0.05,详细数字见
-        // docs/features/07-lyrics-window.md 第九轮记录);其余 15 组"还好/可以接受"
-        // 的均值误差基本没变(0.133→0.142,在噪声范围内)。剩下 2 组"差别大"(黑夜/
-        // Get on the Boat)复测 hueCoherenceScale 都是 1.0(算法判定色相完全一致、
-        // 没有触发任何色相纠偏),说明它们的偏差另有病灶(大概率出在色相本身而不是
-        // 饱和度量级),这条幂函数**修不了它们**,留给下一轮专门查色相。0.94/1.45
-        // 两个数字是 23 组回归系数,不是拍脑袋——想再收紧就该在这批数据上重新拟合,
-        // 不要凭感觉调。
-        // 2026-08-27 第十轮:系数从 0.94/1.45 refit 到 1.029/1.433——用户又批量甩来 14
-        // 组新的真机对拍(方大同/The Weeknd/Janet Jackson/Weezer/NEXZ/薛凯琪等,横跨
-        // 暖色人像/金属质感/高对比封面),样本从第九轮的 23 组涨到 36 组。同时验证并
-        // **推翻**了一个中途冒出来的假说:批量样本里连续几张暖色调(爱我吧/20 Y.O./
-        // Say Yes/自由的夜/Twisted Elegance)都明显比公式预测更浓,一度怀疑"AM 对暖色
-        // /金棕色相(15°~55°)额外加成",遂在 36 组全量数据上做了 `AM_p75 = a×satP75^b
-        // ×(1+c×warmScore)` 的二变量回归——**加了色相项后 R²只从 0.754 升到 0.762,
-        // 提升在噪声量级,而且逐条看是拆东墙补西墙**:改善了 20 Y.O./Say Yes/Twisted
-        // Elegance 这几张,却让原本拟合得很好的 P.Control(误差 0.018→0.098)、黑夜、
-        // Get on the Boat、NEXZLoco 全部变差——色相不是这堆"暖色发灰"案例背后的真正
-        // 变量(反例:玩乐是绿色封面残差 2.16、Controversy 是品红封面残差 1.68,比任何
-        // 暖色案例都离谱)。结论:**不采纳色相项**,只用全量 36 组重新拟合单变量幂函数
-        // (对数-对数回归,系数从 0.94/1.45 微调到 1.029/1.433,R²=0.754,MAE 从
-        // 0.135 降到 0.125,验证用 13 张新增封面离屏复现、satMul 无一顶到 1.6 上限,
-        // 不需要跟着抬)。Say Yes(Weezer 金属压纹封面,AM 给到源图 1.51 倍、refit 后
-        // 仍有 0.365 的误差,全数据集里最大)是最突出的残余反例,真正原因待查——候选
-        // 方向不是色相,可能是材质/金属反光这类构图特征,留给下一轮。完整 36 组数据表
-        // 见 docs/features/07-lyrics-window.md 第十轮记录。
+        // 目标饱和度拟合：采用幂函数曲线模型 target = min(0.95, 1.029 * pow(satP75, 1.433)) * hueCoherenceScale。
+        // 源图饱和度越高，保留比例越高（凸曲线），避免高浓烈封面过度衰减为浑浊灰调。
         let satTarget = min(0.95, 1.029 * pow(satP75, 1.433)) * hueCoherenceScale
         for i in 0..<36 where cellSat[i] > 0.01 && cellSat[i] < satTarget && cellLuma[i] > darkLumaFloor {
             let target = satTarget
@@ -1290,25 +1100,7 @@ final class PlaybackCoordinator: ObservableObject {
             .clampedToExtent()
             .applyingGaussianBlur(sigma: 35)
             .cropped(to: frame)
-        // 闭环饱和度乘子:格级归一后 σ35 融合(相邻异色相格互混)+光斑 lighten 还会
-        // 磨掉一截饱和度,按融合后场的实测均值闭环拉回 satTarget —— 场内部再怎么互混,
-        // 出场饱和度都贴住目标;鲜艳均匀封面 fieldS 超标时乘子自动 <1 回落。
-        //
-        // ⚠️ "AM S50 0.63~0.97"这条 2026-08-21/22 写下的校准基准是错的,2026-08-23
-        // 拿真机 Apple Music 原生「播放中」窗口实测 5 张不同封面推翻——AM 真实背景
-        // 网格采样的 S 中位数普遍落在 0.08~0.42,p75 也就 0.14~0.51,从没到过 0.6+;
-        // 当时"S50 0.63~0.97"的样本来源已不可考,大概率是拿了个位数张偏鲜艳的封面就
-        // 定了基准,没跟真机对照过更大范围的封面。satTarget 的具体倍率与来源见上面
-        // satTarget 声明处的注释。
-        //
-        // ⚠️ 2026-08-23 第九轮:satTarget 换成幂函数后数值整体变大,但**这里的上下限
-        // 刻意没跟着抬**——23 组真机回归数据里只有 1 组(I Wanna Be Your Lover,蓝底
-        // +人像肤色两大色系反差大)顶到过 1.6 那个上限,而且顶到上限也治不好它:这张
-        // 封面 σ35 模糊后 fieldS 崩得极狠(0.56→0.15),就算把上限抬到 2.2/3.5,网格
-        // p75 依然从 0.37 的目标冲到 0.8~1.0(实测过,见 07-lyrics-window.md 第九轮)
-        // ——根子是"闭环乘子按面积均值 fieldS 算、但目标 satTarget 是按网格 p75 校准"
-        // 这个本来就存在的口径错位(旧版本用小基数掩盖了它),抬上限只会把这类高反差
-        // 封面推向过饱和,不抬上限则维持"跟旧版本一样欠一截"——两害相权,不抬。
+        // 闭环饱和度乘子：格级归一后 σ35 模糊与光斑融合会衰减饱和度，按融合后均值闭环调整贴合 satTarget。
         var satMul = 0.85
         let fieldAvg = field.applyingFilter("CIAreaAverage", parameters: [
             kCIInputExtentKey: CIVector(cgRect: frame),
@@ -1318,11 +1110,7 @@ final class PlaybackCoordinator: ObservableObject {
             let mx = Double(max(d[0], max(d[1], d[2])))
             let mn = Double(min(d[0], min(d[1], d[2])))
             let fieldS = mx > 0 ? (mx - mn) / mx : 0
-            // 上下限 0.35~1.6(2026-08-23 随 satTarget 基数一起收窄,原先 0.6~2.2 是
-            // 照着 ×1.5 那版基线定的——基数缩小了三分之一还留着旧上下限,等于只压住了
-            // "目标"没压住"最终能打多高/压多低",一部分封面(尤其源图本身饱和度就很
-            // 高、fieldS 天然大的)会被旧上限重新顶回高饱和)。上限也按 hueCoherenceScale
-            // 收,给一致色相封面留够放大空间(coherenceScale=1 时上限不变)。
+            // 上下限收窄至 0.35~1.6，并按 hueCoherenceScale 自适应缩放，防止高反差封面过饱和。
             if fieldS > 0.02 {
                 satMul = min(1.6 * max(0.4, hueCoherenceScale), max(0.35 * hueCoherenceScale, satTarget / fieldS))
             }

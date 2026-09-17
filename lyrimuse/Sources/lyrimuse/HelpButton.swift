@@ -45,19 +45,13 @@ struct HelpButton: View {
 ///
 /// 跟上面 HelpButton 的分工:那个只认点击,用在设置页里"需要时才展开"的长说明上;
 /// 这个是给行内那种"扫一眼数字、想知道它怎么来的"场景 —— 悬停就该出,点一下也该出。
-///
-/// # 为什么不用 .help()
-///
-/// `.help()` 落到 NSView.toolTip,延迟由 NSToolTipManager **全局**控制,没有按控件调整的
-/// API(唯一的调节点 NSInitialToolTipDelay 是 app 级的,会把整个 App 的所有 tooltip 一起
-/// 改掉);而且它只认悬停,点击对它没有任何意义。用户报的两件事(出得太慢、想点一下就出)
-/// 在 .help() 上一个都做不到,只能自己拿 onHover + popover 做。
+/// 自定义快速悬停提示视图。
+/// 规避系统 `.help()` (NSToolTipManager) 全局固定延迟与无法点击响应的限制，基于 onHover + popover 实现。
 struct QuickHelpLabel<Content: View>: View {
     let text: String
     @ViewBuilder let content: () -> Content
 
-    /// 悬停多久才弹。系统 tooltip 没设过 NSInitialToolTipDelay 时实际观感约 2 秒,
-    /// 这里取它的 1/4(2026-08-17 用户要求)。
+    /// 悬停弹出延迟(500ms)，平衡灵敏度与防误触。
     private static var hoverDelay: Duration { .milliseconds(500) }
     /// 鼠标移出后延这么久才收。不是手感修饰,是防抖:popover 弹出的一瞬间如果它盖住了
     /// 锚点,底下这个视图会立刻收到 onHover(false) —— 不缓冲一下就会"弹出即消失",

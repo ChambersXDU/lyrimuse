@@ -3,69 +3,30 @@ import LyrimuseCore
 import QuartzCore
 import SwiftUI
 
-// 菜单栏里那一行滚动歌词的**渲染层**(2026-08-16 加)——一句歌词排版成一张长图,交给
-// Core Animation 在渲染层平移。主线程每句只干一次活,之后一帧都不碰。
-//
-// ---- 为什么非得走这条路 ----
-//
-// 2026-08-05 到 08-16 之间,菜单栏歌词是 SwiftUI 的 MenuBarExtra + 一个 30/60fps 的
-// 计时器:每帧算出"此刻该偏移多少"、画(后来是裁)一张新图、发布出去让 label 重渲染。
-// 用户反复反馈"菜单栏歌词滚动还是有点卡",而灵动岛上的歌名滚得很顺。
-//
-// 2026-08-16 把这件事测清楚了,结论跟直觉相反:
-//   * 画图**从来不是瓶颈**。离线基准 300 帧:旧的逐帧重排 0.057ms/帧,30fps 下每秒只占
-//     主线程 1.7ms(0.17%);改成整句排版一次、每帧只 CGImage.cropping 之后是 0.002ms。
-//     把一件只占 0.17% 的事再快 30 倍,用户当然感觉不到差别 —— 那次优化(a589c76)
-//     本身没错,但它治不了用户报的病。
-//   * 真正的差距在**驱动方式**。灵动岛歌名是真窗口里的 SwiftUI 视图,offset 交给
-//     Core Animation 在渲染层插值,主线程零参与;菜单栏那条路每一帧都必须走
-//     "模型侧换图 → label 重渲染 → 系统状态栏更新",帧与帧之间的间隔完全取决于主线程
-//     什么时候轮得到它。主线程上还跑着 20Hz 的逐字高亮重绘、2 秒一次的播放轮询,
-//     一旦被挤,滚动就跟着一顿一顿。
-//   * 而 MenuBarExtra **注定**只能走那条路:探针读出 NSStatusBarButton 的实际内容后
-//     确认,SwiftUI 是把 label **快照成一张 NSImage** 塞进 button.image 的
-//     (title 为空、image 是 16x13 的模板图)。视图侧根本没有活的图层可以挂动画 ——
-//     这也顺带解释了此前"`.task` 挂在 MenuBarLabel 上从来不触发"那个实测现象。
-//
-// 所以只能放弃 MenuBarExtra、自建 NSStatusItem,拿到一个真的 NSView 和它的 CALayer,
-// 让滚动变成一条 CAKeyframeAnimation。装好之后主线程不再参与任何一帧。
+// 菜单栏滚动歌词渲染视图。
+// 歌词排版为长位图并由 Core Animation (CALayer + CAKeyframeAnimation) 在 GPU 端平移与裁剪填色，
+// 避免主线程逐帧重绘导致的状态栏滚动掉帧与卡顿。
 //
 // ---- 图层结构 ----
 //
 //   self.layer
 //     ├ clipLayer   (masksToBounds,尺寸/位置 = NSStatusBarButton 画 image 的那一块)
 //     │    └ contentLayer  (滚动动画动的是它的 position.x)
-//     │         ├ baseClipLayer  (masksToBounds,只露出**未唱**区 [边界, 句尾])
+//     │         ├ baseClipLayer  (masksToBounds,只露出未唱区 [边界, 句尾])
 //     │         │    └ textLayer      (contents = 整句长图,基础色)
-//     │         └ fillClipLayer  (masksToBounds,只露出**已唱**区 [0, 边界])
+//     │         └ fillClipLayer  (masksToBounds,只露出已唱区 [0, 边界])
 //     │              └ fillTextLayer (contents = 同一句的强调色长图)
-//     └ iconHostLayer  (歌词旁那枚带播放进度的图标,2026-09-03;关掉时整层 isHidden)
-//          ├ iconBaseClipLayer (masksToBounds,只露出**还没放到**的那截 [边界, 顶])
+//     └ iconHostLayer  (歌词旁带播放进度的图标;关掉时整层 isHidden)
+//          ├ iconBaseClipLayer (masksToBounds,只露出未播完部分)
 //          │    └ iconBaseLayer (contents = 图标模板图,基础色)
-//          └ iconFillClipLayer (masksToBounds,只露出**已经放过**的那截 [底, 边界])
+//          └ iconFillClipLayer (masksToBounds,只露出已播完部分)
 //               └ iconFillLayer (contents = 同一枚图标的强调色版)
-//     └ secondaryClipLayer (masksToBounds,副行那一格,2026-09-06 双排;单行时 isHidden;装不下时 mask 尾部渐隐)
-//          └ secondaryTextLayer (contents = 副行长图,**不滚**;opacity 按档位压淡)
+//     └ secondaryClipLayer (masksToBounds,副行那一格;单行时 isHidden;装不下时 mask 尾部渐隐)
+//          └ secondaryTextLayer (contents = 副行长图,不滚动;opacity 按档位压淡)
 //
-// 图标那一支**挂在 self.layer 上、不挂在 clipLayer/contentLayer 里** —— 它不跟着歌词滚,
-// 也不该被歌词那一格的裁剪窗切掉;它跟歌词是并排的两块,只在 layout() 里一起排位。
-//
-// 用多层而不是"直接给 self.layer 设 contents":文字要能滚出可视区并被裁掉,而可视区
-// 的位置得跟按钮里 image 的绘制位置对齐(见 layout())。分层之后,layout 只碰
-// clipLayer、滚动只碰 contentLayer、染色只碰两个裁剪层,互不干扰 —— 尤其是
-// **换颜色时不能打断正在跑的滚动/染色**(见 rebuildImage:只换 contents 和 bounds,
-// 绝不碰 position/动画)。
-//
-// 逐字染色(2026-08-22,用户点名"像酷狗菜单栏歌词"):基础色/强调色两张同字形长图做
-// **互补裁剪**——已唱区只显示强调色那张、未唱区只显示基础色那张,像经典 KTV 字幕那样
-// 在边界处硬切。⚠️ 不能做成"强调色叠在基础色上面"(第一版就是,当天被用户截图打回):
-// 两张图的字形抗锯齿覆盖率相同,叠着画时边缘半透明像素会让底下的基础色透出来,深色
-// 菜单栏上蓝字四周就镶一圈白晕("染色后有白边")。互补裁剪让每个区域的字形只与背景
-// 合成一次,哪里都没有叠色。
-// 整行的填色进程编成三条**同步**的 CAKeyframeAnimation(fillClip 的宽 + baseClip 的
-// position.x/bounds,共享 beginTime/keyTimes,按逐字时间轴生成,见
-// MenuBarMarquee.karaokeFillKeyframes),装好后主线程一帧都不碰,跟滚动同一哲学。
-// 两个裁剪层都挂在 contentLayer 里,滚动时天然跟文字焊在一起。
+// 填色原理：
+// 基础色与强调色两张位图采用互补裁剪(fillClip 与 baseClip 拼接)，避免图层叠置混合引起的抗锯齿白边瑕疵。
+// 填色动画由同步的 CAKeyframeAnimation 驱动，与滚动动画协同运行。
 @MainActor
 final class MenuBarScrollingLabel: NSView {
     private static let scrollAnimationKey = "lyrimuse.marquee"

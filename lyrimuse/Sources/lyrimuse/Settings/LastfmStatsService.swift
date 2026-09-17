@@ -2365,12 +2365,17 @@ final class LastfmStatsService: ObservableObject {
         rebuildRecentCoverIndex()
         // 快照里的图提前解码进内存:否则冷启动第一次打开这一页,每张图都要先画一帧占位符
         // 再从 URLCache 里异步取(见 ImageMemoryCache.prewarm)。
-        ImageMemoryCache.shared.prewarm(
-            Array(artistAvatars.values) + Array(recentTrackCovers.values)
-                + Array(recentAlbumCovers.values) + Array(catalogCovers.values)
-                + charts.values.flatMap { $0.compactMap(\.imageURL) }
-                + recent.compactMap(\.imageURL)
-                + (onThisDay?.top.compactMap(\.track.imageURL) ?? []))
+        var urlsToPrewarm: [URL] = []
+        urlsToPrewarm.append(contentsOf: artistAvatars.values)
+        urlsToPrewarm.append(contentsOf: recentTrackCovers.values)
+        urlsToPrewarm.append(contentsOf: recentAlbumCovers.values)
+        urlsToPrewarm.append(contentsOf: catalogCovers.values)
+        urlsToPrewarm.append(contentsOf: charts.values.flatMap { $0.compactMap(\.imageURL) })
+        urlsToPrewarm.append(contentsOf: recent.compactMap(\.imageURL))
+        if let top = onThisDay?.top {
+            urlsToPrewarm.append(contentsOf: top.compactMap(\.track.imageURL))
+        }
+        ImageMemoryCache.shared.prewarm(urlsToPrewarm)
         // 其余 fetchedAt 键(翻页缓存等)留空:那些刷新照常发生,快照只是首屏的底
     }
 

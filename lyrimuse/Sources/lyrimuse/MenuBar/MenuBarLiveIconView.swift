@@ -1,28 +1,13 @@
 import AppKit
 import QuartzCore
 
-// 菜单栏图标的"活体"渲染层(2026-08-17):播放时所有款式都能动(设置里有总开关
-// menuBarIconAnimates),暂停/无播放/显示歌词文字时这一层整个退场,由静态模板图接管。
+// 菜单栏图标的动画渲染层：播放时激活，暂停/停止/显示歌词文字时退场并由静态模板图接管。
+// 统一采用 Core Animation 图层动画（无主线程 Timer 轮询换帧），由系统渲染管线插值，保证平滑流畅。
 //
-// ---- 为什么是 Core Animation,不是 Timer 换帧 ----
-//
-// 第一版「跳动音条」是 10fps 的主线程 Timer 换帧(RunCat 的做法),用户当场反馈
-// "卡卡的":正弦起伏这种**连续**运动,10fps 的台阶肉眼可见;而且主线程上还有 20Hz
-// 逐字高亮在跑,Timer 间隔一被挤就一顿一顿。RunCat 的卡通跑步帧吃得消低帧率,
-// 平滑形变吃不消 —— 跟 MenuBarScrollingLabel 头注里记录的滚动歌词是同一课。
-// 改成动画全部交给渲染层插值:主线程只在"开播/暂停/换款/换色"时各干一次活。
-//
-// ---- 四种动效 ----
-//
-//   * 音条(equalizer):三根 CALayer 各挂一条相位错开的高度动画,双正弦,循环无缝。
-//   * 声波(waveform):SF Symbol 原生的 variable-color 流动(NSImageView 符号效果,
-//     系统驱动,跟 macOS 自家图标同一个质感)。
-//   * 其余(音符系/麦克风/经典):统一的轻微摇摆(±5° 正弦),NSImageView 的图层
-//     转起来 —— 模板图交给 imageView 上色,省掉自绘着色那套。
-//
-// 颜色/高亮机制同 MenuBarScrollingLabel:自绘图层享受不到模板图的系统着色,
-// labelColor / selectedMenuItemTextColor 自己解析、菜单开合时换色,换色绝不打断动画。
-// 退场时动画全部摘掉 —— 别留无穷动画在隐藏图层上让渲染层空转。
+// 动效款式：
+// - 音条(equalizer): 三根 CALayer 错相正弦高度动画，循环无缝。
+// - 声波(waveform): SF Symbol variable-color 流动效果。
+// - 其余(音符/麦克风/黑胶等): 图层微幅摇摆或旋转。
 @MainActor
 final class MenuBarLiveIconView: NSView {
     private static let animationKey = "lyrimuse.liveicon"
@@ -33,11 +18,7 @@ final class MenuBarLiveIconView: NSView {
     // ---- 呈现体:一个 imageView(摇摆/声波/旋转)+ 自绘图层(音条、黑胶双层) ----
     private let imageView = NSImageView()
     private var equalizerBars: [CALayer] = []
-    /// "动件"层(黑胶唱盘/光盘旋转、节拍器摆针):**裸 CALayer,几何完全归这里管**。
-    /// 结构动画绝不能挂在 imageView 的视图背板层上 —— AppKit 拥有那个层的几何,布局
-    /// 随时改写,变换叠上去实测就是"画圈不自转"(2026-08-17 用户连报三轮,换了三版字形
-    /// 都没救,根因在机制:黑胶走裸层没事、光盘走视图层不行,对照坐实)。图层 contents
-    /// 享受不到系统模板着色,颜色由 applyColor 里的 tintedContents 现染。
+    /// 动件层(黑胶唱盘/光盘旋转、节拍器摆针)：独立 CALayer 驱动几何变换，避免视图背板层布局重置干扰动画。
     private let movingPart = CALayer()
     /// "静件"层(黑胶唱臂、节拍器机身、钢琴键盘):静止参照物。
     private let staticPart = CALayer()
