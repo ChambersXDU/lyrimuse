@@ -538,8 +538,12 @@ private final class LyricsWindowController: ObservableObject {
     }
 
     deinit {
+        persistFrameTask?.cancel()
         if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) }
         if let nativeFullScreenEscapeMonitor { NSEvent.removeMonitor(nativeFullScreenEscapeMonitor) }
+        if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) }
+        if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
+        if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
         if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
         if let resignKeyObserver { NotificationCenter.default.removeObserver(resignKeyObserver) }
         if let enterFullScreenObserver { NotificationCenter.default.removeObserver(enterFullScreenObserver) }
@@ -1775,14 +1779,8 @@ struct LyricsWindowView: View {
         platformLinks = nil
         let linkArtist = playback.artist, linkTitle = playback.title, linkAlbum = playback.album
         if !linkTitle.isEmpty {
-            Task.detached(priority: .userInitiated) {
-                let links = EnrichCacheReader.platformLinks(
-                    artist: linkArtist, title: linkTitle, album: linkAlbum)
-                await MainActor.run {
-                    guard generation == moreMenuStateGeneration else { return }
-                    platformLinks = links
-                }
-            }
+            platformLinks = EnrichCacheReader.platformLinks(
+                artist: linkArtist, title: linkTitle, album: linkAlbum)
         }
         guard isAppleMusicPlayer else { return }
         Task.detached(priority: .userInitiated) {
@@ -1902,21 +1900,10 @@ struct LyricsWindowView: View {
     }
 
     private func openInfoPanel() {
-        infoLyricsSource = nil
-        withAnimation(.easeOut(duration: 0.12)) { showsInfoPanel = true }
-        // 歌词来源在 enrich 缓存里,首次加载要解析整份 JSON(mtime 缓存,之后是 µs 级),
-        // 放后台取,取到再补进面板。
         let artist = playback.artist, title = playback.title, album = playback.album
-        Task.detached(priority: .userInitiated) {
-            // 一次缓存读同时供两处用(来源 + 各平台链接):都走 EnrichCacheReader,
-            // mtime 没变时是 µs 级,不值得拆成两个 task。
-            let info = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)
-            let links = EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)
-            await MainActor.run {
-                infoLyricsSource = info?.lyricsSource
-                platformLinks = links
-            }
-        }
+        infoLyricsSource = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
+        platformLinks = EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)
+        withAnimation(.easeOut(duration: 0.12)) { showsInfoPanel = true }
     }
 
     /// 「搜索歌词…」:点击瞬间快照曲目字段、后台解析 写回 key + 当前来源,齐了再弹面板。
@@ -1932,24 +1919,15 @@ struct LyricsWindowView: View {
         let p = PlaybackCoordinator.shared
         let artist = p.artist, title = p.title, album = p.album
         let durationSecs = Double(p.currentDurationMs ?? 0) / 1000
-        Task.detached(priority: .userInitiated) {
-            let key = EnrichCacheReader.resolvedKey(artist: artist, title: title, album: album)
-                ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-            let source = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
-            // 「当前使用」双判据要的正文指纹(2026-09-04),跟上面几次读取同在这个后台任务里。
-            let lyrics = EnrichCacheReader.lookup(artist: artist, title: title, album: album)?.lyrics ?? ""
-            let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
-            await MainActor.run {
-                // title 传归一化后的(EnrichCacheKeys.normalizedTitle),不是原始播放器标题——
-                // 2026-08-31 真实bug(林潔心《想逃避(22)》):collector 算缓存 key 时会把标题
-                // 结尾这种非版本标记的括号剥掉,但自动解析发去歌词源的搜索请求以前用的是
-                // 原始标题,搜不到;这里如果也传原始标题,手动搜索会复现同一个"搜不到"。
-                // key/source 两个查找仍然传原始 title——它们各自内部会归一化,契约不变。
-                lyricsSearchContext = LyricsSearchContext(
-                    artist: artist, title: EnrichCacheKeys.normalizedTitle(title), album: album,
-                    key: key, currentSource: source, currentFingerprint: fingerprint, durationSecs: durationSecs)
-            }
-        }
+        let key = EnrichCacheReader.resolvedKey(artist: artist, title: title, album: album)
+            ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        let source = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
+        // 「当前使用」双判据要的正文指纹(2026-09-04)。
+        let lyrics = EnrichCacheReader.lookup(artist: artist, title: title, album: album)?.lyrics ?? ""
+        let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
+        lyricsSearchContext = LyricsSearchContext(
+            artist: artist, title: EnrichCacheKeys.normalizedTitle(title), album: album,
+            key: key, currentSource: source, currentFingerprint: fingerprint, durationSecs: durationSecs)
     }
 
     /// 「歌词时间轴」内联行:标签 + 当前值(只显示**这首歌**的微调,不含全局基准 ——
@@ -2895,23 +2873,25 @@ private struct LyricsLineRow: View, Equatable {
     let onHover: (Bool) -> Void
     let onTap: () -> Void
 
-    static func == (a: LyricsLineRow, b: LyricsLineRow) -> Bool {
-        // item 只比 id:id 里带了曲目标识 + 行下标(见 LyricsWindowLine),同 id 必然同内容。
-        a.item.id == b.item.id
-            && a.distance == b.distance
-            && a.isActive == b.isActive
-            && a.isHovered == b.isHovered
-            && a.isPlaying == b.isPlaying
-            && a.fillSettled == b.fillSettled
-            && a.fontSize == b.fontSize
-            && a.romaFontSize == b.romaFontSize
-            && a.translationFontSize == b.translationFontSize
-            && a.duetInsetUnit == b.duetInsetUnit
-            && a.onArtwork == b.onArtwork
-            && a.showRomanization == b.showRomanization
-            && a.showTranslation == b.showTranslation
-            && a.reduceMotion == b.reduceMotion
-            && a.displayScale == b.displayScale
+    nonisolated static func == (a: LyricsLineRow, b: LyricsLineRow) -> Bool {
+        MainActor.assumeIsolated {
+            // item 只比 id:id 里带了曲目标识 + 行下标(见 LyricsWindowLine),同 id 必然同内容。
+            a.item.id == b.item.id
+                && a.distance == b.distance
+                && a.isActive == b.isActive
+                && a.isHovered == b.isHovered
+                && a.isPlaying == b.isPlaying
+                && a.fillSettled == b.fillSettled
+                && a.fontSize == b.fontSize
+                && a.romaFontSize == b.romaFontSize
+                && a.translationFontSize == b.translationFontSize
+                && a.duetInsetUnit == b.duetInsetUnit
+                && a.onArtwork == b.onArtwork
+                && a.showRomanization == b.showRomanization
+                && a.showTranslation == b.showTranslation
+                && a.reduceMotion == b.reduceMotion
+                && a.displayScale == b.displayScale
+        }
     }
 
     private var secondaryTextColor: Color { onArtwork ? .white.opacity(0.6) : .secondary }

@@ -118,7 +118,7 @@ final class LyricSourceTestService {
             let readQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.test-lyric-sources.stdout", qos: .utility)
             let readGroup = DispatchGroup()
 
-            func drainCompleteLines() {
+            @Sendable func drainCompleteLines() {
                 while let newlineRange = box.outBuffer.firstRange(of: Data([0x0A])) {
                     let lineData = box.outBuffer.subdata(in: box.outBuffer.startIndex..<newlineRange.lowerBound)
                     box.outBuffer.removeSubrange(box.outBuffer.startIndex..<newlineRange.upperBound)

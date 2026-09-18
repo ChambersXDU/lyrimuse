@@ -141,6 +141,32 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
     public static let delayAfterAnchorChange: TimeInterval = 0.4
     private var confirmationInFlight = false
 
+    private func clearConfirmationInFlight() {
+        lock.lock()
+        confirmationInFlight = false
+        lock.unlock()
+    }
+
+    private func isKeyCurrent(_ key: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return scheduledKey == key
+    }
+
+    private func recordProbeResult(
+        key: String,
+        position: Double,
+        midpoint: Date
+    ) -> (stillScheduled: Bool, resultSink: (@Sendable (String) -> Void)?, artworkSink: (@Sendable (String, URL) -> Void)?) {
+        lock.lock()
+        defer { lock.unlock() }
+        let stillScheduled = scheduledKey == key
+        if stillScheduled {
+            pending = (key, position, midpoint)
+        }
+        return (stillScheduled, resultSink, artworkSink)
+    }
+
     /// 开播那次(isConfirmation=false)顺带交封面地址;锚点变化的确认(true)只管位置,结束时放开在飞标记。
     private func runProbe(key: String, delay: TimeInterval, isConfirmation: Bool, retriesLeft: Int) {
         let reason = isConfirmation ? "anchor change" : "track start"
@@ -150,15 +176,10 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
             guard let self else { return }
             defer {
                 if isConfirmation {
-                    self.lock.lock()
-                    self.confirmationInFlight = false
-                    self.lock.unlock()
+                    self.clearConfirmationInFlight()
                 }
             }
-            self.lock.lock()
-            let stillCurrent = self.scheduledKey == key
-            self.lock.unlock()
-            guard stillCurrent else { return }
+            guard self.isKeyCurrent(key) else { return }
             // 两次采样(2026-09-09):第一次只用来证明钟在走,第二次才是交出去的读数(更新,
             // capturedAt 也对得上 consumeCorrection 的 rate×age 补偿)。两次是两次独立的 osascript,
             // 中间 Task.sleep 不占线程。
@@ -181,16 +202,11 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
             }
             let parsed = second.parsed
             let position = second.position
-            self.lock.lock()
-            let stillScheduled = self.scheduledKey == key
-            if stillScheduled { self.pending = (key, position, second.midpoint) }
-            let sink = self.artworkSink
-            let resultSink = self.resultSink
-            self.lock.unlock()
-            if stillScheduled { resultSink?(key) }
+            let probeResult = self.recordProbeResult(key: key, position: position, midpoint: second.midpoint)
+            if probeResult.stillScheduled { probeResult.resultSink?(key) }
             // 封面地址:开播那次才交(还是这首、且是真曲目;广告物料图 / 本地文件的 missing value 都不要)。
-            if deliverArtwork, stillScheduled, let art = parsed.artworkURL, let uri = parsed.uri, SpotifyArtworkURL.isTrackURI(uri) {
-                sink?(key, art)
+            if deliverArtwork, probeResult.stillScheduled, let art = parsed.artworkURL, let uri = parsed.uri, SpotifyArtworkURL.isTrackURI(uri) {
+                probeResult.artworkSink?(key, art)
             }
             Self.logger.notice("spotify position probe (\(reason, privacy: .public)): key=\(key, privacy: .public) position=\(position, format: .fixed(precision: 3)) (first \(first.position, format: .fixed(precision: 3)) over \(wallGap, format: .fixed(precision: 3))s) rtt=\(second.rtt, format: .fixed(precision: 3))")
         }

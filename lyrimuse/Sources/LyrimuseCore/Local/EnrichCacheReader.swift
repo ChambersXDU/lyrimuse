@@ -518,9 +518,9 @@ public enum EnrichCacheReader {
     }
 
     /// QQ 音乐图床的最大边长 —— 再往上是 404,见 nativeSizedCoverURL 的注释。
-    private static let qqCoverMaxEdge = 800
+    nonisolated private static let qqCoverMaxEdge = 800
     /// Apple 图床取的那一档。它要多大给多大,所以这是"够用",不是"上限"。
-    private static let appleCoverTargetEdge = 1200
+    nonisolated private static let appleCoverTargetEdge = 1200
 
     /// 摘掉网易云的 `?param=WxH`。nil = 不是网易云,或本来就没有那个参数。
     private nonisolated static func neteaseNativeCoverURL(_ url: URL) -> URL? {

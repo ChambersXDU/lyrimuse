@@ -101,6 +101,16 @@ final class UnknownPlayerNotifier: NSObject {
         timer?.tolerance = 1
     }
 
+    /// 停止轮询定时器。
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    deinit {
+        timer?.invalidate()
+    }
+
     // MARK: - 一拍
 
     private func tick() {

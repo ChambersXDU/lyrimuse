@@ -420,7 +420,7 @@ final class LyricsSearchService {
 
             // 按 \n 切行,每凑齐一整行就尝试解码成 RawSearchUpdate 并回调——半行(还没读到
             // 换行符的尾巴)留在 outBuffer 里等下一批数据补全,不会被当成一行提前误判。
-            func drainCompleteLines() {
+            @Sendable func drainCompleteLines() {
                 while let newlineRange = box.outBuffer.firstRange(of: Data([0x0A])) {
                     let lineData = box.outBuffer.subdata(in: box.outBuffer.startIndex..<newlineRange.lowerBound)
                     box.outBuffer.removeSubrange(box.outBuffer.startIndex..<newlineRange.upperBound)

@@ -708,8 +708,124 @@ final class PlaybackCoordinator: ObservableObject {
         // 订阅),所以这里也要拿到 AppSettings。
         let settings = AppSettings.shared
         s.start()
+
+        s.$title.assign(to: &$title)
+        s.$artist.assign(to: &$artist)
+        s.$album.assign(to: &$album)
+        s.$isPlayingNow.assign(to: &$isPlayingNow)
+        s.$nextLineText.assign(to: &$nextLineText)
+        s.$nextLineSide.assign(to: &$nextLineSide)
+        s.$anchor.assign(to: &$anchor)
+        s.$hasLyricsContent.assign(to: &$hasLyricsContent)
+        s.$isCurrentTrackInstrumental.assign(to: &$isCurrentTrackInstrumental)
+        s.$currentTrackHasNoLyrics.assign(to: &$currentTrackHasNoLyrics)
+        s.$currentTrackPlainLyrics.assign(to: &$currentTrackPlainLyrics)
+        s.$collectorNetworkDown.assign(to: &$collectorNetworkDown)
+        s.$isCurrentTrackAdBreak.assign(to: &$isCurrentTrackAdBreak)
+        s.$isRadioTalkBreak.assign(to: &$isRadioTalkBreak)
+        s.$radioStationName.assign(to: &$radioStationName)
+        // 台标同样在这一层解一次码,消费方直接拿 NSImage —— 理由同下面 artworkImage 那条。
+        s.$radioStationArtwork
+            .map { $0.flatMap { NSImage(data: $0) } }
+            .assign(to: &$radioStationImage)
+        s.$currentAdSlot.assign(to: &$currentAdSlot)
+        s.$currentLineIndex.assign(to: &$currentLineIndex)
+        s.$scrollLineIndex.assign(to: &$scrollLineIndex)
+        s.$compactLine.assign(to: &$compactLine)
+        s.$compactShowsPlaceholder.assign(to: &$compactShowsPlaceholder)
+        s.$compactDwellMs.assign(to: &$compactDwellMs)
+        s.$compactLeadInMs.assign(to: &$compactLeadInMs)
+        s.$allLines.assign(to: &$allLines)
+        s.$lyricsGapMarkers.assign(to: &$lyricsGapMarkers)
+        s.$currentGapIndex.assign(to: &$currentGapIndex)
+        s.$currentLineFillSettled.assign(to: &$currentLineFillSettled)
+        s.$artworkData.assign(to: &$artworkData)
+        // 解码在这里做一次,消费方(灵动岛顶行小封面/模糊背景)直接拿 NSImage,不在
+        // view body 里反复解同一张图,见 artworkImage 声明处的注释。@Published 的
+        // willSet 语义让这两条订阅在同一次调用里同步跑完,artworkData 和 artworkImage
+        // 不会跨渲染帧不一致(SwiftUI 在这一轮 runloop 结束时才真正重绘)。
+        s.$artworkData
+            .map { $0.flatMap { NSImage(data: $0) } }
+            .assign(to: &$artworkImage)
+
+        // 两个消费面各自从**同一份原始均值**派生自己那一版,处理都是纯数学,放在这一层
+        // 跟 hex→Color 的转换一起做,每首歌只算一次,不在两边的 body 里反复算。
+        // (十六进制字符串必须在这一层才转得成 Color——LocalPlaybackSource 所在的
+        // LyrimuseCore 不引入 SwiftUI,见该属性定义处的注释。)
+        //
+        // 桌面悬浮歌词:背景未知,判据是"跟描边色够对比",所以要跟着描边设置一起算。
+        // 两条管线都优先吃高清替代的均值(highResHex ?? systemHex),理由见
+        // highResAverageHex 的注释:强调色要跟实际显示的那张图对上。
+        Publishers.CombineLatest4(
+            s.$artworkAverageHex,
+            $highResAverageHex,
+            settings.$textStrokeEnabled,
+            settings.$textStrokeColorHex
+        )
+        .map { systemHex, highResHex, strokeOn, strokeHex -> Color? in
+            guard let hex = highResHex ?? systemHex,
+                  let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
+            // NSColor(hexStringWithAlpha:) 用 srgbRed 构造,分量可以直接读,
+            // 不需要再过一次 usingColorSpace。
+            let (r, g, b) = (ns.redComponent, ns.greenComponent, ns.blueComponent)
+            // 描边关着(或者淡到基本不存在)时字直接压在未知背景上,没有"跟谁对比"
+            // 可言 —— 退回那条保证够亮的老规则,这也是这个场景 2026-08-17 之前的行为。
+            // 0.5 这个门槛是取舍不是测量:半透明描边的实际观感取决于它背后是什么,
+            // 而那正是这一层不知道的东西。
+            guard strokeOn,
+                  let stroke = NSColor(hexStringWithAlpha: strokeHex),
+                  stroke.alphaComponent >= 0.5
+            else {
+                let lifted = LocalPlaybackSource.brightenedAccent(r: r, g: g, b: b)
+                return Color(.sRGB, red: lifted.r, green: lifted.g, blue: lifted.b)
+            }
+            let fitted = LocalPlaybackSource.accentAgainstStroke(
+                r: r, g: g, b: b,
+                strokeR: stroke.redComponent,
+                strokeG: stroke.greenComponent,
+                strokeB: stroke.blueComponent)
+            return Color(.sRGB, red: fitted.r, green: fitted.g, blue: fitted.b)
+        }
+        // 输出去重(2026-08-20):四个输入里任何一个抖动(高清 hex 的 nil 重赋值是
+        // 常客)都会重发,而算出来的颜色多数时候没变——Color? 是 Equatable,挡在
+        // assign 前面,别让 coordinator 的全部观察面白挨一轮 objectWillChange。
+        .removeDuplicates()
+        .assign(to: &$artworkAccentColor)
+
+        // 灵动岛:背景永远深色,判据是"够亮"——先过 HSB 亮度地板,再补一道感知亮度
+        // 下限(饱和冷色 HSB 地板拦不住,见 accentForDarkBackdrop)。
+        //
+        // ⚠️ 2026-08-27 补 notchCardStyle 进来:上面两步假设背景永远接近纯黑,对纯黑/
+        // 深色渐变两种风格成立,但 coverArt 风格的背景亮度正比于封面本身的亮度——亮
+        // 封面（比如实测坐实的一张黄底专辑封面）叠 45% 黑之后依然不暗,固定的文字亮度
+        // 地板量不出这种情况,文字会跟背景撞色(实测 WCAG 对比度只有 2.78,灵动岛字号
+        // 9~13.5pt 按 WCAG 够不上大号文字那档,门槛该是 4.5)。只在这个风格下多算一步
+        // accentForCoverArtBackground,纯黑/深色渐变两种风格背景是真的暗,不需要、也
+        // 不该多算(那两种风格下这步会是无操作,加了也不影响,但没必要多算一次)。
+        Publishers.CombineLatest3(s.$artworkAverageHex, $highResAverageHex, settings.$notchCardStyle)
+            .map { systemHex, highResHex, cardStyle -> Color? in
+                guard let hex = highResHex ?? systemHex,
+                      let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
+                let rawR = ns.redComponent, rawG = ns.greenComponent, rawB = ns.blueComponent
+                let base = LocalPlaybackSource.brightenedAccent(r: rawR, g: rawG, b: rawB)
+                var lifted = LocalPlaybackSource.accentForDarkBackdrop(
+                    r: base.r, g: base.g, b: base.b)
+                if cardStyle == .coverArt {
+                    lifted = LocalPlaybackSource.accentForCoverArtBackground(
+                        r: lifted.r, g: lifted.g, b: lifted.b,
+                        rawR: rawR, rawG: rawG, rawB: rawB)
+                }
+                return Color(.sRGB, red: lifted.r, green: lifted.g, blue: lifted.b)
+            }
+            .removeDuplicates() // 同 artworkAccentColor 那条的理由
+            .assign(to: &$notchAccentColor)
+
+        s.$currentLyricsOffsetMs.assign(to: &$currentLyricsOffsetMs)
+        s.$trackLyricsOffsetMs.assign(to: &$trackLyricsOffsetMs)
+        s.$pausedPositionMs.assign(to: &$pausedPositionMs)
+        s.$currentDurationMs.assign(to: &$currentDurationMs)
+
         cancellables = [
-            s.$title.assign(to: \.title, on: self),
             // 换歌就重读一次"喜欢"状态。用 title+artist 组合去重而不是只看 title:同名不同
             // 歌手的曲目(翻唱/合辑里很常见)只看 title 会被当成同一首,漏掉一次刷新。
             s.$title.combineLatest(s.$artist)
@@ -720,48 +836,11 @@ final class PlaybackCoordinator: ObservableObject {
                     // refreshExtendedControls;单项 refresh 保留给写后回读/视图 onAppear。
                     self?.refreshExtendedControls()
                 },
-            s.$artist.assign(to: \.artist, on: self),
-            s.$album.assign(to: \.album, on: self),
-            s.$isPlayingNow.assign(to: \.isPlayingNow, on: self),
             s.$isPlayingNow.sink { [weak self] playing in self?.updateSmoothedPlaying(playing) },
             s.$currentLine.sink { [weak self] line in
                 logger.debug("coordinator currentLine updated: hasLine=\(line != nil) hasWords=\(line?.words != nil) hasMainText=\(line?.mainText != nil)")
                 self?.currentLine = line
             },
-            s.$nextLineText.assign(to: \.nextLineText, on: self),
-            s.$nextLineSide.assign(to: \.nextLineSide, on: self),
-            s.$anchor.assign(to: \.anchor, on: self),
-            s.$hasLyricsContent.assign(to: \.hasLyricsContent, on: self),
-            s.$isCurrentTrackInstrumental.assign(to: \.isCurrentTrackInstrumental, on: self),
-            s.$currentTrackHasNoLyrics.assign(to: \.currentTrackHasNoLyrics, on: self),
-            s.$currentTrackPlainLyrics.assign(to: \.currentTrackPlainLyrics, on: self),
-            s.$collectorNetworkDown.assign(to: \.collectorNetworkDown, on: self),
-            s.$isCurrentTrackAdBreak.assign(to: \.isCurrentTrackAdBreak, on: self),
-            s.$isRadioTalkBreak.assign(to: \.isRadioTalkBreak, on: self),
-            s.$radioStationName.assign(to: \.radioStationName, on: self),
-            // 台标同样在这一层解一次码,消费方直接拿 NSImage —— 理由同下面 artworkImage 那条。
-            s.$radioStationArtwork
-                .map { $0.flatMap { NSImage(data: $0) } }
-                .assign(to: \.radioStationImage, on: self),
-            s.$currentAdSlot.assign(to: \.currentAdSlot, on: self),
-            s.$currentLineIndex.assign(to: \.currentLineIndex, on: self),
-            s.$scrollLineIndex.assign(to: \.scrollLineIndex, on: self),
-            s.$compactLine.assign(to: \.compactLine, on: self),
-            s.$compactShowsPlaceholder.assign(to: \.compactShowsPlaceholder, on: self),
-            s.$compactDwellMs.assign(to: \.compactDwellMs, on: self),
-            s.$compactLeadInMs.assign(to: \.compactLeadInMs, on: self),
-            s.$allLines.assign(to: \.allLines, on: self),
-            s.$lyricsGapMarkers.assign(to: \.lyricsGapMarkers, on: self),
-            s.$currentGapIndex.assign(to: \.currentGapIndex, on: self),
-            s.$currentLineFillSettled.assign(to: \.currentLineFillSettled, on: self),
-            s.$artworkData.assign(to: \.artworkData, on: self),
-            // 解码在这里做一次,消费方(灵动岛顶行小封面/模糊背景)直接拿 NSImage,不在
-            // view body 里反复解同一张图,见 artworkImage 声明处的注释。@Published 的
-            // willSet 语义让这两条订阅在同一次调用里同步跑完,artworkData 和 artworkImage
-            // 不会跨渲染帧不一致(SwiftUI 在这一轮 runloop 结束时才真正重绘)。
-            s.$artworkData
-                .map { $0.flatMap { NSImage(data: $0) } }
-                .assign(to: \.artworkImage, on: self),
             // 高清封面:换歌或换封面之后重找一次,见 highResArtworkImage 的注释。
             //
             // ⚠️ debounce 不是为了省请求,是为了**避开 @Published 的 willSet 时机**:
@@ -813,80 +892,6 @@ final class PlaybackCoordinator: ObservableObject {
             Publishers.CombineLatest(s.$spotifyArtworkURL, s.$artworkData)
                 .debounce(for: .milliseconds(350), scheduler: RunLoop.main)
                 .sink { [weak self] url, _ in self?.refreshSpotifyOriginalCover(url) },
-            // 两个消费面各自从**同一份原始均值**派生自己那一版,处理都是纯数学,放在这一层
-            // 跟 hex→Color 的转换一起做,每首歌只算一次,不在两边的 body 里反复算。
-            // (十六进制字符串必须在这一层才转得成 Color——LocalPlaybackSource 所在的
-            // LyrimuseCore 不引入 SwiftUI,见该属性定义处的注释。)
-            //
-            // 桌面悬浮歌词:背景未知,判据是"跟描边色够对比",所以要跟着描边设置一起算。
-            // 两条管线都优先吃高清替代的均值(highResHex ?? systemHex),理由见
-            // highResAverageHex 的注释:强调色要跟实际显示的那张图对上。
-            Publishers.CombineLatest4(
-                s.$artworkAverageHex,
-                $highResAverageHex,
-                settings.$textStrokeEnabled,
-                settings.$textStrokeColorHex
-            )
-            .map { systemHex, highResHex, strokeOn, strokeHex -> Color? in
-                guard let hex = highResHex ?? systemHex,
-                      let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
-                // NSColor(hexStringWithAlpha:) 用 srgbRed 构造,分量可以直接读,
-                // 不需要再过一次 usingColorSpace。
-                let (r, g, b) = (ns.redComponent, ns.greenComponent, ns.blueComponent)
-                // 描边关着(或者淡到基本不存在)时字直接压在未知背景上,没有"跟谁对比"
-                // 可言 —— 退回那条保证够亮的老规则,这也是这个场景 2026-08-17 之前的行为。
-                // 0.5 这个门槛是取舍不是测量:半透明描边的实际观感取决于它背后是什么,
-                // 而那正是这一层不知道的东西。
-                guard strokeOn,
-                      let stroke = NSColor(hexStringWithAlpha: strokeHex),
-                      stroke.alphaComponent >= 0.5
-                else {
-                    let lifted = LocalPlaybackSource.brightenedAccent(r: r, g: g, b: b)
-                    return Color(.sRGB, red: lifted.r, green: lifted.g, blue: lifted.b)
-                }
-                let fitted = LocalPlaybackSource.accentAgainstStroke(
-                    r: r, g: g, b: b,
-                    strokeR: stroke.redComponent,
-                    strokeG: stroke.greenComponent,
-                    strokeB: stroke.blueComponent)
-                return Color(.sRGB, red: fitted.r, green: fitted.g, blue: fitted.b)
-            }
-            // 输出去重(2026-08-20):四个输入里任何一个抖动(高清 hex 的 nil 重赋值是
-            // 常客)都会重发,而算出来的颜色多数时候没变——Color? 是 Equatable,挡在
-            // assign 前面,别让 coordinator 的全部观察面白挨一轮 objectWillChange。
-            .removeDuplicates()
-            .assign(to: \.artworkAccentColor, on: self),
-            // 灵动岛:背景永远深色,判据是"够亮"——先过 HSB 亮度地板,再补一道感知亮度
-            // 下限(饱和冷色 HSB 地板拦不住,见 accentForDarkBackdrop)。
-            //
-            // ⚠️ 2026-08-27 补 notchCardStyle 进来:上面两步假设背景永远接近纯黑,对纯黑/
-            // 深色渐变两种风格成立,但 coverArt 风格的背景亮度正比于封面本身的亮度——亮
-            // 封面（比如实测坐实的一张黄底专辑封面）叠 45% 黑之后依然不暗,固定的文字亮度
-            // 地板量不出这种情况,文字会跟背景撞色(实测 WCAG 对比度只有 2.78,灵动岛字号
-            // 9~13.5pt 按 WCAG 够不上大号文字那档,门槛该是 4.5)。只在这个风格下多算一步
-            // accentForCoverArtBackground,纯黑/深色渐变两种风格背景是真的暗,不需要、也
-            // 不该多算(那两种风格下这步会是无操作,加了也不影响,但没必要多算一次)。
-            Publishers.CombineLatest3(s.$artworkAverageHex, $highResAverageHex, settings.$notchCardStyle)
-                .map { systemHex, highResHex, cardStyle -> Color? in
-                    guard let hex = highResHex ?? systemHex,
-                          let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
-                    let rawR = ns.redComponent, rawG = ns.greenComponent, rawB = ns.blueComponent
-                    let base = LocalPlaybackSource.brightenedAccent(r: rawR, g: rawG, b: rawB)
-                    var lifted = LocalPlaybackSource.accentForDarkBackdrop(
-                        r: base.r, g: base.g, b: base.b)
-                    if cardStyle == .coverArt {
-                        lifted = LocalPlaybackSource.accentForCoverArtBackground(
-                            r: lifted.r, g: lifted.g, b: lifted.b,
-                            rawR: rawR, rawG: rawG, rawB: rawB)
-                    }
-                    return Color(.sRGB, red: lifted.r, green: lifted.g, blue: lifted.b)
-                }
-                .removeDuplicates() // 同 artworkAccentColor 那条的理由
-                .assign(to: \.notchAccentColor, on: self),
-            s.$currentLyricsOffsetMs.assign(to: \.currentLyricsOffsetMs, on: self),
-            s.$trackLyricsOffsetMs.assign(to: \.trackLyricsOffsetMs, on: self),
-            s.$pausedPositionMs.assign(to: \.pausedPositionMs, on: self),
-            s.$currentDurationMs.assign(to: \.currentDurationMs, on: self),
             // 灵动岛 coverArt 背景的模糊图,封面(系统份或高清替代)一变就重烘一次 ——
             // 见 blurredArtworkImage 声明处的注释。sink 用参数值,不回读属性(willSet 时机)。
             Publishers.CombineLatest($artworkImage, $highResArtworkImage)

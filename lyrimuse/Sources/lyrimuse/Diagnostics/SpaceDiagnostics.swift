@@ -35,22 +35,26 @@ enum SpaceDiagnostics {
         fullScreenCapabilityWrites += 1
     }
 
+    private static var workspaceObservers: [NSObjectProtocol] = []
+    private static var defaultObservers: [NSObjectProtocol] = []
+
     static func start() {
         guard !started else { return }
         started = true
         logger.notice("spacediag: probe started (temporary diagnostics, remove once the cause is found)")
 
         let ws = NSWorkspace.shared.notificationCenter
-        ws.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { _ in
+        let obsSpace = ws.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { report("Space 变了") }
         }
         // 谁在最前台 —— 用户侧用 lsappinfo 采样看到的是「弹回桌面时前台变成访达」,
         // 这里从 App 内部再记一份,两边能对时间线。
-        ws.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { note in
+        let obsApp = ws.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { note in
             let app = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?
                 .localizedName ?? "?"
             MainActor.assumeIsolated { report("别的 App 被激活: \(app)") }
         }
+        workspaceObservers.append(contentsOf: [obsSpace, obsApp])
 
         let nc = NotificationCenter.default
         let appEvents: [(Notification.Name, String)] = [
@@ -58,34 +62,36 @@ enum SpaceDiagnostics {
             (NSApplication.didResignActiveNotification, "本 App 失去活跃"),
         ]
         for (name, label) in appEvents {
-            nc.addObserver(forName: name, object: nil, queue: .main) { _ in
+            let obs = nc.addObserver(forName: name, object: nil, queue: .main) { _ in
                 MainActor.assumeIsolated {
                     report(label)
-                    // ⚠️ **调用栈是这一轮的核心证据**(2026-09-03 第二版):真机日志坐实
-                    // 「切到飞书全屏 → 1.8 秒后 Lyrimuse 自己被激活 → Space 被拽回」,
-                    // 而那一刻既没有 reopen、也没有点击。先 App 激活、再窗口成 key,是
-                    // `NSApp.activate(ignoringOtherApps:)` 的签名动作 —— 但全仓十几个调用点
-                    // 逐个读代码判「需不需要用户点击」已经漏过一次,所以改成让它自报家门。
-                    //
-                    // `NSApp.activate` 在多数路径上是**同步**投递 didBecomeActive 的,所以
-                    // 这个栈里应该能看到真正的调用方;万一只有 AppKit 的帧,那说明激活是
-                    // 系统侧发起的(而不是本 App 调的),那也是一个决定性的结论。
-                    if name == NSApplication.didBecomeActiveNotification {
-                        let frames = Thread.callStackSymbols
-                            .prefix(24)
-                            .map { $0.replacingOccurrences(of: "  ", with: " ") }
-                            .joined(separator: " ⏎ ")
-                        logger.notice("spacediag: became-active call stack | \(frames, privacy: .public)")
-                    }
                 }
             }
+            defaultObservers.append(obs)
         }
         // 窗口成为 key 是「系统把某扇窗带到前台」的直接信号 —— 如果拽 Space 的是某扇
         // 普通窗口被 order 到前面,这一条会先亮。
-        nc.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { note in
+        let obsKey = nc.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { note in
             let title = (note.object as? NSWindow)?.title ?? "(无标题)"
             MainActor.assumeIsolated { report("窗口成为 key: \(title)") }
         }
+        defaultObservers.append(obsKey)
+    }
+
+    static func stop() {
+        guard started else { return }
+        started = false
+        let ws = NSWorkspace.shared.notificationCenter
+        for token in workspaceObservers {
+            ws.removeObserver(token)
+        }
+        workspaceObservers.removeAll()
+        let nc = NotificationCenter.default
+        for token in defaultObservers {
+            nc.removeObserver(token)
+        }
+        defaultObservers.removeAll()
+        logger.notice("spacediag: probe stopped")
     }
 
     /// 把当下的窗口分布整个拍一张:每扇窗在不在当前 Space、可不可见、collectionBehavior

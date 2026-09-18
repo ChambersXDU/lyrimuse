@@ -1197,9 +1197,16 @@ private struct ControlsFramePreferenceKey: PreferenceKey {
 
 /// WrapLayout 排版后文字实际占据的相对矩形。
 /// 供鼠标事件命中测试直接读取，避免在高频动画中引入 GeometryReader 引起重构。
-final class WrapContentRectSink {
+final class WrapContentRectSink: @unchecked Sendable {
     /// 相对 WrapLayout bounds 原点的矩形。`.zero` = 尚未排版或无内容。
     var rect: CGRect = .zero
+}
+
+struct AnySendableHashable: Hashable, @unchecked Sendable {
+    let base: AnyHashable
+    init(_ base: AnyHashable) {
+        self.base = base
+    }
 }
 
 /// 自动换行布局：将逐字歌词按行宽折行，核心几何由 WrapLayoutMath 计算。
@@ -1210,14 +1217,28 @@ struct WrapLayout: Layout {
     var verticalSpacing: CGFloat = 2
     var rowAlignment: RowAlignment = .center
     /// 内容身份 key：内容或字号未变化时跳过重测，避免逐帧重复排版开销。
-    var contentKey: AnyHashable? = nil
+    var contentKey: AnySendableHashable? = nil
     /// 可选：输出文字实际占用矩形给鼠标命中判定。
     var contentRectSink: WrapContentRectSink? = nil
+
+    init(
+        horizontalSpacing: CGFloat = 0,
+        verticalSpacing: CGFloat = 2,
+        rowAlignment: RowAlignment = .center,
+        contentKey: AnyHashable? = nil,
+        contentRectSink: WrapContentRectSink? = nil
+    ) {
+        self.horizontalSpacing = horizontalSpacing
+        self.verticalSpacing = verticalSpacing
+        self.rowAlignment = rowAlignment
+        self.contentKey = contentKey.map(AnySendableHashable.init)
+        self.contentRectSink = contentRectSink
+    }
 
     /// 布局测量缓存结构体。
     struct Cache {
         var sizes: [CGSize]
-        var contentKey: AnyHashable?
+        var contentKey: AnySendableHashable?
         var subviewCount: Int
         // rows 缓存:随 sizes 重测**必须**同步失效(sizes 新 rows 旧会摆放越界/重叠),
         // key 是 (maxWidth, horizontalSpacing)——placeSubviews 的 bounds.width 偶尔不等于

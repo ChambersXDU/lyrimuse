@@ -325,6 +325,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     }
 
     deinit {
+        moveDebounceTimer?.invalidate()
+        placementLockNoticeTimer?.invalidate()
+        longPressTimer?.invalidate()
+        dragHintDismissTimer?.invalidate()
+        transientHintDismissTimer?.invalidate()
         if let moveObserver { NotificationCenter.default.removeObserver(moveObserver) }
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         if let globalMouseMonitor { NSEvent.removeMonitor(globalMouseMonitor) }
