@@ -54,38 +54,29 @@ private final class NotchPlayback: ObservableObject {
     /// 稳态/展开那一行两只耳朵各显示什么(见 NotchEarModule)。
     @Published private(set) var leftEar: NotchEarModule = .title
     @Published private(set) var rightEar: NotchEarModule = .artist
-    /// 歌词行末尾那枚封面缩略图要不要显示、贴哪一边(2026-09-01)。走这里现读而不是
-    /// `NotchChromeSource` 协议——它只影响 `lyricRowContent` 内部的 HStack 排列,不影响
-    /// 卡片高度/宽度,理由同 `notchCardStyle`/`leftEar`/`rightEar`(那几个也只影响渲染)。
+    /// 歌词行末尾封面缩略图的显示开关与停靠侧。直接读取本地订阅，仅影响 `lyricRowContent`
+    /// 内部 HStack 排版，不影响卡片整体尺寸度量。
     @Published private(set) var lyricRowShowsArtwork: Bool = true
     @Published private(set) var lyricRowArtworkPosition: NotchLyricRowArtworkPosition = .right
-    /// 装得下的短句靠哪边(2026-09-03)。同上走这里现读:它只改 `MarqueeText` 静止时的
-    /// 对齐锚点和展开态「下一句」那一行的 frame 对齐,不影响卡片任何一个尺寸。
-    /// ⚠️ 初值必须是 `AppSettings.defaultNotchLyricsAlignment`,不能另写一个字面量 ——
-    /// 这个 `@Published` 的初值和 `AppSettings.init()` 的 fallback 是同一件事,写两份就会
-    /// 在"订阅还没首次投递"的那一帧闪一下另一个方向。
+    /// 歌词短句静态停靠对齐方式。仅影响 `MarqueeText` 静止时的对齐锚点与展开态下一句行 frame 对齐。
+    /// 初值必须与 `AppSettings.defaultNotchLyricsAlignment` 保持一致，避免首帧订阅到达前发生视觉跳变。
     @Published private(set) var lyricsAlignment: LyricsRestingAlignment =
         AppSettings.defaultNotchLyricsAlignment
-    /// 灵动岛歌词的字体(2026-09-09,设置页「字体」组):主行 / 主行同字号细一档(广告态倒计时)/ 副行与展开区
-    /// 「下一句」预览。同上走这里现读:只改字形,不改卡片任何一个尺寸(字号上限由 Core 倒推、保证两行仍塞进 44,
-    /// 见 `NotchLyricRowMetrics`)。初值直接读 `AppSettings.shared` 已算好的派生值,不另抄一份字面量。
+    /// 灵动岛歌词字体体系：主行、主行同字号细档（广告倒计时）、副行及展开预览。
+    /// 字号上限由 Core 层约束确保两行高度兼容于标准灵动岛尺寸（参见 `NotchLyricRowMetrics`）。
     @Published private(set) var mainFont: Font = AppSettings.shared.notchMainFont
     @Published private(set) var mainDetailFont: Font = AppSettings.shared.notchMainDetailFont
     @Published private(set) var secondaryFont: Font = AppSettings.shared.notchSecondaryFont
     /// 副行开着时主行那一格给多高(`lyricTextColumn`):随字号走,公式只在 Core 一份。
     @Published private(set) var mainLineHeight: CGFloat =
         NotchLyricRowMetrics.mainLineHeight(fontSize: CGFloat(AppSettings.shared.notchFontSize))
-    /// 下一句的对唱声部(2026-09-07,「对齐方式 · 自动」用)。跟 `nextLineText` 一样直接镜像
-    /// `PlaybackCoordinator.nextLineSide` —— 悬浮歌词那边同一个来源、同一条"下一句不假定跟当前句
-    /// 同一边"的理由(见 `LyricsOverlayView.nextLineDuetSide`)。当前句的声部不另镜像,`displayLine.side`
-    /// 本来就在。
+    /// 下一句对唱声部，用于「对齐方式 · 自动」计算。直接镜像 `PlaybackCoordinator.nextLineSide`，
+    /// 避免假定前后两句处于同一声部侧。
     @Published private(set) var nextLineSide: LyricDuet.Side?
 
-    /// 「对齐方式」落到三个消费点上的**确定**方向(2026-09-07 加「自动」后从直接读 `swiftUIAlignment`
-    /// 改过来的):非自动三档原样;「自动」按声部 —— 主行按 `displayLine.side`,展开态「下一句」按
-    /// `nextLineSide`,副行看它显示的是谁的内容(下一句跟下一句走,译文 / 罗马音是当前句的,跟主行走)。
-    /// 三个消费点**必须**读这三个值、不许再直接读 `playback.lyricsAlignment.swiftUIAlignment`(selftest 源码
-    /// 契约钉着):这个仓库为"同一个视觉属性漏改一条路径"付过代价,见 `LyricsRestingAlignment.swiftUIAlignment` 注释。
+    /// 各消费点的解析对齐方向：非自动档位保持原样；「自动」档位根据对唱声部分流（主行依 `displayLine.side`，
+    /// 下一句依 `nextLineSide`，副行依据具体呈现内容匹配）。
+    /// 所有渲染点均应统一读取解析后的属性，避免直接读取未经声部分流的原始对齐设置。
     var mainLyricAlignment: Alignment {
         lyricsAlignment.resolved(duetSide: displayLine?.side).swiftUIAlignment
     }
@@ -96,29 +87,16 @@ private final class NotchPlayback: ObservableObject {
         secondaryLine == .nextLine ? nextLineAlignment : mainLyricAlignment
     }
 
-    /// 「跳过广告」有没有对象(2026-09-08):广告中,**且**这条广告是 YT Music 网页广告(探针强信号判定,
-    /// 见 `YouTubeMusicAdSkipper.isYouTubeMusicAd`)。计算属性、不另发布:`isCurrentTrackAdBreak` 翻成 true
-    /// 的那一拍正是探针把 `.ad` 写进缓存的那一拍(`LocalPlaybackSource.apply()` 读的是同一份缓存),视图
-    /// 因 `isCurrentTrackAdBreak` 重估时读到的就是它;广告期间那份缓存每 5 秒被刷一次。Spotify 广告
-    /// (原生 / 网页)的 YT 判定恒 nil,键不出现。
+    /// 指示是否存在可跳过的广告目标：处于广告插播状态，且曲目经探针强信号识别为 YouTube Music 网页广告，
+    /// 并且当前跳过操作有效可用。
     var canSkipAd: Bool {
         isCurrentTrackAdBreak && YouTubeMusicAdSkipper.isYouTubeMusicAd(artist: artist, title: title)
             && adSkipAvailable
     }
 
-    /// 页面上那颗「跳过」键此刻放出来没有(2026-09-11,用户:「如果当前广告不支持跳过的话就不要显示那个
-    /// 跳过的按钮」)。
-    ///
-    /// 在此之前 `canSkipAd` 只问"是不是 YT Music 的广告",于是**不可跳过**的广告上也挂着一颗键,按下去
-    /// 只换来一句「这条广告还不能跳过」—— 一颗永远按不动的键比没有更糟。这个值由 `adSkipGate()` 在广告
-    /// 期间探页面得到(`YouTubeMusicAdSkipper.probeSkippability`,只读、不按键)。
-    ///
-    /// ⚠️ 必须是 `@Published`,不能做成计算属性去读某份缓存:倒计时那 5 秒过完、键刚放出来的那一刻,
-    /// 广告态这一格**没有任何别的东西在变**(「还剩 0:21」那截自己排了一张 `TimelineView`,只重画它自己
-    /// 那一小块),计算属性不会被重估,键就一直不出现。
-    ///
-    /// 初值 false:没问过页面之前不画键 —— 但"问不出来"(脚本跑不成)会被 `showsSkipButton` 判成**画**,
-    /// 见那边那条 fail-open。
+    /// 网页播放器跳过按钮当前是否可见可用。由 `adSkipGate()` 在广告期间通过
+    /// `YouTubeMusicAdSkipper.probeSkippability` 探针只读轮询获取。
+    /// 采用 `@Published` 确保倒计时结束按钮出现时精确触发视图重排。
     @Published private(set) var adSkipAvailable = false
 
     /// 这一轮广告的门槛轮询。广告结束 / 换歌就取消。
@@ -132,12 +110,8 @@ private final class NotchPlayback: ObservableObject {
     /// 门槛轮询自己的日志(跟 Core 那一侧同一个 category,时间线连得上)。
     static let skipGateLogger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusic-skip")
 
-    /// ⚠️ **由 `NotchLyricsView` 按 `controller.isAdBreakNow` 驱动,不挂在上面那条 `$isCurrentTrackAdBreak`
-    /// 订阅上**(2026-09-11 改)。两者对真窗口是同一件事,但**预览 chrome 的 `isAdBreakNow` 恒 false**
-    /// (`NotchEditorStage`),而 `NotchPlayback` 在预览里照样订阅真的 `PlaybackCoordinator` —— 挂在订阅上
-    /// 的话,设置页只要开着,那块编辑台预览就会跟着真广告每 5 秒对用户的浏览器发一次 AppleScript。
-    /// 真机日志坐实过(每一行都打了两遍),而"预览不该产生任何副作用"是这个仓库既有的纪律
-    /// (同 `controlsDidBecomeVisible` 在预览里是空实现)。
+    /// 由 `NotchLyricsView` 按 `controller.isAdBreakNow` 驱动，不直接绑定 `$isCurrentTrackAdBreak`。
+    /// 隔离编辑台预览环境（预览 chrome 的 `isAdBreakNow` 恒为 false），避免设置页预览组件产生 AppleScript 副作用。
     func syncAdSkipGate(adBreak: Bool) {
         NotchPlayback.skipGateLogger.info("gate: adBreak \(adBreak, privacy: .public) → \(adBreak ? "start" : "stop", privacy: .public)")
         adSkipGateTask?.cancel()
@@ -216,9 +190,7 @@ private final class NotchPlayback: ObservableObject {
             NotchTransientCenter.shared.show(.init(icon: "megaphone", text: L10n.t("没能跳过这条广告"), progress: nil))
         }
     }
-    /// 展开区时间行中间要不要显示「歌词时间轴微调」(2026-09-01)。同上走这里现读——只影响
-    /// `NotchScrubber` 内部时间行怎么排,不影响卡片高度,理由见
-    /// `AppSettings.notchExpandedShowsLyricsOffset` 上面那条⚠️。
+    /// 展开区时间行中间是否显示歌词时间轴微调控件。仅控制 `NotchScrubber` 内部排版，不影响卡片高度。
     @Published private(set) var showsLyricsOffsetControls: Bool = false
     /// 这首歌的歌词时间轴校正值(毫秒)+ 每次点击的步长——菜单栏面板那颗微调控件读的是
     /// 同一对值(`PlaybackCoordinator.trackLyricsOffsetMs`/`AppSettings.lyricsOffsetStepMs`),
@@ -237,12 +209,9 @@ private final class NotchPlayback: ObservableObject {
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             p.$currentLine.removeDuplicates().sink { [weak self] in self?.currentLine = $0 },
-            // 主行画哪一句(见 displayLine 的注释):副行关着取 compactLine(唱完就切),副行开着取
-            // currentLine(跟悬浮歌词同一套语义)。「卡拉OK效果」关着时再把**要画的那一行**压成整行
-            // (`SyncedLyricLine.lineLevel`,2026-09-06):歌词行的逐字填色按 `displayLine?.words` 走,
-            // 压成整行之后自然落到 `.plain` 那一档,渲染分支不用改。`currentLine` **不**压 —— 它只给
-            // 均衡器条子当"此刻在唱哪个字"的节拍,那是跟着人声动的律动、不是染色,关掉卡拉OK填色不该
-            // 让条子一起哑掉。
+            // 主行展示逻辑：副行关闭时取 compactLine，副行开启时取 currentLine。
+            // 当卡拉OK动效关闭时将目标行降级为整行（`SyncedLyricLine.lineLevel`），落入 .plain 档位渲染。
+            // 保留原始 currentLine 供均衡器动效跟踪人声节拍律动。
             Publishers.CombineLatest4(p.$compactLine, p.$currentLine, s.$notchLyricsKaraoke, s.$notchSecondaryLine)
                 .map { compact, current, karaoke, secondary -> SyncedLyricLine? in
                     let line = secondary.showsSecondaryRow ? current : compact
@@ -250,7 +219,7 @@ private final class NotchPlayback: ObservableObject {
                 }
                 .removeDuplicates()
                 .sink { [weak self] in self?.displayLine = $0 },
-            // 副行文本(2026-09-06):按四选一取下一句 / 当前句译文 / 当前句罗马音,空白算没有。
+            // 副行文本：根据配置获取下一句、当前句译文或当前句罗马音，空白视为空。
             Publishers.CombineLatest3(p.$currentLine, p.$nextLineText, s.$notchSecondaryLine)
                 .map { current, next, secondary -> String? in
                     // 取值规则在 Core(`LyricSecondaryLine.secondaryText`),菜单栏副行读的是同一份。
@@ -283,8 +252,7 @@ private final class NotchPlayback: ObservableObject {
             p.$anchor.sink { [weak self] in self?.anchor = $0 },
             p.$pausedPositionMs.removeDuplicates().sink { [weak self] in self?.pausedPositionMs = $0 },
             p.$currentDurationMs.removeDuplicates().sink { [weak self] in self?.currentDurationMs = $0 },
-            // ⚠️ 2026-08-31:第二个输入从**悬浮歌词那边的** `followsCoverArt` 换成了灵动岛
-            // 自己的 `notchCardStyle`。理由见 accent 的注释。
+            // 依据灵动岛本身的 notchCardStyle 决定强调色提取策略（参见 accent 属性说明）。
             Publishers.CombineLatest(p.$notchAccentColor, s.$notchCardStyle)
                 .map { accent, style in style == .coverArt ? (accent ?? .white) : .white }
                 .removeDuplicates()
@@ -295,7 +263,7 @@ private final class NotchPlayback: ObservableObject {
             s.$notchLyricRowShowsArtwork.removeDuplicates().sink { [weak self] in self?.lyricRowShowsArtwork = $0 },
             s.$notchLyricRowArtworkPosition.removeDuplicates().sink { [weak self] in self?.lyricRowArtworkPosition = $0 },
             s.$notchLyricsAlignment.removeDuplicates().sink { [weak self] in self?.lyricsAlignment = $0 },
-            // 字体三件(2026-09-09):派生 Font 不是 Equatable,不去重 —— 上游只在三个输入之一真变时才重算,本来就低频。
+            // 派生 Font 非 Equatable，不作去重；上游输入变更频率较低。
             s.$notchMainFont.sink { [weak self] in self?.mainFont = $0 },
             s.$notchMainDetailFont.sink { [weak self] in self?.mainDetailFont = $0 },
             s.$notchSecondaryFont.sink { [weak self] in self?.secondaryFont = $0 },
@@ -417,11 +385,9 @@ extension NotchCardStyle {
 // 等实现的分层思路:稳态给完整基本信息,hover 给深化信息)。
 //
 // 分两/三行:
-// - 顶行(高度 = controller.contentTopInset,等于刘海本身/无刘海屏幕的兜底值):物理
-//   刘海是屏幕硬件层面真实不发光的区域,横向落在刘海宽度(controller.notchWidth)范围内
-//   的内容会被真实挡掉,这一行中间让出 notchWidth 宽度的空当。空当里唯一的内容是一枚
-//   **故意让硬件挡住**的品牌胶囊彩蛋(notchSeam,2026-09-03):只在截屏/录屏/投屏时露面。
-//   左耳放歌名,右耳放 3 个播放控制按钮。
+// - 顶行（高度 = controller.contentTopInset）：物理刘海硬件区域横向让出 notchWidth 宽度的间距。
+//   中间区域包含 notchSeam 品牌标识（仅在截屏/录屏等系统合成帧中呈现）。
+//   左右两耳根据耳部模块配置渲染对应内容。
 // - 歌词行:逐字高亮跟随播放进度扫过,技术上跟 LyricsOverlayView.mainLine 是同一套原理
 //   (TimelineView 按渲染帧频现算 fillFraction+渐变着色),但不复用那份实现——这里没有
 //   WrapLayout(单行不换行,超长直接硬裁),前景色固定白色,复杂度明显小一截,直接写一份
@@ -444,25 +410,14 @@ extension NotchCardStyle {
 ///
 /// ⚠️ 跟 NotchLyricsWindowController 里的同名常量是同一套几何的两处描述,改一处要改两处。
 enum NotchMetrics {
-    /// 稳态歌词行的高度。真源在 Core 的 `NotchLyricRowMetrics.rowHeight`(2026-09-06 下沉,让 selftest
-    /// 能钉"主行 + 副行 ≤ 行高"这条不变量),这里只是转发,调用点仍只需要认识 NotchMetrics 这一个入口。
+    /// 稳态歌词行的高度。源自 Core 层 `NotchLyricRowMetrics.rowHeight`，确保主行与副行排版高度严格受控。
     static var compactRowHeight: CGFloat { NotchLyricRowMetrics.rowHeight }
-    /// 副行开着时歌词格里两行的高度与间距(2026-09-06):默认字号下 15 + 3 + 13 = 31,竖直居中塞进 44,上下各余 6.5。
-    /// 同上转发 Core;改任何一个数都要先看 `twoLineStackHeight ≤ rowHeight` 那条 selftest。
-    /// ⚠️ 主行那一格的高度 2026-09-09 起**随字号走**(`NotchPlayback.mainLineHeight`,公式只在 Core
-    /// `NotchLyricRowMetrics.mainLineHeight(fontSize:)`),这里刻意不再提供一个"默认字号"的静态值 ——
-    /// 留着它,下一个人会拿它去排版、在非默认字号下把主行裁掉一截。
+    /// 副行开启时歌词格两行的高度与间距度量。
+    /// 主行高度随字号动态调整（`NotchPlayback.mainLineHeight`，计算逻辑收敛于 Core 层）。
     static var secondaryLyricLineHeight: CGFloat { NotchLyricRowMetrics.secondaryLineHeight }
     static var secondaryLineSpacing: CGFloat { NotchLyricRowMetrics.lineSpacing }
-    /// 展开区的最大高度 / 按内容算的实际高度 —— 实现在 LyrimuseCore 的
-    /// NotchExpandedMetrics(那边有完整的推导注释和 selftest 断言),这里只是转发,
-    /// 让调用点仍然只需要认识 NotchMetrics 这一个入口。
-    ///
-    /// ⚠️ 2026-09-01 加了 `trackInfoHeight`/`hasLyricPreviewPossible` 之后:**以后再往
-    /// `NotchExpandedMetrics` 加一个决定展开区高度的入参,这两个转发函数(以及
-    /// `NotchLyricsWindowController.expandedExtraHeight`)都要跟着加**,同时别忘了在
-    /// `NotchLyricsWindowController` 加一条对应的设置订阅——漏了订阅的表现不是崩,是
-    /// "改完设置卡片高度纹丝不动,直到下次触发别的几何重算才追上",很难联想到订阅上。
+    /// 展开区高度计算转发。若向 `NotchExpandedMetrics` 增加决定展开区高度的参数，
+    /// 需同步更新转发函数与 `NotchLyricsWindowController` 对应的设置订阅以保证几何重新计算生效。
     static func expandedExtraHeightMax(
         hasLyricPreviewPossible: Bool = true, hasControlsPossible: Bool = true, trackInfoHeight: CGFloat = 0
     ) -> CGFloat {
@@ -537,9 +492,8 @@ protocol NotchChromeSource: ObservableObject {
     /// 物理刘海的宽度,顶行中间要给它让出空当。无刘海屏幕是 0。
     var notchWidth: CGFloat { get }
     var contentTopInset: CGFloat { get }
-    /// 卡片稳态 / 展开态的**真实**宽(经耳朵下限与「展开 ≥ 稳态」)。歌词行按形态各自定宽、以卡片中心为锚,
-    /// 换形态时在原地交叉淡入淡出而不是跟着卡片边沿平移(2026-09-06,见 `NotchLyricsView.lyricRowSlot`)。
-    /// 真窗口是控制器 recomputeGeometry 算出的那两个数;编辑台由 NotchEditorStage 用同一套公式算好推进来。
+    /// 卡片稳态与展开态的实际宽度度量。歌词行按形态独立定宽并以卡片中心为锚点淡入淡出切换。
+    /// 生产环境由控制器计算推进，编辑台通过统一公式推导注入。
     var steadyCardWidth: CGFloat { get }
     var expandedCardWidth: CGFloat { get }
     /// 展开区里那行"下一句歌词预览"会不会渲染 —— 决定要不要给它留高度。
@@ -548,25 +502,15 @@ protocol NotchChromeSource: ObservableObject {
     var expandedShowsLyricPreview: Bool { get }
     /// 展开区里那条迷你进度条会不会渲染(= 这首歌有没有时长)。
     var expandedShowsScrubber: Bool { get }
-    /// 此刻有没有一首曲目(有歌名/歌手,或者正在放广告)。
-    ///
-    /// 决定歌词行整行要不要渲染 —— 压根没有曲目时那一行是**全空**的(两个占位 ♪ 已经
-    /// 按同一个判据留白了),44pt 白占着正是用户 2026-08-21 说的"占用空间"。
-    /// 刻意不看"在不在播":暂停中仍然有曲目,歌名/歌词/封面都该照常显示。
+    /// 决定歌词行是否渲染：无曲目时隐藏以释放高度空间；暂停状态视为有曲目以维持信息展示。
     var hasTrack: Bool { get }
-    /// 此刻在放的是不是广告(2026-09-08)。决定展开态**头部整块不画**(见 `showsExpandedTrackInfo`):
-    /// 广告期间歌名位只会写「广告中」、歌手/专辑一律留空(`metadataText` 的既有规矩),四颗快捷键里
-    /// 「搜索歌词」「显示歌词」无物可指 —— 画出来就是一块只有一个灰词的空头部,正是用户 2026-09-08
-    /// 圈图说的「太呆了」。广告态的状态文字与倒计时改由歌词行接管(`adStatusColumn`)。
-    /// 真窗口 = 控制器镜像的 `isAdBreakNow`(它同时也是 `isCollapsed` 的第三个输入);预览恒 false。
+    /// 广告播放状态。广告期间隐藏展开态曲目信息头部，状态文案与倒计时统一由歌词行接管。
     var isAdBreakNow: Bool { get }
     /// 用户要不要看歌词行(`AppSettings.notchShowLyrics`)。关掉时卡片只剩顶行那一条,
     /// 退化成贴着刘海的状态栏。
     ///
-    /// ⚠️ 走 chrome 而不是让视图直接读 AppSettings:卡片高度(NotchWindowRoot)和内容渲染
-    /// (NotchLyricsView)必须用同一个值,而 NotchWindowRoot 只观察 controller、不观察
-    /// AppSettings(那是 2026-08-19 性能审计定的:别让无关设置写入打醒整卡)。真窗口那一侧
-    /// 由控制器订阅设置后 @Published 出来,预览那一侧现读即可。
+    /// 歌词行显隐开关。通过 chrome 代理传递以确保卡片窗口宿主与内部内容视图读取同一几何计算源，
+    /// 避免设置项无差别唤醒卡片整体重绘。
     var showsLyrics: Bool { get }
     /// 要不要显示播放指示条(音浪)。同上,走 chrome 不直接读 AppSettings——它同时影响
     /// 渲染(NotchLyricsView.topRow)和宽度下限(NotchLyricsWindowController.minEarWidth)。
@@ -592,8 +536,7 @@ protocol NotchChromeSource: ObservableObject {
     var expandedTrackInfoShowsTitle: Bool { get }
     var expandedTrackInfoShowsArtist: Bool { get }
     var expandedTrackInfoShowsAlbum: Bool { get }
-    /// 头部右侧那排「快捷操作」(搜索歌词 / 显示歌词 │ 设置 / 关闭,2026-09-07)要不要画。
-    /// 跟头部四项同一条链路:它参与头部高度(`max` 里的第三块),所以必须走"镜像 + 重算几何"。
+    /// 头部快捷操作显隐开关。该项参与头部几何高度度量，变更时需驱动几何重算。
     var expandedShowsQuickActions: Bool { get }
     func setExpanded(_ expanded: Bool)
     /// 快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。真窗口走 `setVisible(false)`(跟设置页开关、菜单栏
@@ -633,19 +576,10 @@ extension NotchChromeSource {
         return height > 0 ? height + NotchMetrics.trackInfoTopSpacing + NotchMetrics.trackInfoSpacing : 0
     }
 
-    /// 卡片当前高度 —— **全仓唯一一份公式**,真窗口(NotchWindowRoot)和设置页编辑台
-    /// (NotchEditorStage)都读它。
-    ///
-    /// ⚠️ 2026-08-31 抽出来的:在此之前这个公式在那两处各写了一遍,而它的入参一路从 1 个
-    /// (isCollapsed)涨到 4 个(再加 hasTrack / isExpanded 那一组 / showsLyrics)。本章
-    /// 设计决策里早写过同类教训:"两处各自判断必然漂,而漂的表现是行不见了高度还留着、
-    /// 或反过来把行裁掉半截"。加第四个入参那天正好把它收成一份。
+    /// 统一收敛的卡片高度计算公式，确保真实窗口控制器与外观预览组件维持一致高度计算。
     var cardHeight: CGFloat {
         if isCollapsed { return contentTopInset }
-        // 没有曲目(2026-09-07,决策 #31):展开只长出「空闲面板」那一块。此前走下面的通式 ——
-        // 歌词行本来就被 hasTrack 守着不留,但展开区照常按"三键 + 进度条"留 59～76pt,而那块内容
-        // (`cardBodyLayer`)整个被 hasTrack 挡掉,结果 hover 上去长出一大块什么都没有的黑;用户报
-        // 「没有播放的展开状态不是很友好」。高度预留与实际渲染(`idleExpandedPanel` 的 frame)读同一个值。
+        // 无曲目状态：展开时仅展示空闲面板高度，避免按播放态冗余预留进度条与控制键高度导致大片空白。
         if !hasTrack {
             return contentTopInset + (isExpanded ? NotchMetrics.idleExpandedPanelHeight : 0)
         }
@@ -664,9 +598,8 @@ extension NotchChromeSource {
 
 struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     @ObservedObject var controller: Chrome
-    /// 「发现新播放器」提示的状态源(2026-09-11)。**这里不订阅**(不是 @ObservedObject),只往下传给两个宿主
-    /// 子视图(`NotchIdleEarIconHost` / `NotchIdlePanelHost`)各自订阅 —— 同 NotchTransientCenter 那条纪律,
-    /// 提示挂上 / 撤掉只失效那一块。默认是惰性替身(编辑台预览永远看不到提示),真窗口传 `.shared`。
+    /// 「发现新播放器」提示状态源。此处不直接订阅，透传给宿主子视图独立订阅，
+    /// 确保提示挂载/撤销仅局部失效对应组件。
     var prompt: NotchUnknownPlayerPrompt = .inert
     // 不整对象订阅 PlaybackCoordinator/AppSettings —— 见 NotchPlayback 的注释。
     // NotchTransientCenter 也不在这里订阅:banner 只被歌词行消费,订阅下沉到
@@ -682,7 +615,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     @Environment(\.notchHostClipsCard) private var hostClipsCard
     /// 这一块内容此刻是不是可见的那份(见 cardBodyLayer);藏着的那份停掉逐字填色的表。
     @Environment(\.notchCardLayerActive) private var cardLayerActive
-    /// 这块内容所在显示器的像素倍率 —— 只给 `idleAppIcon` 算"要几像素的位图"用(2026-09-07)。
+    /// 内容所在显示器的像素倍率，供 `idleAppIcon` 计算位图分辨率。
     @Environment(\.displayScale) private var displayScale
     /// 快捷操作里此刻被指到的那颗键(2026-09-09,见 `QuickActionTooltipOverlay`);nil = 指针不在任何一颗上。
     @State private var hoveredQuickAction: QuickActionHint?
@@ -709,85 +642,37 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                                    - NotchMetrics.cardHorizontalPadding * 2) / 2)
             ZStack(alignment: .top) {
                 backgroundLayer(size: proxy.size)
-                // 收起态铺一层纯黑盖住卡片样式自己的底(2026-08-19 用户要求):没在播放时
-                // 卡片就是挂在真刘海边上的一小块,深色渐变/磨砂/封面模糊底在真刘海的
-                // 纯黑旁边都是"看得出来的一块灰"——收起就该和机器刘海一个颜色,融为一体。
-                // 用 opacity 而不是 if/else 换填充:跟卡片收放同一条弹簧渐变,不硬切。
-                // 2026-09-06 从 `NotchHangingShape.fill(.black)` 改成纯 `Color`:形状填充是 CG 路径
-                // 光栅化、卡片每变一次尺寸就重画一遍整卡,而 `Color` 只是一层 backgroundColor;
-                // 圆角交给外层那道统一的 clipShape(理由同 backgroundLayer 里的打底层)。
-                // 2026-09-07 加上**压根没有曲目**这一档(用户圈图:关了「暂停时收起」的机器上,没放歌时
-                // 卡片按稳态尺寸挂着、底还是深色渐变/封面兜底那块灰,「整体颜色也要和真实刘海保持一致,
-                // 完全融合在一起」):没有曲目就没有封面可跟、没有内容要衬,底色只剩"像不像刘海"一个
-                // 标准 —— 跟收起态同一个理由,只是收起态还要求缩尺寸,这里尺寸由 collapsesWhenPaused 管、
-                // 底色不再看它。hover 展开时同样黑底(没曲目时展开区本来就是空的)。
-                // 2026-09-09 再加**广告期间**这一档(用户圈图:「广告时候的灵动岛的配色帮我设置为
-                // 和机器刘海一样的纯黑色」):理由跟上面没有曲目那一档同构 —— 广告没有封面可跟
-                // (`accent` 退回默认冷色、`coverArt` 风格退回那块灰),底色于是既衬不了内容、也
-                // 代表不了这一刻在放什么,只剩"像不像刘海"一个标准。广告一结束自动退回原风格,
-                // 跟着同一条弹簧渐变淡回去,不硬切。
+                // 收起态、无曲目空闲态或广告播放期间采用纯黑遮罩覆盖自定义背景，
+                // 与物理刘海屏幕硬件融为一体。
+                // 采用 opacity 弹簧渐变动画切换，使用纯 Color 避免路径光栅化开销。
                 Color.black
                     .opacity(controller.isCollapsed || isIdleNoTrack || controller.isAdBreakNow ? 1 : 0)
-                // 刘海空当里的品牌胶囊(notchSeam)直接钉在 ZStack 顶部**居中**,不再画在顶行的 HStack 里
-                // (2026-09-06,用户报「暂停状态展开的动画会把中间那个 Lyrimuse 图案漏出来一会」)。
-                // 逐帧抓窗坐实:当时顶行是 collapsedRow / topRow 两个视图在 VStack 里整行互换,SwiftUI 对
-                // "正在离场的那一行"按它离场时的耳宽(34pt)布局、对"刚插入的那一行"按目标耳宽(146.5pt)
-                // 布局,两行都从卡片左沿起排 —— 于是各自那枚胶囊一枚偏左 ~15pt、一枚偏右 ~100pt,都跑出了
-                // 刘海的遮挡范围,在屏幕上"漏出来一会"(帧 2～13,约 200ms)。胶囊挂在 ZStack 上,位置只由
-                // ZStack 的居中对齐决定,跟耳朵怎么换、怎么长都无关。同日随后顶行也收成了一个持久的 HStack
-                // (见 topRow 头注),整行互换本身已不存在,但胶囊仍留在这里 —— 它本来就不属于哪只耳朵。
-                // 顶行里原来放胶囊的位置只留同宽的空当(notchGap)。
+                // 刘海缝隙处的品牌胶囊（notchSeam）锚定于 ZStack 顶部绝对居中，
+                // 独立于顶行左右耳的几何排版，避免在耳宽伸缩动画过渡期产生横向位移露出。
                 notchSeam
                     .frame(height: controller.contentTopInset)
                     .opacity(revealContentOpacity)
-                // 收起态(没在播放、没 hover)卡片缩到刘海大小,这里把常显内容整套摘掉而不是
-                // 指望卡片太小自然裁掉——避免文字/按钮在收缩过程中被挤压变形,收起就是纯粹
-                // 一块背景,跟真实刘海融为一体。
-                //
-                // ⚠️ 但"摘掉"不能是硬切。2026-08-16 之前这里没有 transition,内容在收起的
-                // 第一帧就整块消失,而卡片还要再花 0.45 秒缩回去 —— 观感是"字先没了,黑块才
-                // 慢慢收",两段动作对不上。加一个跟卡片同一条弹簧驱动的淡出 + 轻微上缩
-                // (anchor 在顶部,因为卡片是从顶边往上收的),内容就跟着卡片一起"被吸回刘海"。
+                // 收起态内容淡出并上缩，配合卡片尺寸收缩动画执行顶部锚点过渡。
                 VStack(spacing: 0) {
-                    // 顶行占菜单栏那一条高度,收起后跟菜单栏齐平、不额外占屏。两种形态:
-                    // 收起(没在播放)= iPhone 灵动岛式极简(左耳封面、右耳音浪,2026-08-19
-                    // 用户拍板,歌名/播放键都收进 hover 展开卡);稳态/展开 = 歌名 + 播放键。
-                    // ⚠️ 两种形态是**同一个** topRow 按 isCollapsed 换耳朵里的内容,不是两个视图
-                    // 在这里 if/else 互换(2026-09-06 起,理由见 topRow 头注)。
+                    // 顶行复用同一个 topRow 结构，根据 isCollapsed 切换耳朵内容。
                     topRow(earWidth: earWidth)
                         .frame(height: controller.contentTopInset)
-                    // 顶行以下的一切(曲目信息头部 / 歌词行 / 展开区)2026-09-06 起**不在这个 VStack 里**,
-                    // 而是作为外层 ZStack 的 overlay 各自定宽、定 y、以卡片中心为锚(见 cardBodyLayer)。
-                    // 卡片的高度本来就由 NotchChromeSource.cardHeight 给 NotchWindowRoot 钉死,不靠这里堆出来。
+                    // 顶行以下各组件作为外层 ZStack 的 overlay 独立定位渲染。
                 }
-                // 出场动画的内容淡入(2026-09-03):值来自 NotchWindowRoot 的 keyframeAnimator,
-                // 平时恒为 1;背景层不套它,所以卡片形状先长出来、字后到。
+                // 出场动画内容透明度淡入，平时恒为 1。
                 .opacity(revealContentOpacity)
-                // 卷进顶行:锚点放顶部,内容一边淡出一边往上缩,跟卡片高度收缩同一条弹簧。
                 .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
             }
-            // 顶行以下的内容(曲目信息头部 / 两份歌词行变体 / 展开区)作为 ZStack 的 **overlay**、顶部居中,
-            // 理由见 cardBodyLayer。
-            // ⚠️ 必须是 overlay 而不是 ZStack 的子视图:展开宽那些在稳态下比卡片宽,做子视图会把 ZStack
-            // 撑到展开宽,而 GeometryReader 把内容摆在左上角 —— 整卡内容右移 (展开宽 − 稳态宽) / 2
-            // (2026-09-06 逐帧抓窗撞到过两次:第一次是歌词行的定宽容器,第二次就是这里)。overlay 不参与
-            // 父布局,居中对齐的参照始终是卡片本身。
-            //
-            // ⚠️ hasTrack 这一条(2026-08-21)必须跟 NotchChromeSource.cardHeight 里那个同款判断成对出现:
-            // 压根没有曲目时歌词行是**全空**的,44pt 白占着就是用户报的"占用空间"。一处改一处不改的表现是
-            // "行不见了高度还留着"或反过来把行裁掉半截。
+            // 采用 overlay 实现以卡片中心为锚点的对齐定位，不影响 ZStack 父级尺寸计算。
+            // hasTrack 判据需与 NotchChromeSource.cardHeight 严格保持一致。
             .overlay(alignment: .top) {
                 if !controller.isCollapsed, controller.hasTrack {
                     cardBodyLayer
-                        // 出场动画的内容淡入(2026-09-03):值来自 NotchWindowRoot 的 keyframeAnimator,平时恒为 1。
+                        // 出场动画内容透明度淡入，平时恒为 1。
                         .opacity(revealContentOpacity)
                 } else if !controller.isCollapsed {
-                    // 没有曲目:hover 展开只长出一块「空闲面板」(2026-09-07,决策 #31),高度与
-                    // `NotchChromeSource.cardHeight` 的 !hasTrack 分支读同一个值。跟 cardBodyLayer 里
-                    // 各块同一套做法 —— 常驻、定宽、定 y、只切透明度(NotchCardLayerActive),稳态下
-                    // 它透明地挂在顶行下面、被外层裁剪裁掉,展开时在最终位置原地淡入。
-                    // 有「发现新播放器」的信任提议挂着时(2026-09-11,决策 #37)这一块换成提议的变体,
-                    // 同高同排法,由宿主子视图自己订阅、自己切,见 NotchIdlePanelHost。
+                    // 空闲面板：无曲目时展开呈现，尺寸与 NotchChromeSource.cardHeight 保持一致，
+                    // 支持承载「发现新播放器」授权引导。
                     NotchIdlePanelHost(prompt: prompt, tint: accentOrWhite) { idleExpandedPanel }
                         .frame(width: controller.expandedCardWidth,
                                height: NotchMetrics.idleExpandedPanelHeight, alignment: .top)
@@ -796,31 +681,13 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                         .opacity(revealContentOpacity)
                 }
             }
-            // 展开态内容(下一句预览+进度条)本身没有另外裁一次形状——如果只让背景那一层
-            // fill 是圆角、前景内容不跟着裁,内容溢出圆角边界时会带着直角"戳"出卡片轮廓。
-            // 这里对整个 ZStack 统一裁一次,保证任何内容都不会越出这个卡片的真实外轮廓。
-            // 2026-09-06 起背景打底层与收起态黑罩都是不带形状的纯色,底部圆角**只**靠这一道
-            // (或宿主那道,见下)—— 别再把它们改回 NotchHangingShape.fill,那是每帧重画整卡。
-            //
-            // 宿主已经在卡片外面裁过同一个形状时(真窗口的 NotchWindowRoot,那道 NotchRevealShape
-            // 终态与这里重合)这一道就省掉:两层 mask 在尺寸动画里每帧各重设一次路径,是白付的。
-            // 这个环境值对某个宿主是常量(见其 doc),分支不会在运行期切换、不会重建子树。
+            // 统一对外层应用圆角裁剪，避免内部纯色背景重复绘制路径。宿主已裁剪时跳过。
             .modifier(NotchCardClip(enabled: !hostClipsCard))
         }
-        // 「跳过广告」那颗键的门槛轮询,起停挂在这里(2026-09-11)。
-        //
-        // ⚠️ 判据是 **chrome 的 `isAdBreakNow`**,不是 `playback.isCurrentTrackAdBreak` —— 两者对真窗口
-        // 是同一件事,但预览 chrome 的 `isAdBreakNow` 恒 false,而 `NotchPlayback` 在预览里照样订阅真的
-        // `PlaybackCoordinator`:挂在后者上的话,设置页只要开着,那块编辑台预览就会跟着真广告每 5 秒对
-        // 用户的浏览器发一次 AppleScript(真机日志坐实过 —— 每一行都打了两遍)。理由同
-        // `controlsDidBecomeVisible` 在预览里是空实现:预览不产生副作用。
-        //
-        // `.onAppear` 那一下是为了"窗口刚出现时已经在放广告"这种情形 —— `onChange` 只在值变化时触发。
+        // 跳过广告按键门槛轮询触发挂载：依赖 chrome 的 `isAdBreakNow` 隔离预览副作用。
         .onAppear { playback.syncAdSkipGate(adBreak: controller.isAdBreakNow) }
         .onChange(of: controller.isAdBreakNow) { _, on in playback.syncAdSkipGate(adBreak: on) }
-        // 一次性诊断(2026-09-11,用户报「稳态那枚提示不实时更新,展开一次才出来」)。
-        // 问题只可能落在两处:body 压根没被这次翻转叫醒(那 onChange 也不会响),或者 body 看见了、
-        // 但三道门里有一条此刻是假的(那 canSkipAd 响、hint 不响)。两条探针正好把这两种分开。
+        // 广告跳过按键状态诊断探针。
         .onChange(of: playback.canSkipAd) { _, value in
             NotchPlayback.skipGateLogger.info("""
                 view: canSkipAd=\(value, privacy: .public) expanded=\(controller.isExpanded, privacy: .public)                 showsLyrics=\(controller.showsLyrics, privacy: .public) hint=\(showsAdSkipHint, privacy: .public)
@@ -829,21 +696,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         .onChange(of: showsAdSkipHint) { _, value in
             NotchPlayback.skipGateLogger.info("view: adSkipHint=\(value, privacy: .public)")
         }
-        // 2026-08-16 删掉了这里原来那个 .onHover。它覆盖的范围比卡片大一圈(预览那边
-        // 早就记录过同一个现象),窗口改成常驻最大尺寸之后这变成了实打实的 bug:鼠标划过
-        // 卡片下方的透明区也会展开。命中判定和触觉反馈都移到 NotchWindowRoot,那里拿
-        // 精确坐标跟卡片矩形直接比;预览那边本来就走自己的 onContinuousHover。
-        // hover 时给卡片一点投影,让它从桌面/窗口背景上"浮起来"。收起态不给 —— 那时它
-        // 假装自己是刘海的一部分,投影会立刻暴露这是个窗口。
-        // 2026-08-17 去掉了展开态那圈投影。它本来的用意是"hover 时让卡片从背景上浮起来",
-        // 但实际观感是整个卡片外侧糊着一层灰 —— 灵动岛的设计语言是**从刘海长出来**,
-        // 不是一张悬空的卡片,投影反而把这件事拆穿了。
-        //
-        // ⚠️ 将来如果要把投影加回来,窗口**必须**按投影半径留出四周余量,否则阴影会被
-        // 窗口的矩形边界硬裁,在底部两个圆角外侧留下两块直角的深色残影(2026-08-17 用户
-        // 报过一次"左右角怎么还有个虚的直角",离线渲染对照复现确认就是这个)。当时的
-        // 修法是把窗口宽高各加一圈,见 NotchLyricsWindowController.recomputeGeometry ——
-        // 投影既然撤了,那圈余量也跟着撤了,别只加回投影不加余量。
+        // 注意：悬停区域判定由 NotchWindowRoot 根据实际几何矩形精确计算，避免透明区误触发。
     }
 
     // 2026-08-02 新增"跟随封面"背景——跟"歌词窗口"的 artworkBackground(LyricsWindowView.swift)
@@ -884,34 +737,17 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     //
     // 模糊半径比"歌词窗口"artworkBackground 的 60 小得多——那边画布常年好几百 pt 高,
     // 60pt 模糊半径只占画布的一小部分,还能看出封面本身的色块层次;灵动岛稳态高度只有
-    // 76pt、宽度 360pt(约 4.7:1 的又矮又宽比例),照搬同一个绝对数值相对尺寸夸张太多,
-    // 2026-08-02 实测排查坐实:哪怕换一张色彩很丰富的封面(比如粉色玩具马配红白条纹的
-    // 封面),灵动岛这里也会被抹成跟其它封面几乎分不出来的统一深灰色,颜色信息基本损失
-    // 殆尽,违背了"跟随封面颜色"这个功能本身的目的。调小到 20——仍然是明显的"模糊",
-    // 但能留住封面主色调之间可辨认的差异。
+    // 背景层渲染：支持跟随封面、磨砂玻璃与渐变深色等风格。
+    // 在 .coverArt 模式下直接渲染预烘焙高斯模糊封面图，兼顾视觉质感与渲染性能。
     @ViewBuilder
     private func backgroundLayer(size: CGSize) -> some View {
-        // 优先用高清替代(highResArtworkImage):系统那份对网易云永远只有 100×100,云盘
-        // 没匹配上的歌还是灰底音符占位图 —— 缓存里解析到真封面时背景该铺真封面。nil 时
-        // 回落系统那份,跟歌词窗口封面卡同一套取舍(见 highResArtworkImage 的注释)。
-        // 铺的是 PlaybackCoordinator 预烘焙好的模糊图(2026-08-19 性能审计落地),不再在
-        // 视图层挂 .blur(radius: 20) 活滤镜 —— 那是合成期滤镜,这个窗口播放期间因逐字
-        // 填色/音浪/跑马灯几乎永动,GPU 每次重合成都对同一张图重算同一个模糊。烘焙源在
-        // 数据层就是 highResArtworkImage ?? artworkImage(高清替代优先的口径不变),且
-        // clampedToExtent 让边缘实心 —— 原来靠打底层遮的羽化带不复存在,打底层保留只为
-        // 烘焙空窗(封面刚到、模糊图晚几十 ms)兜底。
+        // 优先使用预烘焙的高清封面模糊图（PlaybackCoordinator.blurredArtworkImage），
+        // 避免在视图层应用动态 .blur(radius: 20) 实时滤镜，消除逐帧重绘造成的合成阶段 GPU 负担。
         if playback.notchCardStyle == .coverArt,
            let image = playback.blurredArtworkImage {
             ZStack {
-                // 不透明打底,烘焙空窗期(封面刚到、模糊图晚几十 ms)先露它,见上。
-                //
-                // ⚠️ 是一块**纯色**,不是 darkGradient 那道渐变,也不套 NotchHangingShape(2026-09-06
-                // 动画性能专项):这一层平时整个压在封面模糊图底下、一个像素都看不见,却在 hover
-                // 展开/收起时随卡片尺寸每帧重画 —— Time Profiler 实测(4 次 hover 展开)主线程
-                // 24% 的忙时是 CoreGraphics 在给这道看不见的渐变做 rgba64 轴向着色
-                // (`ripc_DrawShading` → `rgba64_shade_axial_RGB`,964×382px 每帧一遍)。纯色的
-                // `Color` 视图落成一个只有 backgroundColor 的 CALayer,尺寸变化零重画;底部圆角由
-                // 外层 ZStack 那道统一的 clipShape 负责,这里不必再裁。颜色取渐变的中间一档。
+                // 不透明纯色打底，用于在封面模糊图就绪前的微小空窗期兜底显示，
+                // 采用纯色而非复杂渐变或路径填充，避免动画缩放期间引发额外的 CoreGraphics 绘制。
                 Color(hexWithAlpha: "#14212AFF", fallback: .black)
                 Image(nsImage: image)
                     .resizable()
@@ -922,15 +758,6 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     // notchCoverArtOverlayOpacity)——两处对不上,文字对比度的估算就会
                     // 跟实际渲染出来的背景脱节。
                     .overlay(Color.black.opacity(LocalPlaybackSource.notchCoverArtOverlayOpacity))
-                    // 这里原来还有一道 `.clipShape(NotchHangingShape)`(决策 5 那三版排查的产物)。
-                    // 2026-09-06 拿掉:body 末尾已对整个 ZStack 统一裁同一个形状、同一个 rect(后加
-                    // 的,见那里的注释),这道是重复的 —— 而每道 clipShape 都是一层 mask,尺寸动画
-                    // 期间每帧要重设路径(`updateClipShapes`/`MaskLayer.setClips` 占 SwiftUI 渲染
-                    // 时间的约四分之一)。上面那次 `.frame(width:height:)` 钉尺寸仍然必要:
-                    // scaledToFill 协商出的偏大 frame 不钉回来,外层裁剪同样会裁在错的边界上。
-                    // 换歌/高清替代到货都会产出一张**新的**烘焙图实例(NSImage 指针比较),
-                    // 一条过渡覆盖原来 artworkData 字节比较 + highRes 指针比较两条 ——
-                    // 顺带省掉原来每次 body 对几十~几百 KB Data 的逐字节 memcmp。
                     .animation(.easeInOut(duration: 0.5), value: playback.blurredArtworkImage)
             }
         } else {
@@ -945,18 +772,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 跟菜单栏面板的同名属性是同一套语义(MenuBarPanel.isIdleNoTrack)。
     private var isIdleNoTrack: Bool { !controller.hasTrack }
 
-    /// 刘海空当(物理刘海遮挡处)里的品牌胶囊彩蛋(2026-09-03,借鉴清单 #17,用户拍板)。
-    ///
-    /// 肉眼永远看不到——那块被硬件挡死;只在截全屏 / 录屏 / 投屏或镜像到无刘海显示器时
-    /// 露出来,像给刘海贴了个牌子。两个条件缺一不画:
-    ///  - `notchWidth > 0`:无刘海屏幕的兜底几何和外接屏上的镜像副本都是 0,画了就真的能
-    ///    看见,那就不是彩蛋而是一块白疤。
-    ///  - `hasTrack`:会议里没放歌、灵动岛停在空闲黑块时,共享画面顶上不该挂着牌子(用户
-    ///    选了"只在有曲目时画",而不是参考实现那种常驻)。
-    /// 「截屏/录屏时隐藏」开着时整窗不进截图,不必另加开关。高度按顶行让 8pt 边、夹在
-    /// 14～22pt(矮刘海机型顶行可能不到 26pt)。装饰元素,读屏不念。
-    /// 顶行中间刘海那一段的**占位**:只有宽度,什么都不画。胶囊本体(notchSeam)自 2026-09-06 起钉在 body 的
-    /// ZStack 顶部居中(理由见那里),顶行只需要把这段宽度让出来。
+    /// 物理刘海遮挡处的品牌胶囊标识（notchSeam）。
+    /// 在常规显示器物理刘海下被硬件遮挡，仅在截全屏、录屏或镜像投屏至无刘海显示器时呈现。
+    /// 仅在存在曲目且刘海宽度大于 0 时渲染。
     private var notchGap: some View {
         Spacer(minLength: 0).frame(width: controller.notchWidth)
     }
@@ -970,10 +788,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     .padding(.horizontal, 9)
                     .frame(height: min(22, max(14, controller.contentTopInset - 8)))
                     .background {
-                        // 底色跟灵动岛当前主色走(同歌名/音浪那份 accent),上半截叠一层淡白渐变
-                        // 加 0.5pt 浅描边当光泽——纯色胶囊贴在纯黑刘海里像一块色卡,加点高光才
-                        // 读得出"是个立体的牌子"(2026-09-03 用户要求"颜色跟着灵动岛走,稍微
-                        // 加一点光泽有区分度")。
+                        // 底色提取自当前灵动岛主色 accent，叠加上半截浅白微光与半透明描边增加立体光泽。
                         Capsule().fill(accentOrWhite)
                             .overlay {
                                 Capsule().fill(LinearGradient(
