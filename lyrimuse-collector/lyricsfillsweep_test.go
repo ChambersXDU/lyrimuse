@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -77,3 +78,32 @@ func TestParseLyricsFillRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestReadLyricsFillRequest(t *testing.T) {
+	tmpDir := t.TempDir()
+	reqPath := tmpDir + "/lyrics-fill-request.txt"
+	savedPath := lyricsFillRequestPath
+	defer func() { lyricsFillRequestPath = savedPath }()
+	lyricsFillRequestPath = reqPath
+
+	// When file does not exist, should return false cleanly
+	if _, ok := readLyricsFillRequest(); ok {
+		t.Fatal("readLyricsFillRequest succeeded when file does not exist")
+	}
+
+	// Write request file
+	if err := os.WriteFile(reqPath, []byte("all\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	req, ok := readLyricsFillRequest()
+	if !ok || !req.all {
+		t.Fatalf("expected req.all=true, got ok=%v, req=%+v", ok, req)
+	}
+
+	// File should have been removed (consumed)
+	if _, err := os.Stat(reqPath); !os.IsNotExist(err) {
+		t.Fatalf("expected request file to be removed, stat err: %v", err)
+	}
+}
+

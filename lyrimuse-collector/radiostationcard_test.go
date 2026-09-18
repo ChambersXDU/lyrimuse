@@ -3,7 +3,7 @@ package main
 import "testing"
 
 // 台卡判定:电台起播那几十秒系统把台名当一首歌推过来,不能拿去搜歌词。
-// 实测形态见 radioStationCard 的注释(`|petal radio|`、`|NCT 127|`、`|YEONJUN|`)。
+// 测试形态见 radioStationCard 的注释(`|petal radio|`、`|NCT 127|`、`|YEONJUN|`)。
 func TestRadioStationCard(t *testing.T) {
 	cases := []struct {
 		name   string

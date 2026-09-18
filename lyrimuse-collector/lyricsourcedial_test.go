@@ -8,20 +8,34 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
-// 2026-09-06 歌词源拨号:系统 DNS 优先、不答才退 DoH(lyricsourcedial.go)。真实网络里没有
+// 歌词源拨号:系统 DNS 优先、不答才退 DoH(lyricsourcedial.go)。真实网络里没有
 // 可复现的"系统 DNS 不答",三个注入点全换成假的,连接用 net.Pipe 造。
 
 type dialProbe struct {
+	mu                            sync.Mutex
 	sysCalls, dohCalls, dialCalls int
 	dialedAddrs                   []string
 	sysErr                        error
 	sysAddrs                      []net.IPAddr
 	dohIPs                        []string
 	dialErr                       error
+}
+
+func (p *dialProbe) addrs() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]string(nil), p.dialedAddrs...)
+}
+
+func (p *dialProbe) counts() (sys, doh, dial int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.sysCalls, p.dohCalls, p.dialCalls
 }
 
 func installDialProbe(t *testing.T, p *dialProbe) {
@@ -37,19 +51,28 @@ func installDialProbe(t *testing.T, p *dialProbe) {
 		lyricSourceSystemDNSFailUntil = savedFail
 		lyricSourceSystemDNSFailMu.Unlock()
 	})
-	lyricSourceSystemLookup = func(context.Context, string) ([]net.IPAddr, error) {
+	lyricSourceSystemLookup = func(ctx context.Context, host string) ([]net.IPAddr, error) {
+		p.mu.Lock()
 		p.sysCalls++
-		return p.sysAddrs, p.sysErr
+		addrs, err := p.sysAddrs, p.sysErr
+		p.mu.Unlock()
+		return addrs, err
 	}
-	lyricSourceDoHLookup = func(string) []string {
+	lyricSourceDoHLookup = func(host string) []string {
+		p.mu.Lock()
 		p.dohCalls++
-		return p.dohIPs
+		ips := p.dohIPs
+		p.mu.Unlock()
+		return ips
 	}
 	lyricSourceDial = func(_ context.Context, _, addr string) (net.Conn, error) {
+		p.mu.Lock()
 		p.dialCalls++
 		p.dialedAddrs = append(p.dialedAddrs, addr)
-		if p.dialErr != nil {
-			return nil, p.dialErr
+		dialErr := p.dialErr
+		p.mu.Unlock()
+		if dialErr != nil {
+			return nil, dialErr
 		}
 		c1, c2 := net.Pipe()
 		go c2.Close()
@@ -83,11 +106,11 @@ func TestLyricSourceDial_SystemDNSHealthyNeverTouchesDoH(t *testing.T) {
 		t.Fatal(err)
 	}
 	conn.Close()
-	if p.sysCalls != 1 || p.dohCalls != 0 {
-		t.Fatalf("sys=%d doh=%d,系统 DNS 正常时不该问 DoH", p.sysCalls, p.dohCalls)
+	if sys, doh, _ := p.counts(); sys != 1 || doh != 0 {
+		t.Fatalf("sys=%d doh=%d,系统 DNS 正常时不该问 DoH", sys, doh)
 	}
-	if len(p.dialedAddrs) != 1 || p.dialedAddrs[0] != "music.163.com:443" {
-		t.Fatalf("应按域名交给标准拨号器,实际 %v", p.dialedAddrs)
+	if addrs := p.addrs(); len(addrs) != 1 || addrs[0] != "music.163.com:443" {
+		t.Fatalf("应按域名交给标准拨号器,实际 %v", addrs)
 	}
 }
 
@@ -104,12 +127,13 @@ func TestLyricSourceDial_FallsBackToDoHWhenSystemDNSFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	conn.Close()
-	if p.dohCalls != 1 {
-		t.Fatalf("应问一次 DoH,实际 %d", p.dohCalls)
+	if _, doh, _ := p.counts(); doh != 1 {
+		t.Fatalf("应问一次 DoH,实际 %d", doh)
 	}
-	for _, a := range p.dialedAddrs {
+	addrs := p.addrs()
+	for _, a := range addrs {
 		if !strings.HasSuffix(a, ":443") || strings.Contains(a, "c.y.qq.com") {
-			t.Fatalf("应拨 DoH 解析出的 IP:443,实际 %v", p.dialedAddrs)
+			t.Fatalf("应拨 DoH 解析出的 IP:443,实际 %v", addrs)
 		}
 	}
 	if tp.dones == 0 || tp.lastDoneErr != nil || tp.lastAddrs != 2 {
@@ -122,8 +146,8 @@ func TestLyricSourceDial_FallsBackToDoHWhenSystemDNSFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	conn.Close()
-	if p.sysCalls != 1 {
-		t.Fatalf("负缓存期内不该再问系统 DNS,实际 sys=%d", p.sysCalls)
+	if sys, _, _ := p.counts(); sys != 1 {
+		t.Fatalf("负缓存期内不该再问系统 DNS,实际 sys=%d", sys)
 	}
 	if tp2.starts != 1 || tp2.dones != 1 {
 		t.Fatalf("跳过系统解析时要自己补 DNSStart/DNSDone,实际 starts=%d dones=%d", tp2.starts, tp2.dones)
@@ -147,7 +171,7 @@ func TestLyricSourceDial_BothFailKeepsDNSError(t *testing.T) {
 	if tp.lastDoneErr == nil {
 		t.Fatal("DoH 也失败时轨迹 DNSDone 应带错")
 	}
-	if p.dialCalls != 0 {
+	if _, _, dial := p.counts(); dial != 0 {
 		t.Fatal("没有地址不该拨号")
 	}
 	if got := classifyLyricSourceTransportFailure(err, 0, transportTrace{dnsStarted: true, dnsDone: true, dnsErr: tp.lastDoneErr}); got != lyricFailureReasonDNSFailed {
@@ -186,8 +210,8 @@ func TestLyricSourceDial_IPLiteralBypassesResolution(t *testing.T) {
 		t.Fatal(err)
 	}
 	conn.Close()
-	if p.sysCalls != 0 || p.dohCalls != 0 || p.dialCalls != 1 {
-		t.Fatalf("sys=%d doh=%d dial=%d", p.sysCalls, p.dohCalls, p.dialCalls)
+	if sys, doh, dial := p.counts(); sys != 0 || doh != 0 || dial != 1 {
+		t.Fatalf("sys=%d doh=%d dial=%d", sys, doh, dial)
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// amll-ttml-db 歌词源(2026-08-23)。
+// amll-ttml-db 歌词源。
 //
 // 它是社区维护的 Apple Music 风格 TTML 歌词库(CC0、免登录、raw 直取),跟其余源
 // 最大的不同是**歌词格式本身能携带结构化信息**:
@@ -28,10 +28,10 @@ import (
 // 所以其余源的对唱标注全是歌词上传者用行首前缀夹带的民间写法。这个源是唯一能拿到
 // 真·结构化对唱的路子。
 //
-// ⚠️ 覆盖率有限:实测(2026-08-23)对用户 439 首曲库严格命中 **17 首(3.9%)** ——
+// ⚠️ 覆盖率有限:测试对用户 439 首曲库严格命中 **17 首(3.9%)** ——
 // 口径是"歌名一字不差 + 只算 ncm/qq 两个平台"(只有这两个平台的音乐 ID 我们拿得到)。
 // 别用"去掉括号后缀再比"的宽松口径去估这个数:那样会把《告白气球 (Live)》算成录音室版
-// 的命中,而按 ID 直取时 Live 版有自己的 songID、amll 里并没有,实测就是 404。
+// 的命中,而按 ID 直取时 Live 版有自己的 songID、amll 里并没有,测试就是 404。
 //
 // 库的重心也跟华语老歌不重合:索引里 HOYO-MiX(米哈游)841 条、Shawn Mendes/Camila
 // Cabello 各 510、Taylor Swift 418、原子邦妮 395、GARNiDELiA 332 —— 游戏音乐 / V 家 /
@@ -79,7 +79,7 @@ type ttmlDiv struct {
 	Lines []ttmlLine `xml:"p"`
 }
 
-// ⚠️ 一行/一个 span 的孩子必须按**文档顺序**读,不能用声明式 tag。2026-08-24 用户截图
+// ⚠️ 一行/一个 span 的孩子必须按**文档顺序**读,不能用声明式 tag。用户截图
 // 报「这些歌词没有翻译」,根因就在这里:原来 ttmlLine/ttmlSpan 写的是一个 Spans []ttmlSpan
 // 加一个 xml:",chardata" 字段,而 Go 的 encoding/xml 会把一个元素的**全部**直接文本合并成
 // 一个字符串 —— 位置信息全丢。而位置就是全部要点,因为
@@ -90,7 +90,7 @@ type ttmlDiv struct {
 //
 // 前者的空白收不到,拼出来就是 "Whataride"。往下的连锁反应:粘住的假词翻译器原样返回,
 // translate.go 那道「没翻动的行不写进译文」(t == l.text)把整行丢掉 → 用户看到的
-// 「没有翻译」。实测用户库 4 首 amll 来源的歌全中,每首 26~42 行粘连。
+// 「没有翻译」。测试用户库 4 首 amll 来源的歌全中,每首 26~42 行粘连。
 // 中文那种逐字写法(<span>没</span><span>有</span>)span 之间本来就没有空白,不受影响。
 const ttmMetadataNS = "http://www.w3.org/ns/ttml#metadata"
 
@@ -207,7 +207,7 @@ func (s *ttmlSpan) hasSpanKid() bool {
 }
 
 // ttmlWord 是一个逐字词。text 里**含**它后面那段分隔空白(原文有的话)——
-// 这样 words 拼起来恒等于整行文本,Swift 侧 `plainText = words.joined()` 才对得上
+// 这样 words 拼起来恒等于整行文本,Swift 侧 `plainText = words.joined` 才对得上
 // (对不上会让逐字填色整行不生效,见 MenuBarStatusItem.karaokeFillPath 那道守卫),
 // 而且填色边界落在空格之后,跟 amll 里那些本来就把空格写在 span 内部的行完全一致。
 type ttmlWord struct {
@@ -312,7 +312,7 @@ func flattenTTMLLine(kids []ttmlNode, words *[]ttmlWord, translation *string) {
 
 // appendTTMLGap 把 span 之间那段字面文本并进前一个词。
 //
-// 空白折成**一个**空格:实测同一份文件里 span 之间有 1 个空格的、也有 4 个的(行尾那种),
+// 空白折成**一个**空格:测试同一份文件里 span 之间有 1 个空格的、也有 4 个的(行尾那种),
 // 原样保留会在歌词里留一串洞。非空白内容(极罕见的裸文本)按 trim 后原样留下 —— 丢掉
 // 才是真的改歌词。行首那段空白没有可挂的词,直接丢。
 func appendTTMLGap(words *[]ttmlWord, raw string) {
@@ -422,7 +422,7 @@ func parseAMLLTTML(raw string) (amllResult, bool) {
 }
 
 // ttmlWordsText 把逐字词原样拼成整行文本。**必须**跟 buildYRCLine 写进 YRC 的那串词
-// 逐字节一致 —— Swift 侧靠 `plainText == words.joined()` 判断这一行的逐字数据可不可信。
+// 逐字节一致 —— Swift 侧靠 `plainText == words.joined` 判断这一行的逐字数据可不可信。
 func ttmlWordsText(words []ttmlWord) string {
 	var b strings.Builder
 	for _, w := range words {
@@ -514,7 +514,7 @@ var amllSkippedForMissingIDs atomic.Bool
 func amllSkippedForMissingIDsNow() bool { return amllSkippedForMissingIDs.Load() }
 
 // amllLyric 按网易云 / QQ 的音乐 ID 查 amll-ttml-db。两个 ID 都给时先试网易云
-// (实测它那份索引最全:命中的 26 首里 20 首有 ncm ID)。
+// (测试它那份索引最全:命中的 26 首里 20 首有 ncm ID)。
 func amllLyric(ctx context.Context, neteaseID, qqID string) amllResult {
 	if neteaseID == "" && qqID == "" {
 		amllSkippedForMissingIDs.Store(true)

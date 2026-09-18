@@ -8,17 +8,17 @@ import (
 	"time"
 )
 
-// 2026-08-24 用户报:批量解析(相册预取一次触发十几首歌同时解析)时 musixmatch 交出
+// 处理:批量解析(相册预取一次触发十几首歌同时解析)时 musixmatch 交出
 // 候选的比例只有 20% 上下,而单首/大规模扫描能到 65%~90%。量出来的根因:原来
 // musixmatchEnsureToken 判定"没有可用 token"之后,并发的每个 goroutine 各自去发一次
-// token.get——apic 那台机器实测把除第一个之外的并发请求全按反爬拒掉(401
+// token.get——apic 那台机器测试把除第一个之外的并发请求全按反爬拒掉(401
 // hint=captcha),被拒的按官方样例退避 10 秒重试一次,但 20 秒的搜索预算扛不住 N 个
 // goroutine 各跑一遍"发请求→等 10 秒→重试"。
 //
 // 这条测试验证修法本身(单飞锁),不碰网络——用 musixmatchDoFetchToken 这个缝把"真的
 // 换 token"换成一个只计次的桩,断言 16 个并发调用只触发 1 次。
 func TestMusixmatchEnsureTokenSingleFlight(t *testing.T) {
-	// 让 musixmatchLoadTokenFile 读不到东西:musixmatchTokenPath 经 os.UserHomeDir()
+	// 让 musixmatchLoadTokenFile 读不到东西:musixmatchTokenPath 经 os.UserHomeDir
 	// 落在 $HOME 下,重定向到一个空的临时目录,避免测试跟这台机器真实缓存的 token
 	// 文件产生耦合(那份文件是否已过期取决于运行测试的具体时刻,不可控)。
 	t.Setenv("HOME", t.TempDir())

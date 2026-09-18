@@ -8,12 +8,12 @@ import (
 )
 
 // learnedSourceArtistAlias 从本机 enrich 缓存里学"这个歌手在**歌词源那边**署什么名",
-// 给 retryArtistIdentities 当一条纯本地、离线、零请求的别名来源(2026-09-09)。
+// 给 retryArtistIdentities 当一条纯本地、离线、零请求的别名来源。
 //
 // # 起因
 //
-// 用户报王子《1999 (Edit)》搜不到歌词。「王子」是 Prince 的中文译名 —— YouTube Music
-// 这类播放器会把歌手名本地化,而九个歌词源里这首歌的署名一律是 "Prince"。实测对照:
+// 处理王子《1999 (Edit)》搜不到歌词。「王子」是 Prince 的中文译名 —— YouTube Music
+// 这类播放器会把歌手名本地化,而九个歌词源里这首歌的署名一律是 "Prince"。测试对照:
 //
 //	王子   + 1999 (Edit)          → 九个源 0 条候选
 //	王子   + 1999                 → 4 个源命中,但 kugou 只有 462 分
@@ -47,7 +47,7 @@ import (
 //
 //   - 同一歌手名下所有成功条目给出的署名,normLoose 之后必须**唯一**才用。「王子」既是
 //     Prince 又是邱胜翊的用户,这里一律不猜。
-//   - 跟本地标签自身相同的不算别名(它不提供任何新信息;retryArtistIdentities 的 add()
+//   - 跟本地标签自身相同的不算别名(它不提供任何新信息;retryArtistIdentities 的 add
 //     也会去重,这里提前挡掉只是省事)。
 //   - 一致时返回原始写法里**字典序最小**的那个 —— Go 的 map 迭代顺序随机,不定序的话
 //     "Prince" 和 "PRINCE" 这种同一 normLoose 的两种写法会每次启动学到不同的一个,
@@ -112,7 +112,7 @@ func winningCandidateArtist(e enrichEntry) string {
 }
 
 // loadEnrichCacheReadOnly 把 enrich 缓存读进内存供**一次性子命令**查询
-// (`collector search-lyrics`,即「联网搜索候选歌词」弹窗),2026-09-09 随
+// (`collector search-lyrics`,即「联网搜索候选歌词」弹窗),随
 // learnedSourceArtistAlias 一起加 —— 那一档的全部证据就在这份缓存里,子进程不读它
 // 这一档就恒为空,而"播放器把歌手名本地化了"恰恰是用户最会跑来手动搜一把的场景。
 //

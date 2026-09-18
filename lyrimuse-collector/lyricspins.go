@@ -15,7 +15,7 @@ import (
 // 为什么必须有这道闸:校正值是绑在**这一份歌词内容**上的(key 里含 lyrics+lyricsYRC 的
 // SHA256 指纹,见 Swift 侧 LyricsOffsetStore.trackKey),后台一旦把歌词换成另一份,指纹
 // 变、校正值查不到,用户一句句听出来的那几百毫秒当场作废,而且界面上毫无痕迹。
-// 2026-08-20 实测坐实这不是理论风险:那台机器 14 条校正记录里 13 条已经因为"内容换过"
+// 验证这不是理论风险:那台机器 14 条校正记录里 13 条已经因为"内容换过"
 // 或"条目没了"而失联;而 qq 与 kugou 的分差常年只有 9 分(约 1330 分里的 0.7%,时间戳
 // 行数完全相同),任何一次重搜都可能翻盘换源。
 //
@@ -38,7 +38,7 @@ type lyricsPinsFile struct {
 }
 
 var (
-	// 由 main() 跟其余缓存路径一起设定;为空(一次性 CLI 子命令那些提前返回的分支)时
+	// 由 main 跟其余缓存路径一起设定;为空(一次性 CLI 子命令那些提前返回的分支)时
 	// lyricsPinned 一律返回 false。
 	lyricsPinsPath  string
 	lyricsPinsMu    sync.Mutex

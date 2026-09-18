@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-// 退出原因日志(2026-09-03)。常驻 collector 的每一条退出路径在退出前都打一行
+// 退出原因日志。常驻 collector 的每一条退出路径在退出前都打一行
 //
 //	exiting reason=<code> [detail]
 //
@@ -23,12 +23,12 @@ const (
 	exitReasonAlreadyRunning = "already_running"
 	// ctx 被 SIGTERM / SIGINT 取消:launchctl kickstart -k 重启、bootout 卸载、终端 Ctrl-C。
 	exitReasonSignal = "signal"
-	// run() 在没被取消的情况下带错误返回。
+	// run 在没被取消的情况下带错误返回。
 	exitReasonRunError = "run_error"
 	// 配置文件在但读不出来(权限 / IO);内容有问题不在此列,那已经降级成 loadIssues 了。
 	exitReasonConfigUnreadable  = "config_unreadable"
 	exitReasonHomeDirUnresolved = "home_dir_unresolved"
-	// run() 没被取消也没报错就返回了 —— 理论上不该发生,记下来才看得见。
+	// run 没被取消也没报错就返回了 —— 理论上不该发生,记下来才看得见。
 	exitReasonRunReturned = "run_returned"
 )
 

@@ -15,7 +15,7 @@ import (
 // (monotonic watermarks reject late/out-of-order scrobbles that arrive with an
 // older timestamp than one already processed — a real failure mode when the
 // phone-side scrobbler's background sync lags). Entries older than ttl are
-// dropped on trim() so the set doesn't grow forever. forwarded/lfmMirrored in
+// dropped on trim so the set doesn't grow forever. forwarded/lfmMirrored in
 // poller.go are the two instances (used to be two independent copies of this
 // exact load/save/trim code — collapsed here since they're identical).
 type persistedTTLSet struct {

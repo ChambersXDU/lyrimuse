@@ -76,7 +76,7 @@ func TestChunkForTranslationOversizedSingleLine(t *testing.T) {
 	}
 }
 
-// 逐行判定取代了原来的整首判定(looksLikeTargetLanguage,2026-08-23 删,理由见
+// 逐行判定取代了原来的整首判定(looksLikeTargetLanguage,删,理由见
 // translate.go 那段【已删除】注释)。这组用例保留原来那些场景,并补上它判错的那一类:
 // **整行外语**。
 func TestLineNeedsTranslation(t *testing.T) {
@@ -215,7 +215,7 @@ func TestTranslateChunkLineCountMismatchFallsBackToSource(t *testing.T) {
 	}
 }
 
-// 2026-08-26 真实bug复现(Michael Jackson《Beat It》):副歌反复的歌逐行独立发翻译请求,
+// 复现(Michael Jackson《Beat It》):副歌反复的歌逐行独立发翻译请求,
 // 同一句话在原文里出现好几次,以前会分别各发一次、结果各自独立(可能一次翻了、另一次原样
 // 吐回来被当"没翻动"丢掉),同一句台词的译文因此在歌词里断断续续、时有时无。
 // 现在按原文去重再发,断言两件事:①重复的那句话只应该出现在**一次**请求里(不是发几次就
@@ -271,7 +271,7 @@ func TestTranslateRejectsSameLanguageSentinel(t *testing.T) {
 	}
 }
 
-// 配额用尽的两种真实形态都要认出来:文档说的 quotaFinished,和实测真正返回的
+// 配额用尽的两种真实形态都要认出来:文档说的 quotaFinished,和测试真正返回的
 // HTTP 429 + 警告文本。认错了会白烧重试次数,那首歌以后再也不会被翻。
 func TestTranslateQuotaViaHTTP429(t *testing.T) {
 	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
@@ -404,7 +404,7 @@ func TestTranslateChunkSendsFreshEmailEachRequest(t *testing.T) {
 		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
 	})
 	// 拼一首长到必须切成多块的歌,才能验证"每块一个新邮箱"。
-	// ⚠️ 每行的文本必须互不相同:2026-08-26 加了按原文去重再送翻(见
+	// ⚠️ 每行的文本必须互不相同:了按原文去重再送翻(见
 	// machineTranslateLRCWithBase 头注释),60 行完全同一句话会被去重成 1 句、
 	// 落不进多块,这条测试就验证不了"逐块换邮箱"了。
 	var b strings.Builder
@@ -525,7 +525,7 @@ func TestNeedsTranslationBackfillResetsAttemptsOnLanguageChange(t *testing.T) {
 
 // 回归测试:译文必须**落到磁盘**,不能只标 enrichDirty。
 //
-// 2026-08-08 用户报"译文语言切成英文了还是没有翻译"。日志里译文一首首都翻出来了,可缓存
+// 处理"译文语言切成英文了还是没有翻译"。日志里译文一首首都翻出来了,可缓存
 // 文件停在两小时前 —— backfillTranslation 只把 enrichDirty 置 true、从不调 saveEnrichCache,
 // 而 App 侧读的正是磁盘上这份文件(EnrichCacheReader 每次直读),于是翻译只活在 collector
 // 内存里,界面上永远看不到,重启一次还全没了。
@@ -560,7 +560,7 @@ func TestBackfillTranslationPersistsToDisk(t *testing.T) {
 	}
 	enrichInflight = map[string]bool{key: true}
 
-	backfillTranslation(key)
+	backfillTranslation(context.Background(), key)
 
 	raw, err := os.ReadFile(enrichPath)
 	if err != nil {
@@ -582,7 +582,7 @@ func TestBackfillTranslationPersistsToDisk(t *testing.T) {
 	}
 }
 
-// 「译文语言选了英文却永远看到中文」——2026-08-09 用户实报,根因在 App 侧
+// 「译文语言选了英文却永远看到中文」——用户实报,根因在 App 侧
 // EnrichCacheStore.saveEdit 采纳候选时只写 lyrics_tr、不同步 lyrics_tr_lang,让一份
 // 网易云中文社区译文顶着上一轮机翻留下的 "en" 标签蒙混过关。写入侧已修,这里钉的是
 // 读取侧的不变式:标签跟正文自相矛盾时以正文为准,好让已经写坏的老条目也能自愈。
@@ -615,7 +615,7 @@ func TestTranslationUsableDistrustsLangLabelContradictedByText(t *testing.T) {
 	}
 }
 
-// 「日英混排的歌一句译文都没有」——2026-08-10 用户实报,First Love(主歌日文、副歌整段
+// 「日英混排的歌一句译文都没有」——用户实报,First Love(主歌日文、副歌整段
 // 英文)选了英文译文却完全没有译文。两个后端对**整批**做语种识别都判成英文:
 //
 //	on-device: {"ok":false,"source":"en","reason":"same-language"}

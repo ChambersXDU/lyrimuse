@@ -8,7 +8,7 @@ import (
 
 // 决策存档 path 取值与 App 侧中文译名的**成对**守卫。
 //
-// 背景(2026-08-21 真实翻的车):加「重新自动匹配」时在 Go 这边新写了一条 path
+// 背景:加「重新自动匹配」时在 Go 这边新写了一条 path
 // "manual-rematch",却忘了在 LyricsDecisionSheet.pathLabel 那个 switch 里补译名 ——
 // 那边 default 分支是"原样显示 decision.path",于是「解析决策」弹窗上直接印了一个蓝色
 // 英文胶囊 `manual-rematch` 给用户看,用户截图问「这里的文案是否没做好中文的」。
@@ -23,7 +23,7 @@ func TestLyricsDecisionPathsHaveChineseLabels(t *testing.T) {
 		t.Fatalf("读不到 %s: %v(路径变了就跟着改,别把这个测试删掉)", sheet, err)
 	}
 	src := string(data)
-	// ⚠️ 反方向那一段(下面)必须只看 **pathLabel 自己的函数体**。2026-09-12 加查询词留痕
+	// ⚠️ 反方向那一段(下面)必须只看 **pathLabel 自己的函数体**。查询词留痕
 	// (借鉴清单 V1)时同一个文件里多了个 queryReasonLabel,里面也是一串 `case "…":`,
 	// 全文件扫的话它们会被当成"没登记的决策路径"报错 —— 两份清单互相顶替对方的缺口。
 	const fnMarker = "private func pathLabel("

@@ -2,9 +2,9 @@ package main
 
 import "testing"
 
-// 2026-09-03 真实bug:周杰伦《妳聽得到》在「搜索候选歌词」里只出 1 个候选(LRCLIB),
+// :周杰伦《妳聽得到》在「搜索候选歌词」里只出 1 个候选(LRCLIB),
 // 网易云/QQ/酷狗一条都没有 —— 转换后的搜索词是「妳听得到」而它们曲库里叫「你听得到」。
-// 单字隔离实测(见 hanvariants.go 头注的 A/B 表)坐实了病根就是「妳」这一个字。
+// 单字隔离测试(见 hanvariants.go 头注的 A/B 表)验证了病根就是「妳」这一个字。
 func TestHanVariantsFoldsSearchTerms(t *testing.T) {
 	cases := []struct{ in, want string }{
 		// 这一条就是那个真实bug:繁体 + 异体字混在一起,两层都要生效

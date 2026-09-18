@@ -13,32 +13,20 @@ import (
 	"time"
 )
 
-// DoH(DNS over HTTPS)解析,只给那些**本地 DNS 会把它解析歪**的域名用。
+// DoH (DNS over HTTPS) resolution for domains prone to local DNS poisoning or misdirection.
 //
-// 2026-08-15 实测坐实的问题:这台机器上
+// Certain service endpoints (such as apic-appmobile.musixmatch.com and apic-desktop.musixmatch.com)
+// may resolve to invalid IP ranges on specific ISP or local DNS resolvers, causing TLS handshake
+// failures ("no alternative certificate subject name matches target host name").
 //
-//	apic-appmobile.musixmatch.com  系统 DNS → 31.13.91.6（Facebook 的地址段）
-//	                               DoH 查询 → 44.212.146.46 / 52.5.55.223（AWS）
-//	apic-desktop.musixmatch.com    系统 DNS → 98.159.108.57
-//	                               DoH 查询 → 18.154.206.x
+// By querying trusted DoH resolvers (Cloudflare 1.1.1.1 and Google 8.8.8.8) directly via IP,
+// authentic host addresses are resolved, bypassing poisoned local DNS caches.
 //
-// 连过去的结果是 TLS 握手直接失败(`SSL: no alternative certificate subject name
-// matches target host name`)—— 证书当然对不上,那台机器根本不是 Musixmatch。
-// 于是 token.get 一个字节都拿不到,整个 Musixmatch 源静默失效:各源里唯一覆盖
-// 欧美/日韩曲库的那个,英文歌就只剩 LRCLIB 一家。
-//
-// 这**不是**代码问题,也不是 musixmatch.go 注释里记的那种反爬拦截(那种会正经返回
-// 401 + hint=captcha 的 JSON)。用 --resolve 强制连真实 IP 立刻拿到 HTTP 200 和
-// 有效 token —— 服务器一直是好的,只是我们被送错了地方。
-//
-// 只对 musixmatch 生效:网易云/QQ/酷狗在这个网络环境下本来就正常,没有理由让它们
-// 多绕一层;LRCLIB 也一直通。任何一步失败都静默退回系统 DNS,退化成现在的行为,
-// 不会比不加更差。
-//
-// 2026-09-06 补:其余八个歌词源后来也接上了 DoH,但顺序**反过来**(lyricsourcedial.go):系统
-// DNS 优先、它报错才问 DoH。两次的病不同 —— 这里是系统 DNS **答错**(先问它没意义),那次是
-// 公司 VPN 的 DNS **不答**(系统 DNS 正常时不该多打一次 1.1.1.1)。dohLookup / dohDialRaceWith
-// 两套共用,只是拨号器不同。
+// Fallback sequence:
+//   - Musixmatch uses DoH-first resolution because local DNS frequently returns incorrect IPs.
+//   - General lyric sources (lyricsourcedial.go) use system-DNS-first resolution, querying DoH
+//     only when system DNS fails to resolve.
+//   - If DoH resolution fails, calls fall back gracefully to system DNS.
 const (
 	dohTimeout  = 4 * time.Second
 	dohCacheTTL = 30 * time.Minute
@@ -108,6 +96,8 @@ func dohLookup(host string) []string {
 	return ips
 }
 
+var dohQueryHTTPClient = &http.Client{Timeout: dohTimeout}
+
 func dohQuery(endpoint, host string) []string {
 	url := fmt.Sprintf("%s?name=%s&type=A", endpoint, host)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -117,7 +107,7 @@ func dohQuery(endpoint, host string) []string {
 	req.Header.Set("Accept", "application/dns-json")
 	// 这里**不能**用 doHTTPTracked:DoH 查询的成败跟"歌词源可不可达"是两回事,记进
 	// networkLooksDown 的统计里会污染那个判断(见 networkobs.go)。
-	resp, err := (&http.Client{Timeout: dohTimeout}).Do(req)
+	resp, err := dohQueryHTTPClient.Do(req)
 	if err != nil {
 		return nil
 	}
@@ -183,21 +173,13 @@ func dohDialer() *net.Dialer {
 	return &net.Dialer{Timeout: dohDialTimeout, KeepAlive: 30 * time.Second}
 }
 
-// dohDialRace 对 DoH 查到的每个地址**同时**发起拨号,第一个连上的胜出,慢一步也连上的
-// 当场关掉。ips 为空时返回 (nil, nil),由调用方退回系统解析。
+// dohDialRace dials each IP address resolved by DoH concurrently, returning the first
+// successful connection and closing any subsequent slower connections. If ips is empty,
+// returns (nil, nil) allowing caller fallback to system resolution.
 //
-// ⚠️ 2026-09-03 修的真 bug。原来这里是串行的:
-//
-//	for _, ip := range ips { conn, err := dialer.DialContext(ctx, ...); if err == nil { return } }
-//
-// 每个 dialer.Timeout = 8s,而外面 http.Client.Timeout 也是 8s —— 第一个地址是黑洞
-// (SYN 石沉大海、不是被拒)时,8 秒预算全耗在它身上,**永远轮不到第二个**。而 DoH 返回的
-// 地址顺序是随机轮转的(2026-09-03 实测:1.1.1.1 对同一个域名连查三次给了两种顺序),
-// dohCache 又一存 30 分钟 —— 一次坏运气就是接下来半小时这个源全废,而另一个地址明明是
-// 好的。并发拨号让"有一个地址能连"直接等价于"连得上",跟顺序无关。
-//
-// 这跟 net.Dialer 自己对多地址做的 Happy Eyeballs 是同一个思路,但标准库那套只在**它自己**
-// 解析出多个地址时生效;我们是拿 DoH 的结果逐个拨,走不到那条路径。
+// Concurrent dialing follows the Happy Eyeballs pattern across multiple addresses:
+// if one resolved IP is unresponsive (blackhole), other healthy IPs race to connect
+// without waiting for serial timeout budgets.
 func dohDialRace(ctx context.Context, network string, ips []string, port string) (net.Conn, error) {
 	return dohDialRaceWith(ctx, dohDialer().DialContext, network, ips, port)
 }
@@ -258,16 +240,15 @@ func dohDialRaceWith(ctx context.Context, dial func(context.Context, string, str
 	return nil, firstErr
 }
 
-// dohHTTPClient 造一个走上面那套拨号逻辑的 client:直连优先(DoH 解析 + 并发拨号),直连
-// 被打掉时自动改走系统代理(proxyfallback.go / systemproxy.go —— 完整的实测依据和"为什么
-// 不全局走代理"记在 systemproxy.go 头注)。
+// dohHTTPClient constructs an http.Client with direct DoH connection precedence and
+// automatic fallback to system proxy (proxyFallbackTransport).
 //
-// onBlocked 透传给 proxyFallbackTransport:直连不通、代理也救不回来时回调一次,让调用方
-// 记一个具体的失败原因。可以为 nil。
+// onBlocked is invoked when direct attempts fail and proxy fallback cannot recover,
+// recording specific failure rationale. Can be nil.
 //
-// ⚠️ **刻意不设 http.Client.Timeout。** 那是把直连和代理两次尝试算进同一个预算里,直连一
-// 超时就没钱给代理重试了,fallback 等于没加。预算落在 proxyFallbackTransport.attempt 的
-// 每次尝试上(3s 直连 / 10s 代理),调用方自己 ctx 上的 deadline 照常生效。
+// Note: http.Client.Timeout is intentionally unset to prevent direct and proxy attempts
+// from competing for the same timeout budget; timeouts are enforced per-attempt inside
+// proxyFallbackTransport (3s direct / 10s proxy) and bounded by the caller's context deadline.
 func dohHTTPClient(onBlocked func()) *http.Client {
 	return &http.Client{
 		Transport: &proxyFallbackTransport{

@@ -72,12 +72,12 @@ func TestMaybeGenerateRomaPrefersJyutping(t *testing.T) {
 
 // 凡是会改 enrichCache 再调 saveEnrichCache 的 CLI,都必须置 enrichDirty —— 源码级契约闸。
 //
-// 为什么要机械闸而不是靠人记:saveEnrichCache() 开头是 `if !enrichDirty { return }`,漏置
-// 的表现是**静默不落盘**,而同一条路径上的 exportLyricsFiles() 照常把文件写出去,于是
-// "文件有、缓存没有"—— 下次启动 importLyricsFromFiles() 又把文件读回缓存,一切看起来正常。
+// 为什么要机械闸而不是靠人记:saveEnrichCache 开头是 `if !enrichDirty { return }`,漏置
+// 的表现是**静默不落盘**,而同一条路径上的 exportLyricsFiles 照常把文件写出去,于是
+// "文件有、缓存没有"—— 下次启动 importLyricsFromFiles 又把文件读回缓存,一切看起来正常。
 // 也就是说这个 bug 在正常使用下**几乎观测不到**,只有盯着 cache 文件的 mtime 才发现。
 //
-// 2026-09-03 实测:新写的 backfill-roma 踩了一次,而 regenerate-jyutping **一直**带着这个
+// :新写的 backfill-roma 踩了一次,而 regenerate-jyutping **一直**带着这个
 // bug(靠上面那条 import 侥幸兜住)。两个都修了,这条闸负责不让第三个出现。
 func TestApplyCLIsMarkEnrichDirty(t *testing.T) {
 	entries, err := os.ReadDir(".")

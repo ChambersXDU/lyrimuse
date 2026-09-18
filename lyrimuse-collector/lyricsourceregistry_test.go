@@ -9,11 +9,11 @@ import (
 
 // 新增歌词源时的完整性守卫。
 //
-// 2026-08-23 加 amll 那次的教训:源常量加好了、抓取也接上了,但**四处清单漏了**——
+//  amll 那次的教训:源常量加好了、抓取也接上了,但**四处清单漏了**——
 // resolveLyricsSources 的全集兜底(导致全新安装时它被禁用)、healthcheckcli 的探测清单、
 // Swift 侧 LyricsSource 枚举(导致"顺序优先"排序列表里根本没有它、徽章显示成灰色原名)。
 // 一处都不报错、全都是静默失效,只能靠人肉发现。跟 scoretermlabel_test.go 同一个路子:
-// 把清单钉死在测试里,忘了补就直接红。
+// 把清单固定在测试里,忘了补就直接红。
 func allLyricSourceConstants() []string {
 	return []string{
 		lyricSourceNetease, lyricSourceQQ, lyricSourceKugou,
@@ -59,9 +59,9 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	}
 
 	// ④ 老配置的一次性迁移:amll/lyricfind/kuwo 各自的迁移标记缺失时补进去,已表态时
-	// 尊重用户选择。这条不是补测——2026-08-25 实测坐实过:漏了迁移标记参数那版代码在真实
+	// 尊重用户选择。这条不是补测——验证过:漏了迁移标记参数那版代码在真实
 	// 机器上跑,这台机器 lyrics_sources 里只有旧的六个源、没有对应迁移字段,
-	// search-lyrics 的 sourcesTotal 停在 6、候选列表里一条新源都没有。这里钉死
+	// search-lyrics 的 sourcesTotal 停在 6、候选列表里一条新源都没有。这里固定
 	// 的正是当时复现过的那个场景(见 resolveLyricsSources 里对应的注释)。
 	old := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil, nil)
 	if !old[lyricSourceAMLL] {
@@ -134,7 +134,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 
 // 并发收集那个循环的次数、以及结果 channel 的缓冲,都必须**跟着源数走**,不许写字面量。
 //
-// 2026-09-13 接第十个源时实测坐实的坑:那行曾经是硬编码的 `for i := 0; i < 9`,而 goroutine
+// 接第十个源时的坑:那行曾经是硬编码的 `for i := 0; i < 9`,而 goroutine
 // 数是"源数 + 1"(多出来的是 applecover)。两个数从来没绑在一起,于是每加一个源就多丢一份
 // 结果——循环先数满就退出,**最后到达的那个源的应答被直接扔掉**。当时的现象是:新接的
 // deezer 明明取回了 2810 字节逐行歌词,却从没进过候选列表;`git log -S` 查下来这个字面量
@@ -176,7 +176,7 @@ func TestSwiftLyricsSourceEnumCoversAllSources(t *testing.T) {
 	}
 	// ⚠️ 别按"以 netease 开头"来找这一行。枚举的**声明顺序是有语义的**(它同时是设置页九个
 	// 勾选框的展示序和"顺序优先"模式的默认顺序,见 Swift 侧那段注释),排序本来就会变:
-	// 2026-09-07 按实测采用率把 kugou 提到首位时,原先写死的 `case\s+(netease[^\n]*)` 当场
+	// 按测试采用率把 kugou 提到首位时,原先写死的 `case\s+(netease[^\n]*)` 当场
 	// 匹配不到、整条守卫直接 Fatal —— 而它要守的是"九个源一个不漏",跟谁排第一无关。
 	// 改成先定位枚举声明本身、再取其后第一个 case 行:以后怎么重排都不会误伤这条守卫。
 	re := regexp.MustCompile(`(?s)public enum LyricsSource: String.*?\n\s*case\s+([^\n]+)`)
@@ -211,7 +211,7 @@ func TestSwiftSourceDisplayNameCoversAllSources(t *testing.T) {
 }
 
 // 「搜索候选歌词」弹窗两句空状态文案里硬编码的中文数字("六个源都没找到可用的候选"/
-// "六个源的请求全部失败…")必须跟源的实际数量一致——2026-08-24 加 amll 之后这两句
+// "六个源的请求全部失败…")必须跟源的实际数量一致—— amll 之后这两句
 // 曾经停在"五个源"没跟上,纯靠人肉截图发现,而上面几个 Test 都不会替它报警(它们守的是
 // "某个源漏挂在某个清单里",不是"某句文案里的数字过期了")。同一份文件里,零个/一个
 // 数字不用写死中文数字表——已知会用到的范围窄,给 5~9 手写映射即可,超出直接报错提醒
@@ -242,9 +242,9 @@ func TestSwiftSearchEmptyStateCountMatchesSourceCount(t *testing.T) {
 	}
 }
 
-// 面向用户 / 面向维护者的几处"一共几个源"必须跟常量表对齐——2026-09-04 加咪咕时只改了上面
+// 面向用户 / 面向维护者的几处"一共几个源"必须跟常量表对齐——咪咕时只改了上面
 // selftest 钉住的两句文案和 README 三处,漏了 01 章、09 章标题、14 章、collector 一条日志里写死的
-// "%d/8"(用户当天发现「歌词源数量还是 8」)。这里把**带具体数字的现状描述**钉死;其它地方从此
+// "%d/8"(用户当天发现「歌词源数量还是 8」)。这里把**带具体数字的现状描述**固定;其它地方从此
 // 一律写"全部源 / 各源",不带数字(带日期的历史记录除外),新加源时就不会再有第二批漏网。
 func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
 	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十"}

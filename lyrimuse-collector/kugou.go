@@ -30,7 +30,7 @@ type kugouResult struct {
 	lrc string
 	yrc string // 归一化成 YRCParser 语法后的逐字数据,没有则空串
 	// tr/roma:KRC 里 `[language:<base64>]` 内嵌的中文译文 / 罗马音两轨,已按 KRC 行始
-	// 时间戳拼成逐行 LRC(2026-09-02 加,见 krcLanguageTracks);没有则空串。
+	// 时间戳拼成逐行 LRC;没有则空串。
 	tr, roma string
 	// durationSecs:酷狗曲库自报的这首歌时长(秒),0=没给。透传用,见 lyricCandidate 同名字段。
 	durationSecs float64
@@ -38,7 +38,7 @@ type kugouResult struct {
 	// 候选歌词"弹窗展示用,不参与任何匹配/打分逻辑,取自搜索结果本身(本来就已经查到,
 	// 只是原来没往外传)。
 	title, artist, album string
-	// cover:2026-08-31 加。搜索接口本身没有可靠的封面图字段(AlbumImage 实测经常是空
+	// cover:。搜索接口本身没有可靠的封面图字段(AlbumImage 测试经常是空
 	// 字符串,这一点没变),但搜索结果带的 album_id 能换一次 album/info 接口拿到
 	// imgurl——多一次请求,只在拿到候选(chosen != nil)之后才发,查不到/请求失败就留空,
 	// 交给 enrich.go 的 coverOrFallback 退到 Apple 封面,不影响歌词本身的可用性。
@@ -160,20 +160,20 @@ func krcToYRC(krc string) string {
 //	            {"type":0,"language":0,"lyricContent":[["yu ","me ","na ","ra ","ba"],…]}],"version":1}
 //
 // type 1 是中文译文、type 0 是音译;lyricContent 每一项对应 KRC 的一条计时行
-// (`[行始,行长]<…>`),**按行序号对齐**,行数相等是格式契约(2026-09-02 直连实测 5 首:
+// (`[行始,行长]<…>`),**按行序号对齐**,行数相等是格式契约(直连测试 5 首:
 // Lemon 57/57、Ditto 73/73、Cruel Summer 73/73、Pretender 78/78、夜に駆ける 88/88;晴天
 // 这类中文歌没有这一行)。片段拼接后就是这一行的文字,片段自带空格;空片段对应署名行。
 // 行始时间戳取 KRC 那一行的行始——App 侧把译文贴到酷狗 fmt=lrc 那份整行歌词上用的是
-// 700ms 最近邻,实测两套时间戳最近邻差最大 9ms。
+// 700ms 最近邻,测试两套时间戳最近邻差最大 9ms。
 //
-// ⚠️ 韩文歌的 type 0 轨**不是罗马音,是中文谐音**(Ditto 实测:「马列做 say it back」
+// ⚠️ 韩文歌的 type 0 轨**不是罗马音,是中文谐音**(Ditto 测试:「马列做 say it back」
 // 「啊亲们 挠木 摸咯」),照单全收会把这种谐音当罗马音显示。这里用汉字占比
 // 把它挡掉(krcLanguageRomaMaxHanRatio);下游 usableValueAdd 的"原文假名占比 > 5%"是第二道闸。
 
 var krcLanguageLineRegex = regexp.MustCompile(`^\[language:(.*)\]$`)
 
 // krcLanguageRomaMaxHanRatio:type 0 轨正文里汉字占比超过这个值就当没有罗马音。真罗马音
-// 是拉丁字母(实测 Lemon/Pretender/夜に駆ける 三首为 0),谐音轨实测 ≈0.9,取 0.3 两边都不擦边。
+// 是拉丁字母(测试 Lemon/Pretender/夜に駆ける 三首为 0),谐音轨测试 ≈0.9,取 0.3 两边都不擦边。
 const krcLanguageRomaMaxHanRatio = 0.3
 
 // splitKRCLanguageLine 把 `[language:…]` 行摘出来,返回 base64 正文与去掉该行后的 KRC。
@@ -275,7 +275,7 @@ type kugouSong struct {
 	AlbumName  string  `json:"album_name"`
 	AlbumID    string  `json:"album_id"`
 	Duration   float64 `json:"duration"` // 秒
-	// TransParam.Language:实测坐实酷狗搜索接口自带的语种标签,直接是人类可读字符串
+	// TransParam.Language:酷狗搜索接口自带的语种标签,直接是人类可读字符串
 	// ("国语"/"粤语"),交叉验证过周杰伦《稻香》→"国语"、Beyond《海阔天空》→"粤语"。
 	TransParam struct {
 		Language string `json:"language"`
@@ -331,7 +331,7 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 	// 搜索词逐个 variant 试,先命中先用(顺序由 searchTitleVariants 定,跟设置走)。带括号的标题在酷狗
 	// 上不会返回空、而是回一串该歌手的热门歌,所以"搜砸了"表现为 pickKugouSearchCandidate
 	// 一条都收不下,不是 kugouGet 报错——必须靠 chosen==nil 才能发现,不能只在 err != nil
-	// 时才换词。详见 searchTitleVariants 的注释。第二跳(krcs 查 KRC 候选)不受影响:实测
+	// 时才换词。详见 searchTitleVariants 的注释。第二跳(krcs 查 KRC 候选)不受影响:测试
 	// 同一个 hash 下 keyword 带不带括号返回的候选完全一致,身份是 hash 认的。
 	var chosen *kugouSong
 	for _, q := range searchTitleVariants(title) {
@@ -409,7 +409,7 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 
 // pickKugouSearchCandidate 从一页搜索结果里挑"这份歌词该跟谁走"。
 //
-// 2026-09-01 之前是**第一条过闸就收工**——闸门只有标题(lyricTitleAccepted)和歌手,完全
+// 之前是**第一条过闸就收工**——闸门只有标题(lyricTitleAccepted)和歌手,完全
 // 不看专辑和时长,于是排序靠前的杂项能把同页靠后的正主顶掉。真实案例(周杰伦《简单爱
 // (Live)》/《The One 周杰伦演唱会》,本地 273.227s):酷狗对"周杰伦 简单爱 (Live)"返回的
 // 第 1 条是「简单爱 (无与伦比演唱会 m 56s)」——一个 56 秒的片段、专辑名为空,剥括号后
@@ -453,7 +453,7 @@ func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, du
 		if !lyricSourceArtistMatches(s.SingerName, artist) {
 			// 歌手闸不过 → 还有第二条依据:标题逐字同名 + 专辑对得上 + 时长紧密吻合
 			// = 同一次录音。修的是"艺名↔本名 / 乐队名↔成员名"这类连分隔符都没有、
-			// 段集交集档和别名轮都够不到的署名分歧(实测案例见
+			// 段集交集档和别名轮都够不到的署名分歧(测试案例见
 			// lyricRecordingTriangleMatches 的注释)。酷狗是各源里唯一**已经把正主
 			// 排在搜索结果第 1 位、只差这一闸**的源,而且它带 YRC 逐字。
 			if !lyricRecordingTriangleMatches(s.SongName, s.AlbumName, s.Duration,
@@ -503,10 +503,10 @@ func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, du
 	return best
 }
 
-// kugouAlbumCoverURL 按专辑 ID 查 album/info 接口拿封面(2026-08-31 加)。响应的
+// kugouAlbumCoverURL 按专辑 ID 查 album/info 接口拿封面。响应的
 // imgurl 字段是个带 "{size}" 占位符的模板(如
 // "http://imge.kugou.com/stdmusic/{size}/…/….jpg"),换成具体像素数才是能直接访问的
-// URL——400/480/800 实测都能 200,这里用 480,跟 qqCoverMaxEdge 取的档位量级一致。
+// URL——400/480/800 测试都能 200,这里用 480,跟 qqCoverMaxEdge 取的档位量级一致。
 // albumID 为空(有些搜索结果确实没有)或请求失败都返回空串,调用方(enrich.go 的
 // coverOrFallback)会自然退到 Apple 封面,不是致命错误。
 func kugouAlbumCoverURL(ctx context.Context, albumID string) string {
@@ -523,13 +523,13 @@ func kugouAlbumCoverURL(ctx context.Context, albumID string) string {
 		return ""
 	}
 	cover := strings.ReplaceAll(out.Data.ImgURL, "{size}", "480")
-	// ⚠️ 2026-08-31 真实bug(用户报"酷狗的没有返回封面",截图里酷狗那条候选是空白占位图,
+	// ⚠️ (处理"酷狗的没有返回封面",截图里酷狗那条候选是空白占位图,
 	// netease 那条却有缩略图):酷我/acg 的这个接口原样返回的是 "http://" 前缀,collector
 	// 这边发请求不受影响(没有 ATS 限制),但这个 URL 之后会原样进 lyricCandidate.cover、
 	// 一路传到 Swift 侧的 AsyncImage——macOS App Transport Security 默认拒绝纯 HTTP 的
 	// 网络请求,图片静默加载失败、退回占位图标,不会报错也不会抛异常,只在真机 UI 上才
 	// 看得出来(拿 CLI 直查 cover_url 字符串本身看不出这个问题,之前用这个办法验证过、
-	// 没发现是因为凑巧没测到走 http 这条路的场景)。实测坐实同一张图换成 https 也是 200,
+	// 没发现是因为凑巧没测到走 http 这条路的场景)。同一张图换成 https 也是 200,
 	// 强制换成 https 就地修好,不需要额外配置 ATS 例外域名(改 Info.plist 加白名单域名是
 	// 更大范围的例外,没必要为一张图开这个口子)。
 	return strings.Replace(cover, "http://", "https://", 1)

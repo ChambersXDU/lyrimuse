@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// 「暂停时该报哪个位置」(2026-08-21)。样本全是真抓的:
+// 「暂停时该报哪个位置」。样本全是真抓的:
 //   - Arc(网页播放器,页面没调 setPositionState):elapsedTime 恒 0、timestamp 恒为开播
 //     那一刻 → 一按暂停位置就归零,这是要修的那个 bug。
 //   - QQ/网易云/Apple Music:暂停时会带新鲜时间戳重发一次 elapsedTime,那个值就是暂停位置
@@ -45,7 +45,7 @@ func TestPausedPositionSecs(t *testing.T) {
 
 func TestMediaControlAnchorAge(t *testing.T) {
 	now := time.Date(2026, 8, 20, 19, 47, 16, 0, time.UTC)
-	// media-control 实测的时间戳形态(无小数秒)
+	// media-control 测试的时间戳形态(无小数秒)
 	age, ok := mediaControlAnchorAge("2026-08-20T19:44:16Z", now)
 	if !ok || age != 180 {
 		t.Errorf("age = %v ok = %v，期望 180 true", age, ok)
@@ -88,8 +88,8 @@ func TestPlayingPositionSecs(t *testing.T) {
 	if got := playingPositionSecs(100, 130.4, 1, tsStr, ts.Add(30*time.Second)); got != 130.4 {
 		t.Fatalf("rate>0 should use elapsedTimeNow, got %.3f", got)
 	}
-	// rate 缺失(恢复播放的实测形态):elapsedTimeNow 冻结,按 ts+0.5 自己补算。
-	// 实测样本:锚点 172.994@:25(真实 :25.560),42.647s 后 Spotify 自己的钟 215.081;
+	// rate 缺失(恢复播放的测试形态):elapsedTimeNow 冻结,按 ts+0.5 自己补算。
+	// 测试样本:锚点 172.994@:25(真实 :25.560),42.647s 后 Spotify 自己的钟 215.081;
 	// 中点法给 215.141(差 0.06),改动前直接用整秒给 215.641(差 0.56)。
 	got := playingPositionSecs(172.994, 172.994, 0, tsStr, ts.Add(42647*time.Millisecond))
 	if want := 172.994 + 42.647 - 0.5; math.Abs(got-want) > 1e-6 {

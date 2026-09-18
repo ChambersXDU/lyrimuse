@@ -15,7 +15,7 @@ func deezerTrackFromJSON(t *testing.T, raw string) deezerTrack {
 	return tr
 }
 
-// synchronizedLines → 逐行 LRC。形状是 2026-09-13 从 pipe.deezer.com 真实响应里 dump 出来的
+// synchronizedLines → 逐行 LRC。形状是 从 pipe.deezer.com 真实响应里 dump 出来的
 // (Joseph Kamel《Crash》64 行):只认 lrcTimestamp + line 同时非空的行。Deezer 用空 line
 // 表示间奏,原样拼进去会变成一堆空行——那会拉低 lines 这一项的分,还会在歌词面上留白。
 func TestDeezerBuildLRC(t *testing.T) {
@@ -90,7 +90,7 @@ func TestDeezerCandidateScore(t *testing.T) {
 }
 
 // 「这首歌没有歌词」的识别 —— 这是**正常结果**不是失败,认出来才不会往失败原因里记、
-// 不会惊动熔断。2026-09-13 实测原文(Jungeli《Juste un peu》、Suzane《SLT》)。
+// 不会惊动熔断。原文(Jungeli《Juste un peu》、Suzane《SLT》)。
 func TestDeezerIsLyricsNotFound(t *testing.T) {
 	real := `[{"message":"Lyrics does not exists","type":"LyricsNotFoundError","path":["track","lyrics"]}]`
 	if !deezerIsLyricsNotFound(real) {

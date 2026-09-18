@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// 真实数据(2026-08-22 实测 iTunes lookup):
+// 真实数据:
 //
 //	id=1485220321 → 「枫+退后+搁浅 (Live)」/ artistName=「南拳妈妈弹头」/
 //	                collectionArtistName=「周杰伦」/ 专辑「周杰伦地表最强世界巡回演唱会 (Live)」/ 119.213s
@@ -43,7 +43,7 @@ func seedAnchorCache(t *testing.T) {
 }
 
 // TestAppleCatalogPlausibleID 钉住"什么样的 uniqueIdentifier 才值得拿去 lookup"。
-// 用的是实测值:本地导入曲目拿到的是负数(直接 lookup 是 HTTP 400),取绝对值是 0 results。
+// 用的是测试值:本地导入曲目拿到的是负数(直接 lookup 是 HTTP 400),取绝对值是 0 results。
 func TestAppleCatalogPlausibleID(t *testing.T) {
 	cases := []struct {
 		id   int64
@@ -145,7 +145,7 @@ func TestAppleCatalogSearchIdentities(t *testing.T) {
 	}
 }
 
-// TestAppleStorefrontArtistIdentitiesLive 是真实网络集成测试(2026-08-30 加,方大同
+// TestAppleStorefrontArtistIdentitiesLive 是真实网络集成测试(,方大同
 // 《Lovers Policy》案,见 appleStorefrontArtistIdentities 头注)——直接打真实 iTunes
 // Search API,不 mock。跟同包内 TestRetryArtistIdentitiesGenericMusicBrainzReverseDirection
 // 同一个前提:这类"通用查询是否真的通用"的验证,意义就在于打真实的第三方服务,mock 掉
@@ -169,7 +169,7 @@ func TestAppleStorefrontArtistIdentitiesLive(t *testing.T) {
 	}
 }
 
-// TestAppleStorefrontCanonicalTitleLive 钉住 2026-09-12 那个病根的**确切形状**(用户报
+// TestAppleStorefrontCanonicalTitleLive 钉住 那个病根的**确切形状**(处理
 // 「为什么这首歌只搜出这一个结果」,Mrs. GREEN APPLE《クスシキ》):Apple Music 国际区把
 // 这首日文歌的标签写成罗马字「KUSUSHIKI」,而 JP 商店里它叫「クスシキ」——三家中文源收录的
 // 都是后者,拿罗马字问九个源只有 LRCLIB 答得上来。
@@ -288,7 +288,7 @@ func TestDedupeArtistIdentities(t *testing.T) {
 }
 
 // TestMediaControlRawStateParsesUniqueIdentifier 用**真实的 media-control 输出**
-// (2026-08-22 抓的,只去掉了体积巨大的 artworkData/artworkMimeType)钉住这个字段真的解出来了。
+// 钉住这个字段真的解出来了。
 //
 // 为什么值得有这个测试:JSON tag 拼错是**静默**失败——字段恒为零值,
 // appleCatalogPlausibleID(0) 直接 false,整条 Apple 目录锚点会安静地永不生效,
@@ -315,7 +315,7 @@ func TestMediaControlRawStateParsesUniqueIdentifier(t *testing.T) {
 		t.Errorf("同一份 payload 的其它字段也该照常解出来,得到 title=%q duration=%v", raw.Title, raw.Duration)
 	}
 
-	// Apple Music 目录曲目:同一个字段位置放的是目录 ID(实测 1485220325 = 演唱会专辑第 18 首)
+	// Apple Music 目录曲目:同一个字段位置放的是目录 ID(测试 1485220325 = 演唱会专辑第 18 首)
 	const catalog = `{"album":"周杰伦地表最强世界巡回演唱会 (Live)","artist":"周杰伦",` +
 		`"bundleIdentifier":"com.apple.Music","duration":208.293,"playing":true,` +
 		`"title":"印地安老斑鸠 (Live)","uniqueIdentifier":1485220325}`
@@ -328,7 +328,7 @@ func TestMediaControlRawStateParsesUniqueIdentifier(t *testing.T) {
 	}
 }
 
-// TestAppleCatalogAnchorRejectsSiblingTracks 是 2026-08-22 对抗性复核抓到的洞的回归测试。
+// TestAppleCatalogAnchorRejectsSiblingTracks 是 对抗性复核匹配到的洞的回归测试。
 //
 // 原来的自校验用 lyricTitleAccepted,而它的**第二档**是「双方各自 stripParens 之后判相等」——
 // 于是同一张专辑上的括号兄弟轨互相判等,专辑名又必然相同,锚点照样"成立",把差 40~47% 的
@@ -368,14 +368,14 @@ func TestAppleCatalogAnchorRejectsSiblingTracks(t *testing.T) {
 		t.Errorf("序号对得上的正主应成立,得到 ok=%v dur=%v", ok, got.DurationSecs)
 	}
 	// ④ 本地拿不到序号(0)时不把"缺证据"当"反证据":完全同名那一对退回放行
-	//    ——这是刻意保留的残余风险,同名兄弟轨的时长差通常只有几个百分点(实测 4.6%),
+	//    ——这是刻意保留的残余风险,同名兄弟轨的时长差通常只有几个百分点(测试 4.6%),
 	//    远小于括号兄弟轨那 40%+,而收紧成"必须有序号"会让没有序号的曲目整条失效。
 	if _, ok := appleCatalogAnchor(appleMusicBundleID, 850697815, 0, "Love Never Felt So Good", albumXscape); !ok {
 		t.Errorf("本地没有序号时应退回只校曲目名+专辑名")
 	}
 }
 
-// 按曲名 + 时长从 iTunes 全文搜索结果里挑署名(2026-09-08,王子《Why You Wanna Treat Me So Bad?》案:
+// 按曲名 + 时长从 iTunes 全文搜索结果里挑署名(,王子《Why You Wanna Treat Me So Bad?》案:
 // YT Music zh-HK 界面把 Prince 本地化成「王子」,九个源全空;iTunes 用「王子 Why You…」照样能搜到
 // Prince 那条)。这条没有专辑证据,所以三道门都要钉住:曲名归一全等、时长 3%/4s 内、最多两个。
 func TestPickAppleTitleSearchIdentities(t *testing.T) {
@@ -406,7 +406,7 @@ func TestPickAppleTitleSearchIdentities(t *testing.T) {
 		"刘若英", "序曲", 94.56); len(got) != 0 {
 		t.Errorf("中文本地署名对中文同名艺人不该采, got %v", got)
 	}
-	// 几十秒的器乐段不问(实测 陶喆《Doxology》47s 撞出拉丁名的 "A Covering",跨文字系统守卫挡不住它)。
+	// 几十秒的器乐段不问(测试 陶喆《Doxology》47s 撞出拉丁名的 "A Covering",跨文字系统守卫挡不住它)。
 	if got := pickAppleTitleSearchIdentities([]itunesResult{{TrackName: "Doxology", ArtistName: "A Covering", TrackTimeMillis: 47400}},
 		"陶喆", "Doxology", 47.427); len(got) != 0 {
 		t.Errorf("短于 %ds 的曲目不该采, got %v", appleTitleSearchMinDurationSecs, got)
@@ -447,7 +447,7 @@ func TestPickAppleTitleSearchIdentities(t *testing.T) {
 	}
 }
 
-// 2026-09-12:back number《Happy End - EP》在 US 商店对上了韩国歌手 Rothy 的同名 EP —— 专辑名相等、曲名也相等
+// :back number《Happy End - EP》在 US 商店对上了韩国歌手 Rothy 的同名 EP —— 专辑名相等、曲名也相等
 // (都叫 Happy End),只有时长(232s vs 314s)能分开;JP 商店里同一录音叫「ハッピーエンド」,曲名跨文字系统 + 时长相等才放行。
 func TestAppleStorefrontTrackMatches(t *testing.T) {
 	rothy := itunesResult{TrackName: "Happy End", ArtistName: "Rothy", TrackTimeMillis: 232400}
@@ -498,7 +498,7 @@ func TestAppleStorefrontsFor(t *testing.T) {
 	}
 }
 
-// v1 裸 map 格式的缓存整份丢掉:里面的署名没经过曲目核对,已实测装进过错人。
+// v1 裸 map 格式的缓存整份丢掉:里面的署名没经过曲目核对,已测试装进过错人。
 func TestAppleStorefrontArtistCacheDiscardsV1(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/storefront-v1.json"

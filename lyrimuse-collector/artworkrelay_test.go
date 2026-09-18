@@ -18,7 +18,7 @@ import (
 // 之后才去读包级的 artworkRelayURL 的,所以上一个用例排下的上传,可能等到下一个用例把
 // artworkRelayURL 指向**它自己的** httptest 服务器之后才发出请求 —— 表现就是下一个用例
 // 平白多收到一次 HEAD(`-count=25` 压出来的:heads = 2)。
-// 生产里这个变量在 main() 里设一次就再也不变,不存在这个问题,是测试特有的。
+// 生产里这个变量在 main 里设一次就再也不变,不存在这个问题,是测试特有的。
 func resetArtworkRelayState(t *testing.T) {
 	t.Helper()
 	artworkMu.Lock()

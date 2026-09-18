@@ -10,26 +10,27 @@ import (
 	"time"
 )
 
-// 2026-09-06 别名轮改口径(用户定的:「这个源没有候选就去跑别名(如果有的话)」)。
+// 别名轮改口径(用户定的:「这个源没有候选就去跑别名(如果有的话)」)。
 // 纯函数部分在这里钉住;整条 scoredLyricCandidatesStreaming 要联网,不在单测里跑。
 
 func TestLyricSourcesWorthAliasRetry(t *testing.T) {
-	savedFeatures := features
+	savedSources := getFeaturesLyricsSources()
 	savedBreaker := lyricSourceBreakerShared
 	savedYT, savedMM := ytmusicLastFailureReasonNow(), musixmatchLastFailureReasonNow()
 	savedDZ := deezerLastFailureReasonNow()
 	t.Cleanup(func() {
-		features = savedFeatures
+		setFeaturesLyricsSources(savedSources)
 		lyricSourceBreakerShared = savedBreaker
 		ytmusicSetLastFailureReason(savedYT)
 		musixmatchSetLastFailureReason(savedMM)
 		deezerSetLastFailureReason(savedDZ)
 	})
-	features.LyricsSources = map[string]bool{}
+	sources := map[string]bool{}
 	for _, s := range lyricSourceNames {
-		features.LyricsSources[s] = true
+		sources[s] = true
 	}
-	features.LyricsSources["migu"] = false // 关掉的不算
+	sources["migu"] = false // 关掉的不算
+	setFeaturesLyricsSources(sources)
 	lyricSourceBreakerShared = newLyricSourceBreaker(time.Now)
 	// 酷我:传输层连不上 —— 换名字也没用
 	dns := &url.Error{Op: "Get", Err: &net.OpError{Op: "dial", Err: &net.DNSError{Err: "no such host", IsNotFound: true}}}
@@ -102,7 +103,7 @@ func TestAliasRoundTargetingIsWired(t *testing.T) {
 	for _, needle := range []string{
 		"only := lyricSourceOnlyFrom(ctx)",
 		"if only != nil && !only[source] {",
-		// 守的是"定向重查这道接线还在",不是那一行长什么样 —— 2026-09-12 起外面还包了
+		// 守的是"定向重查这道接线还在",不是那一行长什么样 —— 外面还包了
 		// 一层 withLyricQueryReason(借鉴清单 V1 的查询词留痕),所以只钉内层这一段。
 		"withLyricSourceOnly(ctx, only)",
 		"fetchScoredLyricCandidatesStreaming(altCtx, alt, title, album, durationSecs, aliasUpdate)",

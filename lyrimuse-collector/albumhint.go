@@ -9,49 +9,42 @@ import (
 	"net/http"
 	neturl "net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 )
 
-// ---- 专辑名回填:播放器没报专辑名时问 Apple 目录这首歌出自哪张专辑(2026-09-08)----
+// ---- Album Hint Backfill ----
 //
-// 起因:用户在 YouTube Music 里放王子(Prince)《Why You Wanna Treat Me So Bad?》的 **MV**,网页和上送都
-// 没有专辑。两个来源都是空的:MediaSession 报的 album 就是空串;页面 byline 是「王子 • 501万次观看 • 5万 人赞」,
-// 只有频道链接、没有 `browse/MPREb` 专辑链接(ytmusicAlbumPatch 无从补起)—— MV 在 YT Music 里是独立的
-// 「视频」实体,不挂专辑,同专辑的音频版都带 album「Prince」。用户拍板作为**通用逻辑**加上:任何播放器,只要
-// 报上来的专辑名为空,就按「署名 + 曲名 + 时长」去 Apple 目录反查(iTunes Search 公开接口,纯 HTTPS,不依赖
-// 本机装 iTunes / Apple Music)。
+// When a player does not report an album name (e.g. YouTube Music video/MV tracks where
+// MediaSession reports an empty album), this module queries the Apple Catalog (iTunes Search API)
+// using artist + title + duration to resolve the track's original album.
 //
-// ⚠️ 回填的只是**呈现 / 上送**用的专辑(snapshot.AlbumHint → relay 网页、Last.fm album、LB release_name、
-// 本地收听日志),**绝不进 enrich 缓存 key**:App 侧 EnrichCacheReader 按播放器报的 `artist|title|album` 查歌词,
-// 这边若把 album 改掉,两边 key 对不上、App 拿不到词;广告判据 isAdBreak(Spotify 原生 album 为空即广告)、
-// 专辑预取、会话 key 也继续看 Album 本身。见 snapshot.albumForUpload。
+// Invariant: The hint album is used strictly for presentation and external uploads
+// (snapshot.AlbumHint -> relay web page, Last.fm scrobble album, ListenBrainz release_name,
+// and local listen log). It MUST NEVER modify the enrich cache key, because the Swift frontend
+// queries lyrics using the player-reported `artist|title|album`. If modified here, the keys
+// would mismatch and lyric lookups would fail. Ad break detection (isAdBreak), album prefetch,
+// and session keys also continue using the raw Album.
 //
-// 两段式:**取候选**一次、**挑**每拍。
+// Two-stage architecture:
+//   - Candidate fetching (fetchAppleAlbumHintCandidates, asynchronous background query):
+//     Queries "Artist Title" and bare "Title" across CN and US storefronts. Retains candidates
+//     where normalized title matches exactly, duration is within appleTitleSearchDurationTolerance
+//     (max(4s, 3%)), and album is non-empty. Performs a single batch collection lookup to obtain
+//     collection-level release dates (since track releaseDate is the original track release date).
+//     If primary query yields zero candidates, attempts albumHintTitleSplit ("Artist - Title" format).
+//   - Candidate picking (pickAppleAlbumHint, pure function executed per tick from memory):
+//     Evaluates candidate artist across two tiers: Tier 0 (exact match or credit subset, e.g.
+//     "Prince" vs "Prince & The Revolution") and Tier 1 (lyric-resolved artists from enrich
+//     or winning lyric candidate). Candidates failing both tiers are rejected to avoid mismatched
+//     instrumental/piano covers. Within a tier, candidates are ranked: non-compilation >
+//     non-single/EP > non-deluxe/remaster > earliest album release date > Apple search order.
 //
-//   - 取候选(fetchAppleAlbumHintCandidates,后台一次):「署名 曲名」和裸曲名两个查询 × CN / US 两个商店,
-//     留下曲名归一后**完全相等**、iTunes 时长在 appleTitleSearchDurationTolerance(max(4s, 3%))内、专辑名非空
-//     的结果;再用**一次** lookup(id 可以逗号串起来)把这些专辑的**专辑级发行日期**补上 —— iTunes Search 给的
-//     `releaseDate` 是**歌**的首发日期(精选集里的老歌也标 1979),分不出原专辑和精选,专辑自己的日期才行
-//     (实测 Prince「Prince」1979-10-19 vs「The Hits/The B-Sides」1993-09-13;Seal「Seal II」1994 vs
-//     「Seal: Best 1991-2004」2004)。候选按 key 落盘,查空只记内存、最多试 appleAlbumHintMaxMisses 次 ——
-//     但网络不通那一轮的空结果不算查空(fetchAppleAlbumHintCandidatesTracked / appleAlbumHintQueryConcluded)。主查询
-//     零候选时把曲名按第一个破折号拆成「署名 - 曲名」再问一次(albumHintTitleSplit,搬运频道把歌手写进曲名的形态)。
-//   - 挑(pickAppleAlbumHint,纯函数、单测钉着;每拍从缓存里重挑,零网络):署名分两档 —— 0 档:归一相等,或
-//     拆开 credit 后一方是另一方的子集(「Prince」↔「Prince & The Revolution」);1 档:**歌词链路核实过的署名**
-//     (lyricResolvedArtists:enrich 条目的 CanonicalArtist,或已采纳歌词决策里胜出候选所报的 artist ——
-//     王子 那首 kugou 候选报「Prince」)。两档都不中的一律不采:实测裸按"跨文字系统就认"会把 周杰伦《七里香》
-//     配到一位拉丁名艺人的「Jay - Piano Cover (Piano Version)」上 —— 同名同时长的翻唱 / 钢琴版比想象多,
-//     必须要旁证。同档内按「非群星合辑 > 非 Single/EP > 非豪华/重制版 > 专辑发行日期最早 > Apple 顺序」:要
-//     回答的是"这首歌出自哪张专辑",原始录音室专辑通常最早发行。
-//
-// 因为"挑"每拍都做,歌词晚几秒解析出来也没事:那一拍旁证到位,回填自然出现。代价是回填通常比换歌晚一到几拍,
-// relay 靫去重 key 里的 `|a` 标记补推一次(relayAlbumHintSuffix),会话 meta 同曲期间跟着补(poller.handle)。
-//
-// 生命周期纪律同 prefetchAppleCatalogTrack:poll 主循环只读缓存,没命中就后台补取、本轮按现状走 —— poll 路径上
-// 同步等对外 HTTP 会把网络抖动变成"进度卡住"。
+// Poller lifecycle discipline: The main poll loop only reads the in-memory cache and triggers
+// background fetching on a cache miss to prevent network latency from blocking the polling tick.
 const appleAlbumHintMaxMisses = 2
 
 // albumHintCandidate 是一条"曲名 + 时长对得上"的 Apple 目录候选,落盘后每拍重挑。
@@ -78,8 +71,11 @@ var (
 	appleAlbumHintPath     string                              // 空 = 只用内存(单测 / 一次性子命令)
 	appleAlbumHintDirty    bool
 	appleAlbumHintInflight = map[string]bool{}
+	appleAlbumHintWaiters  = map[string]chan struct{}{}
 	appleAlbumHintMisses   = map[string]int{}
 	appleAlbumHintLogged   = map[string]string{} // key → 已打过日志的挑选结果,同一首只记一行
+
+	albumHintLookupHTTPClient = &http.Client{Timeout: 6 * time.Second}
 )
 
 // appleAlbumHintKey:署名|曲名|整秒时长,刻意不 normLoose —— 缓存里存的是原始标签对应的候选。
@@ -119,18 +115,45 @@ func saveAppleAlbumHintCache() {
 		return
 	}
 	data, err := json.Marshal(appleAlbumHintCache)
-	appleAlbumHintDirty = false
 	path := appleAlbumHintPath
-	appleAlbumHintMu.Unlock()
 	if err != nil {
+		appleAlbumHintMu.Unlock()
 		return
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	appleAlbumHintDirty = false
+	appleAlbumHintMu.Unlock()
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp.*")
+	if err != nil {
+		appleAlbumHintMu.Lock()
+		appleAlbumHintDirty = true
+		appleAlbumHintMu.Unlock()
+		log.Printf("save apple album hint cache: %v", err)
 		return
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		appleAlbumHintMu.Lock()
+		appleAlbumHintDirty = true
+		appleAlbumHintMu.Unlock()
+		log.Printf("save apple album hint cache: %v", err)
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmp.Name())
+		appleAlbumHintMu.Lock()
+		appleAlbumHintDirty = true
+		appleAlbumHintMu.Unlock()
+		log.Printf("save apple album hint cache: %v", err)
+		return
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		os.Remove(tmp.Name())
+		appleAlbumHintMu.Lock()
+		appleAlbumHintDirty = true
+		appleAlbumHintMu.Unlock()
+		log.Printf("save apple album hint cache: %v", err)
 	}
 }
 
@@ -151,6 +174,8 @@ func appleAlbumHint(ctx context.Context, artist, title string, durationSecs floa
 		return ""
 	}
 	appleAlbumHintInflight[key] = true
+	waitCh := make(chan struct{})
+	appleAlbumHintWaiters[key] = waitCh
 	appleAlbumHintMu.Unlock()
 	go func() {
 		cands, concluded := fetchAppleAlbumHintCandidatesTracked(ctx, artist, title, durationSecs)
@@ -159,61 +184,83 @@ func appleAlbumHint(ctx context.Context, artist, title string, durationSecs floa
 	return ""
 }
 
-// appleAlbumHintSyncWait:后台解析路径等 poll 主循环刚发起的那次候选查询最多等这么久(两个查询 × 两个商店 +
-// 一次 lookup,实测 1~3 秒);超时就自己查一次。
+// appleAlbumHintSyncWait defines the maximum wait duration for background resolution
+// when an Apple Catalog hint query initiated by the main poll loop is already inflight.
 const appleAlbumHintSyncWait = 8 * time.Second
 
-// appleAlbumHintSync 给**后台**解析路径用(resolveTrackEnrichment / backfillPeripheralFields / recheck-cover CLI,
-// 2026-09-08 晚加,给封面解析当专辑名,见 03 章决策 16):候选没缓存就当场查、查完再挑,不像 appleAlbumHint 那样
-// 丢给后台"本轮先按现状走" —— 这些调用方本来就在 goroutine 里等九个歌词源,多等 Apple 一两秒没人看见;而封面
-// 选源这一步一旦过去就不会再来(王子那首 MV 首次解析时没有专辑名可用,Apple 第一条合集封面就此冻结了一天)。
-// 后台那次还在飞就等它,不重复发同一份请求。
+// appleAlbumHintSync resolves an album hint synchronously for background processing pipelines
+// (resolveTrackEnrichment, backfillPeripheralFields, recheck-cover CLI).
+// If candidates are not cached, it queries immediately and picks from the result.
+// If another query is already inflight, it waits on the shared notification channel.
 //
-// ⚠️ 会阻塞、且内部取 appleAlbumHintMu:绝不能在 poll 主循环里调,也不能在持有 enrichMu 时调。
+// Blocking call that acquires appleAlbumHintMu; must not be called from the main poll loop
+// or while holding enrichMu.
 func appleAlbumHintSync(ctx context.Context, artist, title string, durationSecs float64, resolvedArtists []string) string {
 	if !appleAlbumHintEligible(artist, title, durationSecs) {
 		return ""
 	}
 	key := appleAlbumHintKey(artist, title, durationSecs)
-	deadline := time.Now().Add(appleAlbumHintSyncWait)
-	for {
-		appleAlbumHintMu.Lock()
-		if cands, ok := appleAlbumHintCache[key]; ok {
-			appleAlbumHintMu.Unlock()
-			return pickAppleAlbumHintLogged(key, cands, artist, title, durationSecs, resolvedArtists)
-		}
-		if !appleAlbumHintInflight[key] {
-			if appleAlbumHintMisses[key] >= appleAlbumHintMaxMisses {
-				appleAlbumHintMu.Unlock()
-				return ""
-			}
-			appleAlbumHintInflight[key] = true
-			appleAlbumHintMu.Unlock()
-			cands, concluded := fetchAppleAlbumHintCandidatesTracked(ctx, artist, title, durationSecs)
-			storeAppleAlbumHintResult(key, cands, concluded)
-			if len(cands) == 0 {
-				return ""
-			}
-			return pickAppleAlbumHintLogged(key, cands, artist, title, durationSecs, resolvedArtists)
-		}
+
+	appleAlbumHintMu.Lock()
+	if cands, ok := appleAlbumHintCache[key]; ok {
 		appleAlbumHintMu.Unlock()
-		if ctx.Err() != nil || time.Now().After(deadline) {
+		return pickAppleAlbumHintLogged(key, cands, artist, title, durationSecs, resolvedArtists)
+	}
+
+	if !appleAlbumHintInflight[key] {
+		if appleAlbumHintMisses[key] >= appleAlbumHintMaxMisses {
+			appleAlbumHintMu.Unlock()
 			return ""
 		}
-		select {
-		case <-ctx.Done():
+		appleAlbumHintInflight[key] = true
+		waitCh := make(chan struct{})
+		appleAlbumHintWaiters[key] = waitCh
+		appleAlbumHintMu.Unlock()
+
+		cands, concluded := fetchAppleAlbumHintCandidatesTracked(ctx, artist, title, durationSecs)
+		storeAppleAlbumHintResult(key, cands, concluded)
+		if len(cands) == 0 {
 			return ""
-		case <-time.After(200 * time.Millisecond):
 		}
+		return pickAppleAlbumHintLogged(key, cands, artist, title, durationSecs, resolvedArtists)
+	}
+
+	// Already in-flight! Get or create wait channel to synchronize without busy-polling.
+	waitCh, ok := appleAlbumHintWaiters[key]
+	if !ok {
+		waitCh = make(chan struct{})
+		appleAlbumHintWaiters[key] = waitCh
+	}
+	appleAlbumHintMu.Unlock()
+
+	// Wait cleanly on the channel for completion, context cancellation, or sync timeout.
+	timer := time.NewTimer(appleAlbumHintSyncWait)
+	defer timer.Stop()
+
+	select {
+	case <-waitCh:
+		appleAlbumHintMu.Lock()
+		cands := appleAlbumHintCache[key]
+		appleAlbumHintMu.Unlock()
+		if len(cands) == 0 {
+			return ""
+		}
+		return pickAppleAlbumHintLogged(key, cands, artist, title, durationSecs, resolvedArtists)
+	case <-ctx.Done():
+		return ""
+	case <-timer.C:
+		return ""
 	}
 }
 
-// storeAppleAlbumHintResult 把一次候选查询的结果记进缓存,并清掉在途标记。空结果只在 concluded(见
-// appleAlbumHintQueryConcluded)时记一次 miss:网络不通那一轮查出来的空不是证据,只清在途、下次照常再问。
-// appleAlbumHint(后台)/ appleAlbumHintSync(当场)两条路共用,保证 inflight / misses / dirty 三个状态只有一种写法。
+// storeAppleAlbumHintResult 把一次候选查询的结果记进缓存,并清掉在途标记并唤醒所有等待者。
 func storeAppleAlbumHintResult(key string, cands []albumHintCandidate, concluded bool) {
 	appleAlbumHintMu.Lock()
 	delete(appleAlbumHintInflight, key)
+	if ch, ok := appleAlbumHintWaiters[key]; ok {
+		delete(appleAlbumHintWaiters, key)
+		close(ch)
+	}
 	if len(cands) == 0 {
 		if concluded {
 			appleAlbumHintMisses[key]++
@@ -247,14 +294,13 @@ func pickAppleAlbumHintLogged(key string, cands []albumHintCandidate, artist, ti
 	return album
 }
 
-// coverAlbumForTrack:封面复查 / 换封面判定用的专辑名(2026-09-08 晚,用户报王子那首 MV「用的是合集封面,不应该是
-// 另外一个吗」,见 03 章决策 16)—— 播放器报了专辑就是它;没报就用 Apple 目录回填的那个(只读缓存、不等网络,没命中
-// 就后台补一次、这一轮按空处理)。回填名只进**挑选过程**(Apple 匹配打分 / 网易云 vs Apple 对版 / QQ、同专辑邻居两道
-// guard / coverSwapAllowed / coverNeedsHintCheck),**绝不落盘成 cover_album**:那个字段是"归属已核实"的凭据(App 侧
-// 越过 Last.fm 自带图、collector 侧不再复查都靠它,见 03 章决策 13 的 ⚠️),而回填是按曲名 + 时长猜的,合集 / 重录版
-// 撞车不是小概率,猜错一次就两边一起骗过、且永不自愈。
+// coverAlbumForTrack determines the album name used for cover art verification and swapping.
+// Returns the player-reported album if present; otherwise falls back to the Apple Catalog hint
+// from cache (without blocking on network I/O). The hint album is used only during candidate
+// evaluation (e.g. Apple matching score, NetEase vs Apple album guard, coverSwapAllowed) and is
+// never persisted as cover_album, preserving cover_album as an authoritative verified-match record.
 //
-// ⚠️ 内部经 lyricResolvedArtists 取 enrichMu:持有 enrichMu 时不能调(trackEnrichment 要在取锁之前算好)。
+// Acquires enrichMu internally via lyricResolvedArtists; must not be called while holding enrichMu.
 func coverAlbumForTrack(ctx context.Context, artist, title, album string, durationSecs float64) string {
 	if album != "" {
 		return album
@@ -262,9 +308,9 @@ func coverAlbumForTrack(ctx context.Context, artist, title, album string, durati
 	return appleAlbumHint(ctx, artist, title, durationSecs, lyricResolvedArtists(artist, title, album))
 }
 
-// coverAlbumCorroboration 是首次解析那一刻能凑到的署名旁证:缓存里已有的(lyricResolvedArtists,首次解析时通常还没有)
-// + 这一轮 MusicBrainz 统一名 + 这一轮歌词胜出候选报的署名(王子那首:kugou 候选报「Prince」,正是靠它把 Apple 目录里
-// 的「Prince」认下来)。
+// coverAlbumCorroboration gathers artist corroboration from all available sources: existing
+// enrich cache (lyricResolvedArtists), current MusicBrainz canonical artist, and current winning
+// lyric candidate artist.
 func coverAlbumCorroboration(artist, title, album, canonical string, picked *scoredLyricCandidateResult) []string {
 	out := lyricResolvedArtists(artist, title, album)
 	if strings.TrimSpace(canonical) != "" {
@@ -276,11 +322,10 @@ func coverAlbumCorroboration(artist, title, album, canonical string, picked *sco
 	return out
 }
 
-// coverNeedsHintCheck:播放器没报专辑、Apple 目录回填出了专辑名,而现有封面**明确属于另一张专辑**时,值得按回填专辑
-// 重选一次封面(走 backfillPeripheralFields,受同一套 5 次上限 + 10 分钟节流)。判据是 albumScore == 0 而不是
-// coverNeedsAlbumCheck 那条 < 200:回填的是我们猜的名字、cover_album 是来源报的真名,写法差异(「1999」vs
-// 「1999 (2019 Remaster)」)不值得白重试 5 轮。只看 netease / apple 两档 —— 它们的 cover_album 是来源自己报的;
-// qq 从不报专辑名、device 的身份不靠文字,都判不了。
+// coverNeedsHintCheck evaluates whether cover art should be re-selected using the hinted album.
+// Triggers when the player reported no album, an Apple Catalog album hint was resolved, and the
+// current cover belongs to an entirely different album (albumScore == 0). Checks NetEase and Apple
+// sources, where cover_album is reported directly by the provider.
 func coverNeedsHintCheck(e enrichEntry, album, hint string) bool {
 	if album != "" || hint == "" || e.CoverURL == "" || e.CoverAlbum == "" {
 		return false
@@ -329,13 +374,12 @@ func fetchAppleAlbumHintCandidates(ctx context.Context, artist, title string, du
 	return cands
 }
 
-// fetchAppleAlbumHintCandidatesTracked 在 fetchAppleAlbumHintCandidates 外面包一轮网络观察(networkobs.go 的
-// beginNetworkRound),多回答一个问题:这次的空结果算不算数(2026-09-09,Rocky 查《One Last Kiss》首播无词时发现直连
-// DNS 挂过 36 秒,顺带暴露这里的同款问题)。itunesSearch 把 DNS 失败 / 超时 / ctx 取消统统吞成空切片,原来一律记
-// miss,appleAlbumHintMaxMisses=2 之后这首歌的专辑回填就在进程生命周期内永久关闭 —— 网络抖两下,王子那首 MV 的
-// 封面又会退回「Apple 第一条合集」那个 03 章决策 16 刚修掉的形态。
+// fetchAppleAlbumHintCandidatesTracked wraps fetchAppleAlbumHintCandidates with network round
+// observation (beginNetworkRound) to determine whether an empty result constitutes a definitive miss.
+// Network failures (DNS errors, timeouts, context cancellation) are not counted as misses against
+// appleAlbumHintMaxMisses, preventing transient network glitches from permanently disabling album hints.
 //
-// concluded 为 false 时调用方只清在途标记、不记 miss,下次换到这首歌照常再问。
+// When concluded is false, callers clear the inflight flag without recording a miss.
 func fetchAppleAlbumHintCandidatesTracked(ctx context.Context, artist, title string, durationSecs float64) (cands []albumHintCandidate, concluded bool) {
 	end := beginNetworkRound()
 	cands = fetchAppleAlbumHintCandidates(ctx, artist, title, durationSecs)
@@ -343,16 +387,15 @@ func fetchAppleAlbumHintCandidatesTracked(ctx context.Context, artist, title str
 	return cands, appleAlbumHintQueryConcluded(len(cands), attempts, failures)
 }
 
-// appleAlbumHintQueryConcluded:一次候选查询的结果能不能下结论。有候选自然算;空结果只在「至少一个请求真的到了
-// 对面、对面回了话」时才算「Apple 目录里没有」—— 复用 lyricsRoundConfirmsNoResult 那条判据,不另起口径:四个
-// Search 全是传输层失败(断网 / DNS 挂 / ctx 已取消),或者一个请求都没发出去,都不构成证据。
-// 并发混入别的 goroutine 的成功只会让空结果更容易被判成算数,即退回改前的行为,方向上不会更差。
+// appleAlbumHintQueryConcluded determines whether a candidate query result is definitive.
+// Any non-empty candidate list is concluded. An empty result is concluded only if at least
+// one network request reached the server and received a response, using lyricsRoundConfirmsNoResult.
 func appleAlbumHintQueryConcluded(n int, attempts, failures int32) bool {
 	return n > 0 || lyricsRoundConfirmsNoResult(attempts, failures)
 }
 
-// albumHintCandidatesFromResults 是取候选那一步的过滤,纯函数、可单测:曲名归一相等 + 时长在容差内 + 专辑名 /
-// 署名非空;按「署名|专辑」去重(CN / US 两个商店会各回一份)。Order 记 Apple 返回顺序。
+// albumHintCandidatesFromResults filters candidate results by title equality, duration tolerance,
+// and non-empty metadata, deduplicating across CN and US storefronts by artist|album.
 func albumHintCandidatesFromResults(results []itunesResult, title string, durationSecs float64) []albumHintCandidate {
 	want := normLoose(title)
 	if want == "" || durationSecs < appleTitleSearchMinDurationSecs {
@@ -385,19 +428,11 @@ func albumHintCandidatesFromResults(results []itunesResult, title string, durati
 	return out
 }
 
-// albumHintTitleSplit:搬运频道形态的身份兜底(2026-09-11,用户问「为什么当前这首 YT Music 的歌没有专辑上送」)。
-//
-// 现场:Safari 播 YT Music 里「音樂頑童」频道上传的《Musiq Soulchild - Buddy (Official Video)》,media-control 的 artist
-// 位是频道名、真正的歌手写在曲名破折号前面。主查询按「署名 曲名」和裸曲名问 Apple,候选又要求曲名归一**完全相等**,
-// 「musiqsoulchildbuddyofficialvideo」永远不等于「buddy」,零候选;就算有候选,署名 0 档拿频道名比、1 档要歌词旁证
-// (这类条目歌词多半也解析不出来),一样过不去。
-//
-// 兜底:先用 normEnrichTitle 剥掉结尾的「(Official Video)」「[HD]」这类非版本括号(版本标记如「(Live)」按它的规则保留),
-// 再在**第一个**破折号分隔(" - " / " – " / " — ")处拆成「前段 = 署名、后段 = 曲名」;两段任一归一后为空就不拆。
-// 只有主查询零候选时才走(fetchAppleAlbumHintCandidates),所以「Song - Remastered」这种被拆错的歌名最多多花两个请求、
-// 不会多出错候选:候选还要 Apple 署名与前段 0 档相符(albumHintCandidatesFromTitleSplit)。官方频道的 MV 标题
-// 「Prince - 1999 (Official Music Video)」同样受益:前段跟播放器署名相等,后段才是 Apple 认得的曲名。
-// 时长容差不放宽:该 MV 231.4s 对录音室版 223.8s 超出 max(4s, 3%),仍会被挡,是否放宽另议。
+// albumHintTitleSplit extracts artist and song title from tracks where the channel/uploader
+// name is reported as the artist and the song title is formatted as "Artist - Title".
+// Strips non-version bracket suffixes (e.g. "(Official Video)", "[HD]") via normEnrichTitle,
+// then splits on the first hyphen delimiter (" - ", " – ", " — ").
+// Only invoked when primary catalog queries yield zero candidates.
 func albumHintTitleSplit(title string) (artist, song string, ok bool) {
 	clean := normEnrichTitle(title)
 	best, sepLen := -1, 0
@@ -447,7 +482,7 @@ func itunesLookupCollectionReleaseDates(ctx context.Context, ids []int64, countr
 		return nil
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
+	resp, err := doHTTPTracked(albumHintLookupHTTPClient, req)
 	if err != nil {
 		return nil
 	}

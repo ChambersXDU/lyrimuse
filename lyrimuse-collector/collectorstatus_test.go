@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// 常驻采集器里必须用 per-round 的差值。networkLooksDown() 读的是进程启动以来的累计值，
+// 常驻采集器里必须用 per-round 的差值。networkLooksDown 读的是进程启动以来的累计值，
 // 一旦早期有过成功，failures==attempts 就永远不成立 —— 开机有网、后来断网，它一路报正常。
 func TestNetworkRoundIsRelativeNotCumulative(t *testing.T) {
 	a0 := atomic.LoadInt32(&networkAttemptCount)

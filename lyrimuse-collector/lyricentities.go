@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// 歌词正文里的 HTML / XML 字符实体(2026-09-09 用户报 Prince《Free》的灵动岛歌词里满屏
+// 歌词正文里的 HTML / XML 字符实体(处理 Prince《Free》的灵动岛歌词里满屏
 // `they&apos;re` 这种"乱码")。
 //
 // 这是歌词源自己数据库里的脏数据,不是我们转义链路的 bug(json 解码早就正常完成了)。全库
@@ -136,7 +136,7 @@ func migrateLyricEntities() {
 	}
 	if fixed > 0 {
 		// 必须显式置脏,否则 saveEnrichCache 是空操作——同 migrateLyricTimelines 里那条
-		// 2026-09-01 实测坐实的潜伏 bug。
+		// 验证的潜伏 bug。
 		enrichDirty = true
 	}
 	enrichMu.Unlock()

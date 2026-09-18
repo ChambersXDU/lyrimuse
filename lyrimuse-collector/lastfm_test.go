@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// shouldDisable 的裁决规则:9/10/26 一击致命;4 要两击坐实(间隔 ≥30s、≤30min);
+// shouldDisable 的裁决规则:9/10/26 一击致命;4 要两击验证(间隔 ≥30s、≤30min);
 // 非致命码永不熔断;成功洗清嫌疑;过期嫌疑重新开桩。时间全部显式传入,不碰真实时钟。
 func TestShouldDisableErrorFourNeedsConfirmation(t *testing.T) {
 	e4 := &lastfmAPIError{Code: 4, Message: "Authentication Failed", Method: "track.updateNowPlaying"}

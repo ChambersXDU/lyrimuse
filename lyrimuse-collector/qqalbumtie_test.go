@@ -2,12 +2,12 @@ package main
 
 import "testing"
 
-// 专辑路线"最优档并列"的放宽判据(2026-09-02,裘德《寻找一片青草地》案)。
+// 专辑路线"最优档并列"的放宽判据。
 //
-// 病灶:原规则是"最优档位里出现两条同档就整条路线放弃"。实测撞到它判错性质的形态——
+// 病灶:原规则是"最优档位里出现两条同档就整条路线放弃"。测试撞到它判错性质的形态——
 // QQ 把裘德《离开银色荒原》整张上架了两遍(GetAlbumSongList 回 20 条 = 同样 10 首各一条,
 // 两个母带),于是这张专辑的**每一首**都并列两条、整张专辑的歌词全被挡在外面。而那两条
-// 是同一首歌的两个版本(实测《火山灰》《变色龙》两条 mid 取回的歌词逐字节相同),不是
+// 是同一首歌的两个版本(测试《火山灰》《变色龙》两条 mid 取回的歌词逐字节相同),不是
 // "两个不同的东西分不清"。
 //
 // ⚠️ 这组用例的重点不是"并列能通过",而是**放宽没有放过头**:每一条正例都配了一条
@@ -28,7 +28,7 @@ func TestQQAlbumTiedSongsAreSameTrack(t *testing.T) {
 			true,
 		},
 		{
-			// 同专辑《银色荒原》实测差 7 秒(母带首尾静音长度不同),仍算同一首。
+			// 同专辑《银色荒原》测试差 7 秒(母带首尾静音长度不同),仍算同一首。
 			"时长差 7 秒仍算同一首",
 			[]qqAlbumSong{
 				{mid: "a", name: "银色荒原", singer: "裘德", interval: 240},
@@ -99,15 +99,15 @@ func TestQQAlbumTiedSongsAreSameTrack(t *testing.T) {
 	}
 }
 
-// 用**真实抓下来的**《离开银色荒原》曲目单钉住整段挑选逻辑(2026-09-02)。
+// 用**真实抓下来的**《离开银色荒原》曲目单钉住整段挑选逻辑。
 //
 // 这张专辑在 QQ 上整个上架了两遍:GetAlbumSongList 回 20 条 = 同样 10 首各一条。改之前
 // 「最优档并列就放弃」让这张专辑的每一首都挑不出来,整张专辑的歌词全军覆没。
 //
 // ⚠️ 测 pickQQAlbumTrack 而不是只测 qqAlbumTiedSongsAreSameTrack:后者是判据,前者才是
-// 真正会回归的那段。变异测试实测——把调用点改回「并列一律放弃」,只测判据的用例全绿。
+// 真正会回归的那段。变异测试测试——把调用点改回「并列一律放弃」,只测判据的用例全绿。
 func TestPickQQAlbumTrackHandlesDoubleListedAlbum(t *testing.T) {
-	// 2026-09-02 实测数据,mid/时长原样照抄。
+	// 数据,mid/时长原样照抄。
 	album := []qqAlbumSong{
 		{mid: "003C6uoW3TRsod", name: "银色荒原", singer: "裘德", interval: 240},
 		{mid: "0018yJhH3fxaJm", name: "火山灰", singer: "裘德", interval: 277},
@@ -130,7 +130,7 @@ func TestPickQQAlbumTrackHandlesDoubleListedAlbum(t *testing.T) {
 		{mid: "002N66hL2lpaQs", name: "我们不要躲雨了", singer: "裘德", interval: 262},
 		{mid: "0023jZIS4Ml5xu", name: "寻找一片青草地", singer: "裘德", interval: 221},
 	}
-	// 用户报的那首,以及同专辑另外两首(它们的两条 mid 实测都取得回逐字节相同的歌词)。
+	// 处理那首,以及同专辑另外两首(它们的两条 mid 测试都取得回逐字节相同的歌词)。
 	for _, title := range []string{"寻找一片青草地", "火山灰", "变色龙", "银色荒原"} {
 		got, ok := pickQQAlbumTrack(album, "裘德", title)
 		if !ok {

@@ -8,9 +8,9 @@ import (
 	"strings"
 )
 
-// 纯空白的逐字词条不该独立存在(2026-08-19 用户报"有些单词没有读条直接填满"):
+// 纯空白的逐字词条不该独立存在:
 // Musixmatch richsync 把空格作为独立计时条目,空格占走了前一个词的绝大部分演唱时长
-// (实测《Ocho Rios》"In" 23ms + 空格 165ms),悬浮窗按 23ms 填完一个词,观感就是
+// (测试《Ocho Rios》"In" 23ms + 空格 165ms),悬浮窗按 23ms 填完一个词,观感就是
 // "瞬间填满"。richsyncToYRC 已在源头归并(见 musixmatch.go);这里是对**存量**缓存的
 // 一次性清洗 —— 空白词条自带的时间信息就在数据里,原地归并即可,不需要重新联网解析。
 //
@@ -104,7 +104,7 @@ func migrateYRCWhitespaceTokens() {
 	}
 	if fixed > 0 {
 		// 必须显式置脏,否则 saveEnrichCache 是空操作 —— 同 migrateLyricTimelines 里
-		// 那条 2026-09-01 实测坐实的潜伏 bug,这里是同一个形态。
+		// 那条 验证的潜伏 bug,这里是同一个形态。
 		enrichDirty = true
 	}
 	enrichMu.Unlock()

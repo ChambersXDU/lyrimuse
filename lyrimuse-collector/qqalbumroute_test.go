@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// TestQQAlbumIdentityQuery 钉死专辑维度查询词的剥词规则(实测 smartbox 对多余的词零容忍:
+// TestQQAlbumIdentityQuery 固定专辑维度查询词的剥词规则(测试 smartbox 对多余的词零容忍:
 // "周杰伦 The One 周杰伦演唱会" 0 条、"周杰伦 The One" 命中,见 qqAlbumIdentityQuery 注释)。
 func TestQQAlbumIdentityQuery(t *testing.T) {
 	cases := []struct {

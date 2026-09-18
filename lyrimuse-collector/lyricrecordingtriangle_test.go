@@ -17,7 +17,7 @@ const (
 )
 
 // TestLyricRecordingTriangleOnRealKugouRows 用**酷狗搜索接口的真实返回行**锁住
-// "只放行正主那一条"。这 6 行是 2026-08-22 实测 keyword="南拳妈妈弹头 枫+退后+搁浅"
+// "只放行正主那一条"。这 6 行是  keyword="南拳妈妈弹头 枫+退后+搁浅"
 // (searchTitleVariants 的第二条变体,酷狗一定会跑到它——kugouLookup 只在 chosen!=nil
 // 时才 break)返回的前 6 条,逐字抄下来。
 //
@@ -120,7 +120,7 @@ func TestLyricRecordingTriangleGuards(t *testing.T) {
 	}
 }
 
-// TestLyricRecordingTriangleAlbumWidthBoundary 把长度可比性那道闸的边界钉死。
+// TestLyricRecordingTriangleAlbumWidthBoundary 把长度可比性那道闸的边界固定。
 //
 // 本地专辑刻意选一个**不含版本限定词、也不含中文现场标记**的串:否则 versionTagsMismatch
 // 会先一步否决(v9 起"演唱会/现场/音乐会"字样的专辑名视同声明了 live——原夹具
@@ -140,7 +140,7 @@ func TestLyricRecordingTriangleAlbumWidthBoundary(t *testing.T) {
 }
 
 // TestLyricRecordingTriangleNotUsedForIdentity 锁住这条档位的适用范围:它**只能**出现在
-// 歌词候选的采纳闸上,绝不能被用到判**身份**的地方(netease 的 pick()/nameOnlyMatch 决定
+// 歌词候选的采纳闸上,绝不能被用到判**身份**的地方(netease 的 pick/nameOnlyMatch 决定
 // 封面和 canonical_artist、qq.go 的 qqCoverFallback 决定封面)。在那三处放宽等于直接采信
 // 仿冒号的署名 —— 正是 netease.go 里当年删掉 byAlbum 兜底要防的东西。
 //

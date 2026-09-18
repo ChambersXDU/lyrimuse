@@ -25,7 +25,7 @@ type lbClient struct {
 	dryRun  bool
 	alerter *alerter
 
-	// 429 的跨调用退避(2026-08-25 实测坐实的缺口)。submit() 内部的 tries/退避(见下)
+	// 429 的跨调用退避。submit 内部的 tries/退避(见下)
 	// 只管**一次调用内**的几次重试,治不了"LB 持续 429 几个小时"这种情况——poller.go
 	// 有 4 个调用点(Mac 原生 single/playing_now、桥接 iPhone single/playing_now)各自
 	// 独立按自己的节奏(桥接 15s 一轮、Mac 侧每次 poll tick ~5s 只要歌还在放就重试)发起
@@ -111,14 +111,14 @@ func lbMeta(s snapshot) lbTrackMeta {
 	// 封面/主色/各平台链接/歌词只跟 歌手|歌名|专辑 有关、且稳定不变，解析代价不小
 	// (多次外部搜索 + 封面主色解码)。统一缓存并落盘，同一首歌重播/重启后都不再重解析。
 	// isNewTrack 传 false:这里只是再查一次已经解析好的缓存(或触发首次解析),不是
-	// poller.go handle() 那种"刚确认是新曲目"的现场时刻。
-	enr := trackEnrichment(s.Artist, s.Title, s.Album, s.Bundle, s.Duration, false, s.Radio)
+	// poller.go handle 那种"刚确认是新曲目"的现场时刻。
+	enr := trackEnrichment(context.Background(), s.Artist, s.Title, s.Album, s.Bundle, s.Duration, false, s.Radio)
 	for _, k := range []string{"cover_url", "accent_color", "netease_url", "apple_music_url", "qq_music_url", "spotify_url", "cover_source", "lyrics_source"} {
 		v := enr[k]
 		if k == "cover_url" {
 			// ⚠️ 这份 info 是**要离开这台机器**的(ListenBrainz 的 additional_info,
 			// 以及 relay.go relayState 推给网页的 artwork —— 它读的就是这里的 ai)。
-			// 而 2026-08-31 起 cover_url 可能是设备直送封面的 file:// 本地路径,别的
+			// 而  cover_url 可能是设备直送封面的 file:// 本地路径,别的
 			// 机器根本读不到,发出去只会得到一张加载失败的图 + 把本机用户名公开出去。
 			// webSafeCoverURL 把它换成中继上的 https 地址(或者干脆留空,让网页走它
 			// 自己的兜底)。缓存里存的仍然是 file://——本机 App 要的就是那一份。
@@ -131,7 +131,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	}
 	// Spotify 原生播放:按 ListenBrainz 的标准字段上送这次播放的曲目 —— spotify_id(官方定义就是这条录音的
 	// Spotify 曲目 URL,LB 拿它做匹配与元数据补全)、origin_url、music_service=spotify.com,形状跟 LB 自家的
-	// Spotify 导入一致(2026-09-09,见 spotifytrack.go)。ID 是录音级身份、缓存里跨播放器共用,但「在哪个服务听的」
+	// Spotify 导入一致。ID 是录音级身份、缓存里跨播放器共用,但「在哪个服务听的」
 	// 按当次播放的 bundle 算,所以只有 Spotify 原生播放才写这三个键;上面那个非标准的 spotify_url 照旧发,网页
 	// 中继读的是它(现在也是真链接了)。
 	for k, v := range spotifyListenFields(s.Bundle, enr["spotify_track_id"]) {
@@ -148,7 +148,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	}
 	// 歌手/歌名/专辑一律**原样上送播放器报的标签**,不做任何替换。
 	//
-	// ⚠️ 2026-08-31 改。这里原来会用 canonical_artist(网易云/QQ/MusicBrainz 查到的
+	// ⚠️ 改。这里原来会用 canonical_artist(网易云/QQ/MusicBrainz 查到的
 	// "官方写法")**替换掉**播放器的标签,理由是"避免同一个人时而中文时而英文"。撤销
 	// 它的依据有三条:
 	//
@@ -163,7 +163,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	//     默认做"外部查询改名"的是 **0 个**;唯一有这能力的 multi-scrobbler 是 opt-in、
 	//     要填联系邮箱、文档还警告 free text search 是 "unconstrained"。
 	//     (Pano 反而拿 MusicBrainz 名单当 allowlist **保护**合唱串不被切,方向相反。)
-	//  3. **实测有真错**。本机 2514 条缓存审计:194 条被改写,其中
+	//  3. **测试有真错**。本机 2514 条缓存审计:194 条被改写,其中
 	//     `USA for Africa`→`Xtc Planet`、`LBI利比`→`Safehse` 明确错误。而写进 Last.fm
 	//     公共 artist 页的东西基本收不回来(纠错库已冻结)。
 	//
@@ -181,7 +181,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	return lbTrackMeta{
 		ArtistName: s.Artist,
 		TrackName:  s.Title,
-		// 播放器没报专辑名时用 Apple 目录回填的(snapshot.albumForUpload,2026-09-08);报了就原样。
+		// 播放器没报专辑名时用 Apple 目录回填的(snapshot.albumForUpload,);报了就原样。
 		ReleaseName:    s.albumForUpload(),
 		AdditionalInfo: info,
 	}

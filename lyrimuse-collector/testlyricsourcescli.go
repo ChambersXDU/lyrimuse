@@ -22,10 +22,10 @@ import (
 // 并发打一遍(跟 healthcheck/search-lyrics 完全一样),不给每个源单独写一套"只探测它自己"
 // 的调用——AMLL 需要先从网易云/QQ 拿到平台 ID 才能测,拆出来反而更复杂。
 //
-// 但**要测的源全部有了结论之后就不再跑下去**(2026-09-13 修的 bug,下面 allReported/cancel)
+// 但**要测的源全部有了结论之后就不再跑下去**
 // ——这条 CLI 的全部产出就是那几行 NDJSON,最后一个目标源报完之后再跑不会多出
 // 任何输出,只会让调用方干等。原来两首探测曲雷打不动各跑到底,`-source deezer` 这种
-// "只要一行"的调用于是在 deezer 那行打完之后还要再跑一整首探测曲(实测 5.8s 出结果、
+// "只要一行"的调用于是在 deezer 那行打完之后还要再跑一整首探测曲(测试 5.8s 出结果、
 // 12.0s 才退出),设置页那颗按钮因此在结果已经显示出来之后还持续显示"测试中…"六秒以上
 // (用户实机反馈"点了单个源的测试,结束之后右边的测试状态一直没有变更")——那颗按钮的
 // "测试中"是跟着子进程活着算的,见 SettingsView.isTestingLyricSources。现在最后一个目标源
@@ -44,7 +44,7 @@ func runTestLyricSourcesCLI(args []string) {
 		log.Fatalf("test-lyric-sources: %v", err)
 	}
 
-	// 跟 search-lyrics 同一段boilerplate:这条 CLI 子命令在 main() 的 loadFeatureFlags(...)
+	// 跟 search-lyrics 同一段boilerplate:这条 CLI 子命令在 main 的 loadFeatureFlags(...)
 	// 之前就 return 了,features 这个包级变量不自己补一遍加载的话是零值(LyricsSources 为
 	// nil map),lyricSourceEnabled 对任何源都会返回 false —— 测试功能会把每一个源都误判成
 	// "没启用",一个都测不了。
@@ -133,7 +133,7 @@ func runTestLyricSourcesCLI(args []string) {
 	// 两首探测曲,一首华语一首英文,取并集——理由见 healthcheckcli.go 顶部注释:
 	// NetEase/QQ/酷狗以中文库为主,LRCLIB/Musixmatch 以英文库为主,只用一首会把另一半源的
 	// "库里确实没有这首"误判成"这个源坏了"。中文探测曲跟 healthcheckcli.go 保持同一首
-	// (2026-08-31 从《晴天》换成《少年》,理由同样见 healthcheckcli.go 那边的注释——不重复)。
+	// 。
 	runProbe("梦然", "少年", "")
 	// 第一首就把要测的源全问出结论了(单测一个源时最常见)就不跑第二首——两首取并集是为了
 	// 补"这个源的曲库里没有那一首"造成的漏判,已经有结论的源不需要补。
@@ -153,8 +153,8 @@ func runTestLyricSourcesCLI(args []string) {
 		if down {
 			status, reasonCode = "fail", lyricTestReasonNetworkDown
 		} else {
-			// 目前接了具体失败原因诊断的源(2026-08-31,分别见 ytmusic.go/musixmatch.go/
-			// netease.go 头注——每一条都是实测复现过、不是猜的)。QQ/酷狗/LRCLIB/AMLL
+			// 目前接了具体失败原因诊断的源(,分别见 ytmusic.go/musixmatch.go/
+			// netease.go 头注——每一条都是测试复现过、不是猜的)。QQ/酷狗/LRCLIB/AMLL
 			// 逐一验证过,没有找到当前能复现的失败信号(见对应文件排查记录),没有对应
 			// 旁路,拿不到具体原因时统一退回上面的通用代码,不编一个没核实过的理由。
 			var reason string
@@ -164,16 +164,16 @@ func runTestLyricSourcesCLI(args []string) {
 			case "musixmatch":
 				reason = musixmatchLastFailureReasonNow()
 			case "deezer":
-				// 2026-09-13,换不到匿名 JWT 那一档(deezer_auth_failed,见 deezer.go 头注)。
-				// ⚠️ 这个 case 是**真机验证抓到的漏接**:接源时只补了 searchcli.go 的
+				// ,换不到匿名 JWT 那一档(deezer_auth_failed,见 deezer.go 头注)。
+				// ⚠️ 这个 case 是**真机验证匹配到的漏接**:接源时只补了 searchcli.go 的
 				// lyricSourceFailureReasons,这条路照样退回通用的 no_response —— 设置页那颗
 				// 「测试」按钮于是只会说「这个源没反应」,把"换票这一步失败"说成了"没反应"。
 				// 再接新源时记得这里和 searchcli.go 是**两处**,守卫没钉住它。
 				reason = deezerLastFailureReasonNow()
 			case "netease":
-				// 同 lyricSourceFailureReasons(2026-09-03):这一轮网易云只要成功答过
+				// 同 lyricSourceFailureReasons:这一轮网易云只要成功答过
 				// 一次,就不把限流当成"这个源没给出候选"的原因 —— 吃过一次 405 跟"这个源
-				// 不可用"是两件事,实测对照见 netease.go 的 neteaseSawSuccessNow 头注。
+				// 不可用"是两件事,测试对照见 netease.go 的 neteaseSawSuccessNow 头注。
 				if !neteaseSawSuccessNow() {
 					reason = neteaseLastFailureReasonNow()
 				}
@@ -196,7 +196,7 @@ type lyricSourceTestResult struct {
 	// 但也可能只是恰好都没收录这两首,不排除极小概率误判);fail=网络整体不通,这一轮探测
 	// 本身就没有意义,不能拿来对这个源下任何结论。
 	Status string `json:"status"`
-	// ReasonCode:稳定代码,不是文案(2026-09-01 从 Detail 改名——见 lyricsourcefailure.go
+	// ReasonCode:稳定代码,不是文案(从 Detail 改名——见 lyricsourcefailure.go
 	// 头注,人话交给 Swift 侧按 App 界面语言翻译)。ok 状态下恒为空串,Swift 侧从不读它。
 	ReasonCode       string `json:"reasonCode"`
 	NetworkLooksDown bool   `json:"networkLooksDown"`

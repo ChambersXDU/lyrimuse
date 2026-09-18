@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// v15(2026-09-07)语种版本(粤语/国语)的批级推断与双向判决。案例全部来自 2026-09-06 对陈奕迅
+// v15语种版本(粤语/国语)的批级推断与双向判决。案例全部来自 对陈奕迅
 // 《K歌之王》一次手动搜索的复盘和随后的全库决策存档回放,见 match.go 的 v15 注释与 09 章。
 // 单独开文件的理由同 songlanguage_test.go:match_test.go 常有并行会话在改。
 
@@ -26,7 +26,7 @@ func TestInferLocalLanguageVersion(t *testing.T) {
 	}{
 		{"①本地曲名带 Apple 单字缩写", "K歌之王 (國)", "2013 陈奕迅 Music Life 精选", 218.667, nil, languageVersionTagMandarin},
 		{"①本地曲名带全词标签(繁体)", "K歌之王 (粵語)", "", 222.351, nil, languageVersionTagCantonese},
-		// Shall We Talk 是粤语歌却收在《陈奕迅 国语精选》里(金标集 yue-shall-we-talk 抓到的反例)——
+		// Shall We Talk 是粤语歌却收在《陈奕迅 国语精选》里(金标集 yue-shall-we-talk 匹配到的反例)——
 		// 专辑名不能当语种线索。
 		{"专辑名含「国语」不算声明", "Shall We Talk", "陈奕迅 国语精选", 227.277, []lyricCandidate{
 			{source: "kugou", title: "Shall We Talk", album: "Shall We Dance? Shall We Talk!", sourceReportedDurationSecs: 227, language: songLanguageCantonese},
@@ -150,7 +150,7 @@ func TestLanguageVersionTagCanonicalKeys(t *testing.T) {
 	}
 }
 
-// TestCrossLanguageVersionTags 钉住 2026-09-12 补的三个跨语言键(用户报「为什么这首歌匹配错
+// TestCrossLanguageVersionTags 钉住 的三个跨语言键(处理「为什么这首歌匹配错
 // 版本了,匹配成英文版本了」——优里《ドライフラワー》)。原来这套只认粤语/国语,「(English ver.)」
 // 压根不进限定词集合,于是本地与候选两边都是空集、不算版本不符,那 600 分一分没扣,英文版靠
 // 逐字+译文以 1036 分顶掉了日文原曲(919)。两版时长还差不到 0.1 秒,时长判据救不了。

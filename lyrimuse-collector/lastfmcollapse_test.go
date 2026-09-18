@@ -16,8 +16,8 @@ import (
 
 // 「智能」档判定的回归测试。这套逻辑改动的是**写进 Last.fm 的内容**,而 Last.fm 的纠错/重定向
 // 库目前是冻结的(官方 FAQ:"New corrections CANNOT be added to the database")——错了全局
-// 补不回来。所以每一条"什么情况下不折叠"都要单独钉死,而不是只测 happy path;每一条"结论
-// 不再变"也要钉死 —— 2026-08-31 删掉上一版的理由正是"同一首歌两次运行发出不同的名字"。
+// 补不回来。所以每一条"什么情况下不折叠"都要单独固定,而不是只测 happy path;每一条"结论
+// 不再变"也要固定 —— 删掉上一版的理由正是"同一首歌两次运行发出不同的名字"。
 
 // probeResp 是假 Last.fm 对某个 artist 参数的固定应答。
 type probeResp struct {
@@ -306,7 +306,7 @@ func TestCollapseDeferRechecksAfterWindow(t *testing.T) {
 	}
 }
 
-// 查询失败**不能**被缓存 —— 否则一次偶发限流会把这条记录钉死;下一次要重查、且两步都重来。
+// 查询失败**不能**被缓存 —— 否则一次偶发限流会把这条记录固定;下一次要重查、且两步都重来。
 func TestCollapseDoesNotCacheFailures(t *testing.T) {
 	var jointCalls int
 	var mu sync.Mutex
@@ -363,7 +363,7 @@ func TestCollapseCacheKeyIncludesTrack(t *testing.T) {
 }
 
 // 请求形态:method/autocorrect 固定;第二步查的是 firstCreditedArtist 切出来的第一位;
-// 含 `+`/`%` 的歌名要按 lastfmGetQuery 双重编码(2026-08-22 真实事故:标准编码让含加号的
+// 含 `+`/`%` 的歌名要按 lastfmGetQuery 双重编码(真实事故:标准编码让含加号的
 // 歌名一律 error 6,而 error 6 在这里意味着"可能折叠")。
 func TestCollapseRequestShape(t *testing.T) {
 	col, cs := newCatalogServer(t, map[string]probeResp{

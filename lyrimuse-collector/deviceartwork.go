@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 )
 
-// 2026-08-31 加:media-control 能直接给出正在播放这首歌的封面(playing app 自己经
-// MediaRemote 上送的,浏览器网页播放器也会给——实测坐实过 Arc 播 Apple Music 网页版时
+// :media-control 能直接给出正在播放这首歌的封面(playing app 自己经
+// MediaRemote 上送的,浏览器网页播放器也会给——过 Arc 播 Apple Music 网页版时
 // media-control 能读到跟这首歌逐字节对应的封面)。这份数据本来就在,只是
 // fetchRawMediaControlState 一直传 --no-artwork 把它丢在门外(省几百 KB 的轮询开销)。
 //
@@ -33,7 +33,7 @@ import (
 // Apple/QQ 三个源的猜测结果比较。
 
 const (
-	// deviceArtworkMinEdge:2026-08-31 实测订正过一次——最初拍脑袋定的 200(觉得"真实专辑
+	// deviceArtworkMinEdge:订正过一次——最初拍脑袋定的 200(觉得"真实专辑
 	// 封面哪怕最小档位也有几百像素"),结果直接把这个功能真正要修的那个案例挡在外面:
 	// Arc/Edge 播 Apple Music 网页版《Immortal》时,MediaSession API 实际上送的封面就是
 	// 120x120(Web 端 MediaSession artwork 常见的按需小尺寸档位之一,不是浏览器随便拿了个

@@ -46,11 +46,7 @@ func makeRaceDialer(logRef *raceDialLog, blackHoles map[string]bool, delay map[s
 			return nil, ctx.Err()
 		}
 		if d := delay[addr]; d > 0 {
-			select {
-			case <-time.After(d):
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
+			time.Sleep(d)
 		}
 		a, b := net.Pipe()
 		mu.Lock()
@@ -68,7 +64,7 @@ func makeRaceDialer(logRef *raceDialLog, blackHoles map[string]bool, delay map[s
 	return dial, cleanup
 }
 
-// 这是 2026-09-03 那个真 bug 的回归测试:**黑洞排在第一个**。
+// 这是 那个真 bug 的回归测试:**黑洞排在第一个**。
 // 串行版本(修复前)会把整个预算耗在第一个地址上,永远轮不到第二个;并发版本必须立刻拿到
 // 第二个。断言"很快返回"而不只是"返回了" —— 串行版本最终也会返回,只是要等到超时,那正是
 // 用户看到的"这个源整整半小时不可用"。
@@ -260,7 +256,7 @@ func TestProxyFallbackDirectSuccessNeverTouchesProxy(t *testing.T) {
 		t.Errorf("body = %q, 期望走直连", body)
 	}
 	// 这条是整个改动的核心纪律:代理在这台机器上是更差的通道(见 systemproxy.go 头注的
-	// Last.fm 实测),直连正常时一个包都不该经过它。
+	// Last.fm 测试),直连正常时一个包都不该经过它。
 	if viaProxy.calls != 0 {
 		t.Errorf("直连成功却动了代理 %d 次", viaProxy.calls)
 	}

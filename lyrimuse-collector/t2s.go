@@ -20,7 +20,7 @@ import (
 // 间接依赖——效果经过逐条数据对拍验证跟原来 gocc 完全一致(见开发时用两份实现批量对比
 // 4000+ 条词典数据 + 混合句子的验证过程),不是"看起来差不多"的近似替代。
 //
-// 2026-08-27 追加 dictionary/STCharacters.txt——同一个 OpenCC 项目、同一份许可证的
+// 追加 dictionary/STCharacters.txt——同一个 OpenCC 项目、同一份许可证的
 // 简→繁单字词典(方向相反),给 jyutping.go 的粤拼查表当兜底用(JyutpingChars.txt 主体
 // 是繁体收字,简体歌词逐字查不到读音时先转一次繁体再查一次)。见 s2tCharMap 的注释。
 //
@@ -54,7 +54,7 @@ func init() {
 }
 
 // loadT2SDict 解析 "繁体\t简体候选1 简体候选2..." 格式的词典文件,跟 liuzl/da 的
-// Build() 逐行解析规则一致(Tab 分隔取前两列,第二列按空白符切开取第一个)。词典文件本身
+// Build 逐行解析规则一致(Tab 分隔取前两列,第二列按空白符切开取第一个)。词典文件本身
 // 是编译期内嵌的常量数据,格式损坏(理论上不会发生,除非这两个文件被手动改坏)时静默跳过
 // 那一行,不 panic——不影响整个进程启动。
 func loadT2SDict(path string) map[string]string {
@@ -87,7 +87,7 @@ func loadT2SDict(path string) map[string]string {
 // 单字表,都没命中原样保留这个字符不动。跟 gocc 的 PrefixMatch+选最长+"当前字典没匹配
 // 才试下一个字典"逻辑等价:gocc 里 TSPhrases 优先于 TSCharacters(数组顺序决定),这里
 // 用"先试词组、词组完全没命中才退到单字"复刻同一个优先级,不是巧合写对,是照着
-// opencc.go 的 Convert() 实现逐行对应写的。
+// opencc.go 的 Convert 实现逐行对应写的。
 func toSimplifiedT2S(s string) string {
 	runes := []rune(s)
 	var b strings.Builder
@@ -115,7 +115,7 @@ func toSimplifiedT2S(s string) string {
 		if repl, ok := t2sCharMap[string(r)]; ok {
 			b.WriteString(repl)
 		} else if std, ok := hanVariantMap[r]; ok {
-			// 2026-09-03 加的第三层:OpenCC 词组表和单字表都没管的字,再问一次**异体字表**
+			// 的第三层:OpenCC 词组表和单字表都没管的字,再问一次**异体字表**
 			// (「妳」→「你」这类)。挂在这个兜底分支上是刻意的 —— 它永远不会覆盖 OpenCC 的
 			// 判断,只填它留下的空。来龙去脉见 hanvariants.go 头注。
 			b.WriteRune(std)

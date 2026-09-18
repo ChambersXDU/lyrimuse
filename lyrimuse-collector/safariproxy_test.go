@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 2026-09-02 真实bug(王力宏《你不知道的事》Safari 网页播放,「歌词管理」占位行永远停在
+// (王力宏《你不知道的事》Safari 网页播放,「歌词管理」占位行永远停在
 // "搜索歌词中…"):Safari 播网页音频时 MediaRemote 报的是媒体代理进程 com.apple.WebKit.GPU,
 // 信任表里存的是宿主 com.apple.Safari——system.go 里三处**裸查** features.TrustedPlayers[
 // bundleID] 的地方对 Safari 全部落空(getAutoDetectedState 把播放整条丢掉、
@@ -28,7 +28,7 @@ func TestSafariMediaProxyTrustResolution(t *testing.T) {
 	})
 
 	t.Run("notASong 守卫对代理进程同样生效", func(t *testing.T) {
-		// Safari 播非歌曲视频(album 恒为空,同 Arc 的实测形态)→ 该被守卫丢掉。
+		// Safari 播非歌曲视频(album 恒为空,同 Arc 的测试形态)→ 该被守卫丢掉。
 		if !trustedPlaybackNotASong(proxy, "某个频道名", "") {
 			t.Error("Safari(代理进程)播 album 为空的内容,该判成不是一首歌")
 		}

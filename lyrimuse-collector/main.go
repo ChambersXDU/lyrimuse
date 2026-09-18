@@ -28,12 +28,12 @@ import (
 // 没有就取最近一个 git tag)。
 //
 // ⚠️ **必须是 var,不能是 const** —— Go 的 `-ldflags -X` 只能写 var,对 const
-// **静默失败**:构建照样 exit 0、不报错不警告,而值原封不动。2026-09-02 实测坐实
+// **静默失败**:构建照样 exit 0、不报错不警告,而值原封不动。验证
 // (`go build -ldflags "-X main.clientVersion=9.9.9"` 之后 `collector version`
 // 仍然打印旧值)。谁要是哪天顺手把它改回 const,注入就会无声无息地失效,回到下面
 // 说的那个老毛病——`versioninjection_test.go` 有一条断言专门钉住这件事。
 //
-// **为什么改成注入**(2026-09-02):在此之前这里是手动维护的字面量,而 App 侧版本号
+// **为什么改成注入**:在此之前这里是手动维护的字面量,而 App 侧版本号
 // 一直是从 git tag 自动派生的——两个版本号一个自动一个手动,靠人在发版时记得改这一行
 // 来同步。实际记录:v1.1.0 补同步一次、v1.2.0 补一次、**v1.3.0 漏了**(User-Agent/
 // ListenBrainz submission_client 谎报了一整个发布周期)、v1.4.0 补上、**v1.5.0 又漏了**
@@ -48,7 +48,7 @@ import (
 var clientVersion = "dev"
 
 const (
-	// 2026-07-23:项目最早叫 applemusic-nowplaying,后来改名 Lyrimuse 时这个常量
+	// :项目最早叫 applemusic-nowplaying,后来改名 Lyrimuse 时这个常量
 	// 没跟着一起改——配置目录/文件名前缀/User-Agent/ListenBrainz submission_client
 	// 全部由它派生,现在统一改过来,不做旧路径兼容(不写自动迁移代码)。
 	clientName = "lyrimuse"
@@ -85,23 +85,23 @@ const (
 func main() {
 	// 日志出口最先装(logsink.go),在任何子命令分流之前 —— 子命令各自 loadConfig、不走
 	// 下面的主流程,漏了它们同样会把 api_key 写进日志。时间戳(UTC、带 Z,跟 App 侧 os.Logger
-	// 的 +0000 对得上表)/ 等级 / 脱敏 / 重复折叠 / 轮转全在那条链上;2026-09-05 之前这里是
+	// 的 +0000 对得上表)/ 等级 / 脱敏 / 重复折叠 / 轮转全在那条链上;之前这里是
 	// log.SetFlags(LUTC) + installLogScrubbing 两步,slog 桥接后 log 包自己不再打时间前缀。
 	// 常驻模式写自己打开的日志文件,子命令写 stderr。
 	installLogSink(isDaemonInvocation(os.Args))
 	// `collector version`:一次性子命令,只打印 clientVersion 就退出——App 侧设置页
 	// "后台采集服务"卡片靠它检测"App 本体版本"跟"实际打包进这份 App 的 collector 版本"
-	// 是否一致(2026-08-31 加)。起因是 main.go 里 clientVersion 这个字面量一直是手动
+	// 是否一致。起因是 main.go 里 clientVersion 这个字面量一直是手动
 	// 同步的,发布时忘记同步过至少一次(v1.3.0 那次漏了,见 clientVersion 声明处注释,
 	// User-Agent/ListenBrainz submission_client 因此谎报了一整个发布周期)——当时没有
 	// 任何机制能让用户/开发者自己发现这个不一致,这条子命令就是补上这道自检。跟
-	// search-lyrics 一样,检查要放在 flag.Parse() 之前。
+	// search-lyrics 一样,检查要放在 flag.Parse 之前。
 	if len(os.Args) > 1 && os.Args[1] == "version" {
 		fmt.Println(clientVersion)
 		return
 	}
 	// `collector search-lyrics ...`:一次性子命令,desktop-lyrics 的"歌词管理"窗口靠
-	// Process 调用它来手动重新搜索候选歌词(见 searchcli.go)——检查放在 flag.Parse()
+	// Process 调用它来手动重新搜索候选歌词(见 searchcli.go)——检查放在 flag.Parse
 	// 之前,不然位置参数 "search-lyrics" 会被当成未知 flag 报错。
 	if len(os.Args) > 1 && os.Args[1] == "search-lyrics" {
 		runSearchLyricsCLI(os.Args[2:])
@@ -176,7 +176,7 @@ func main() {
 		return
 	}
 	// `collector retranslate-repeated [-apply]`:扫描整份缓存,把"歌词有重复行、可能被
-	// 2026-08-26 那个逐行独立翻译 bug 坑过"的存量译文重新机翻一遍(见 retranslatecli.go)。
+	// 那个逐行独立翻译 bug 坑过"的存量译文重新机翻一遍(见 retranslatecli.go)。
 	// 默认预演,-apply 才真改、且要求常驻实例已停。
 	if len(os.Args) > 1 && os.Args[1] == "retranslate-repeated" {
 		runRetranslateRepeatedCLI(os.Args[2:])
@@ -233,7 +233,7 @@ func main() {
 	// 「Scrobble 的播放器」那一项**不重启也生效**:按 mtime 热重读这一个键,见 lastfmexclude.go 头注。
 	// 其余键仍然只在这里读一次(下面好几处会把它们展开进包级变量),改了要重启才算数。
 	setLastfmExcludePath(featureFlagsPath)
-	// (2026-09-02 删掉了这里的 `nativeLyricSources = resolveNativeLyricSources(features.Players)`。
+	// `。
 	//  同源加权的判据不该是"用户勾了哪些播放器",而是"**这一刻在放的是哪个**"——现在由
 	//  trackEnrichment 每首歌按 bundleID 设一次,见 match.go 里 nativeLyricSources 的注释。
 	//  顺带,原注释那句"换播放器本来就要重启 collector"对多选年代也不成立了。)
@@ -264,8 +264,8 @@ func main() {
 	loadArtistIdentityCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-identity-cache.json"))
 	// 歌词部分(lyrics/lyrics_tr/lyrics_roma/lyrics_yrc/lyrics_source/manual_lyrics)以
 	// lyrics/ 文件夹为权威源,不只是 enrichCache 的只读存档——顺序很重要:先
-	// importLyricsFromFiles() 用文件夹内容覆盖刚从 JSON 缓存加载出来的内存态(文件
-	// 永远赢),再 exportLyricsFiles() 把"刚被覆盖生效的内容"重新导出一遍,让磁盘
+	// importLyricsFromFiles 用文件夹内容覆盖刚从 JSON 缓存加载出来的内存态(文件
+	// 永远赢),再 exportLyricsFiles 把"刚被覆盖生效的内容"重新导出一遍,让磁盘
 	// 文件立刻互相对齐(老版本导出的无头文件、或者刚发生的"删除文件=删条目"调和结果,
 	// 都会在这一轮里落定)。desktop-lyrics 那边"歌词管理"手动编辑/删除后 kickstart
 	// 重启 collector,走的也是这同一条启动路径,不用在 Swift 侧另外实现一遍调和逻辑。
@@ -282,10 +282,10 @@ func main() {
 	// 暴露成一项用户配置。
 	deviceArtworkDir = filepath.Join(filepath.Dir(*cfgPath), "artwork")
 	// 这些设备封面同时要托管到状态中继上,否则推给网页/ListenBrainz 的是别的机器
-	// 根本读不到的 file:// 本地路径(2026-09-02 用户报「网页上没有封面了」)。
+	// 根本读不到的 file:// 本地路径。
 	// 复用 /push 那套地址与令牌 —— 是同一个中继、同一份认证。见 artworkrelay.go 头注。
 	artworkRelayURL, artworkRelayToken = cfg.StateRelayURL, cfg.StateRelayToken
-	// 存量 key 归一化,必须夹在这里:要在 importLyricsFromFiles() 之前(否则老文件会按
+	// 存量 key 归一化,必须夹在这里:要在 importLyricsFromFiles 之前(否则老文件会按
 	// 旧头部标签把刚合并掉的条目又导回来,而且两份文件抢同一个 key,内容每次重启随机翻转),
 	// 又要在 lyricsDir 定下来之后(它得删掉落选条目的导出文件)。见 enrichkey.go。
 	// 「配置搬家」带过来的决策数据(enrich 缓存的非歌词字段),见 enrichrestore.go 头注。
@@ -295,28 +295,28 @@ func main() {
 	// 绝大多数启动这个文件不存在,直接早退,零成本。
 	adoptEnrichRestore(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-restore.json"))
 	migrateEnrichKeys()
-	// 存量「借来的封面被盖上归属戳」清洗(2026-09-07,见 coverstampmigrate.go)。
+	// 存量「借来的封面被盖上归属戳」清洗。
 	// 位置只有两条约束:loadEnrichCache 之后(要有 enrichPath 才落得了盘)、
 	// migrateEnrichKeys 之后(它落盘的得是归一化过的 key)。跟歌词那条 import/export
 	// 链**没有**先后关系 —— 它一个歌词字段都不碰,只擦 cover_album。
 	migrateBorrowedCoverAlbums()
 	importLyricsFromFiles()
-	// 存量歌词正文里的 HTML / XML 字符实体(2026-09-09,酷狗 `they&apos;re`,见 lyricentities.go)。
+	// 存量歌词正文里的 HTML / XML 字符实体。
 	// 紧跟 import:lyrics/ 文件夹赢完之后改的才是权威内容;后面 export 把干净正文写回文件。
 	// 也要排在 migrateManualPickMarks 之前(那一步按最终正文算指纹)。
 	migrateLyricEntities()
 	// 夹在 import 和 export 之间:见 invalidateStaleTranslations 的注释——前者让
 	// lyrics/ 文件夹赢,后者负责把这里清空的译文同步成删掉对应的 .tr.lrc。
 	invalidateStaleTranslations()
-	// 逐字歌词的空白词条清洗(2026-08-19,Musixmatch richsync 存量,见 yrcwhitespace.go)。
+	// 逐字歌词的空白词条清洗。
 	// 必须夹在 import(权威内容已从 lyrics/ 文件夹导回缓存)与 export(把修好的内容写回
 	// 导出文件)之间,顺序错了修的就是马上要被覆盖的那一份。
 	migrateYRCWhitespaceTokens()
-	// 行级时间轴与逐字轴打架时以逐字轴为准重挂(2026-08-27,见 lyricstimeline.go)。
+	// 行级时间轴与逐字轴打架时以逐字轴为准重挂。
 	// 同样夹在 import 与 export 之间,理由同上;放在空白词条清洗**之后**,因为那一步会
 	// 改动 YRC 的词条结构,重挂要读的是清洗完的最终逐字轴。
 	migrateLyricTimelines()
-	// 存量「用户选定的源」→「手动选定」留痕(2026-09-01,见 manualpickmigrate.go)。
+	// 存量「用户选定的源」→「手动选定」留痕。
 	// ⚠️ 必须排在上面三步**之后**:import / YRC 空白清洗 / 时间轴重挂都会重写 Lyrics 和
 	// LyricsYRC,而这一步要按最终内容算指纹。排在它们之前的话指纹当场过期,老用户打开
 	// 「手动选定歌词后锁定」照样一首都锁不上,且没有任何迹象。
@@ -356,7 +356,7 @@ func main() {
 
 	log.Printf("%s %s starting (bundles: %v, dry-run: %v)",
 		clientName, clientVersion, cfg.BundleIDs, *dryRun)
-	// 存量设备封面补传。放后台:它只是把已有的图确认/补到中继上,不该挡住 run()。
+	// 存量设备封面补传。放后台:它只是把已有的图确认/补到中继上,不该挡住 run。
 	// 绝大多数启动里每张都会在 HEAD 那步命中,整个扫描就是几十次廉价的读(见头注)。
 	go sweepDeviceArtwork(ctx)
 	err = run(ctx, cfg, lb)
@@ -364,7 +364,7 @@ func main() {
 		fatalExit(exitReasonRunError, "err=%v", err)
 	}
 	// 走到这里是正常收尾。ctx 被信号取消(launchctl kickstart -k 重启、bootout 卸载、终端 Ctrl-C
-	// 都是 SIGTERM / SIGINT)是常驻 collector 最常见的退出 —— 2026-09-03 之前这条路一行日志都没有,
+	// 都是 SIGTERM / SIGINT)是常驻 collector 最常见的退出 —— 之前这条路一行日志都没有,
 	// 排「collector 为什么自己退了」只能拿 launchd 状态猜。见 exitreason.go。
 	if ctx.Err() != nil {
 		logExit(exitReasonSignal, "context canceled by SIGTERM/SIGINT")

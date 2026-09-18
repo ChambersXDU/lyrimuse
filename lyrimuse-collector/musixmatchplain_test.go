@@ -2,18 +2,18 @@ package main
 
 import "testing"
 
-// Musixmatch 纯文本回退(2026-09-02,Charlie Musselwhite《Storm Warning》案)。
+// Musixmatch 纯文本回退。
 //
 // 病灶:resolveMusixmatchLyric 原来只调 track.subtitle.get(带时间戳的字幕),拿不到就
 // 当整个源没有。而 Musixmatch 把"有没有时间轴"和"有没有词"记成两个独立字段
 // (has_subtitles / has_lyrics),凡是 `has_lyrics=1 / has_subtitles=0` 的歌,词就在
-// track.lyrics.get 里躺着,我们从来不问。实测那首:subtitle 回 404,lyrics 回 616 字完整
+// track.lyrics.get 里躺着,我们从来不问。测试那首:subtitle 回 404,lyrics 回 616 字完整
 // 歌词,而界面显示"八个源都没找到"。
 
-// 剥离器:本项目这组身份(apic-appmobile + mac-ios-v2.0)实测**不带**水印,所以最要紧的
+// 剥离器:本项目这组身份(apic-appmobile + mac-ios-v2.0)测试**不带**水印,所以最要紧的
 // 用例其实是反面的——**干净正文必须原样保留**,一个字都不能被"顺手清洗"掉。
 func TestSanitizeMusixmatchPlainLyricsKeepsCleanBody(t *testing.T) {
-	// 2026-09-02 真实抓取的形态(首尾各带一个引号是源站自己的转写风格,不是我们要清的东西)。
+	// 真实抓取的形态(首尾各带一个引号是源站自己的转写风格,不是我们要清的东西)。
 	clean := "\"I hear there's a storm warning\nMy baby blowin' back into town\n\nShe's got long wavy hair\nThunder in her hips\""
 	if got := sanitizeMusixmatchPlainLyrics(clean); got != clean {
 		t.Errorf("干净正文被改动了:\n原=%q\n后=%q", clean, got)
@@ -90,7 +90,7 @@ func TestMusixmatchNoticeDetectionDoesNotOverreach(t *testing.T) {
 	}
 }
 
-// 搜索阶段那道 has_subtitles 闸门的放宽(2026-09-02)。
+// 搜索阶段那道 has_subtitles 闸门的放宽。
 //
 // ⚠️ 这组才是真正会回归的那段。第一版只把纯文本回退加在 resolveMusixmatchLyric 里,
 // 而 musixmatchSearchTrackOnce 有一道 `if HasSubtitles != 1 { continue }` —— 目标曲目在
@@ -99,7 +99,7 @@ func TestMusixmatchNoticeDetectionDoesNotOverreach(t *testing.T) {
 func TestPickMusixmatchTrackRow(t *testing.T) {
 	const artist, title = "Charlie Musselwhite", "Storm Warning"
 
-	// 实测形态:目标曲目 has_lyrics=1 / has_subtitles=0,同名另一条是别的艺人。
+	// 测试形态:目标曲目 has_lyrics=1 / has_subtitles=0,同名另一条是别的艺人。
 	rows := []musixmatchTrackRow{
 		{TrackID: 322223735, TrackName: "Storm Warning", ArtistName: "Charlie Musselwhite",
 			AlbumName: "Look Out Highway", HasSubtitles: 0, HasLyrics: 1, TrackLength: 245},
@@ -139,7 +139,7 @@ func TestPickMusixmatchTrackRow(t *testing.T) {
 	}
 
 	// 两个字段都是 0、而且**没有 instrumental 标记** → 没有可取的东西,不要。
-	// (2026-09-11 补的第三趟只认显式 Instrumental==1,这一条正是它不能放宽到的那一侧:
+	// (的第三趟只认显式 Instrumental==1,这一条正是它不能放宽到的那一侧:
 	//  "这个源没收录"跟"这首本来就没有词"是两回事。)
 	neither := []musixmatchTrackRow{
 		{TrackID: 4, TrackName: "Storm Warning", ArtistName: artist, HasSubtitles: 0, HasLyrics: 0},
@@ -153,15 +153,15 @@ func TestPickMusixmatchTrackRow(t *testing.T) {
 	}
 }
 
-// 第三趟:纯音乐断言(2026-09-11)。
+// 第三趟:纯音乐断言。
 //
-// 形态取自 2026-09-11 的真实响应——纯音乐曲目在 Musixmatch 上是 has_subtitles=0 且
+// 形态取自 的真实响应——纯音乐曲目在 Musixmatch 上是 has_subtitles=0 且
 // has_lyrics=0,前两趟的闸门按定义会把它们全部筛掉。没有第三趟,enrich.go 那边的
 // musixmatch instrumentalMarker 分支就是死代码。
 func TestPickMusixmatchTrackRowInstrumentalPass(t *testing.T) {
 	const artist, title = "Explosions In The Sky", "Your Hand In Mine"
 
-	// 实测形态:五行候选全是 sub=0 / lyr=0 / instrumental=1。
+	// 测试形态:五行候选全是 sub=0 / lyr=0 / instrumental=1。
 	rows := []musixmatchTrackRow{
 		{TrackID: 11, TrackName: title, ArtistName: artist,
 			HasSubtitles: 0, HasLyrics: 0, Instrumental: 1, TrackLength: 497},
@@ -180,7 +180,7 @@ func TestPickMusixmatchTrackRowInstrumentalPass(t *testing.T) {
 		t.Errorf("时长仍要透传:%v", got.durationSecs)
 	}
 
-	// **排在最后不是随口说的**:同一首曲子不同行 instrumental 并不一致(实测
+	// **排在最后不是随口说的**:同一首曲子不同行 instrumental 并不一致(测试
 	// Ludovico Einaudi《Nuvole Bianche》5 行里 3 行 instrumental=1,另有一行 sub=1/lyr=1
 	// 却 instrumental=0 —— 有人给这首钢琴曲传了"歌词")。有真正的正文时以正文为准。
 	mixed := []musixmatchTrackRow{
@@ -204,10 +204,10 @@ func TestPickMusixmatchTrackRowInstrumentalPass(t *testing.T) {
 	}
 }
 
-// hasRichsync 闸门(2026-09-11):has_richsync==0 时 track.richsync.get 必然 404,
+// hasRichsync 闸门:has_richsync==0 时 track.richsync.get 必然 404,
 // 调用方据此跳过那一趟。跟 hasSubtitles 同一份契约,这里只钉"字段有没有被正确带出来"。
 //
-// 实测依据:2026-09-11 拿 16 首横跨欧美/日/韩/华语/纯音乐的曲目对打,has_richsync 对
+// 测试依据:拿 16 首横跨欧美/日/韩/华语/纯音乐的曲目对打,has_richsync 对
 // track.richsync.get 的结果预测 16/16 全中,其中 4 首是 0(25%)。关键的一首是
 // 五月天《倔強》——has_subtitles=1 走主路径,但 has_richsync=0。
 func TestPickMusixmatchTrackRowCarriesHasRichsync(t *testing.T) {

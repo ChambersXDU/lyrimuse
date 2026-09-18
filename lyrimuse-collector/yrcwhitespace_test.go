@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 实测形状:《Ocho Rios》(musixmatch richsync)的空白词条掏空了短词的读条时长。
+// 测试形状:《Ocho Rios》(musixmatch richsync)的空白词条掏空了短词的读条时长。
 func TestYRCMergeWhitespaceTokensMusixmatchShape(t *testing.T) {
 	in := "[1980,4087](1980,23,0)In(2003,165,0) (2168,24,0)the(2192,96,0) (2288,40,0)nick\n"
 	want := "[1980,4087](1980,188,0)In (2168,120,0)the (2288,40,0)nick\n"

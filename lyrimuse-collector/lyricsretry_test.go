@@ -7,15 +7,15 @@ import (
 
 // needsLyricsRetry 的回归测试。
 //
-// 背景(2026-08-07 实测复现):五源搜索有 20 秒总上限,到点没回来的源这一轮不参与候选,而
+// 背景:五源搜索有 20 秒总上限,到点没回来的源这一轮不参与候选,而
 // 网易云既是最慢的、也最可能带逐字歌词。同一首「悟空 2003 Demo」连查两次:一次 3 秒返回、
 // 候选里根本没有网易云,lrclib 以 83 分胜出;另一次跑满 20 秒,网易云回来了、525 分带逐字。
 // 缓存又是"解析一次永久保留",于是那一瞬间的运气被永久固化。这个函数就是那道补救闸门,
-// 它的判定条件比较绕(五个 and 关系),所以逐条钉死。
+// 它的判定条件比较绕(五个 and 关系),所以逐条固定。
 func TestNeedsLyricsRetry(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsSources = map[string]bool{"netease": true, "qq": true, "lrclib": true}
+	saved := getFeaturesLyricsSources()
+	defer func() { setFeaturesLyricsSources(saved) }()
+	setFeaturesLyricsSources(map[string]bool{"netease": true, "qq": true, "lrclib": true})
 
 	long, recent := time.Now().Unix()-int64(lyricsRetryInterval/time.Second)-1, time.Now().Unix()
 
@@ -75,9 +75,9 @@ func TestNeedsLyricsRetry(t *testing.T) {
 
 // 未启用的源缺席不算数——只有**已启用**的源缺席才说明这次决定是在信息不全的情况下做的。
 func TestNeedsLyricsRetryIgnoresDisabledSources(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsSources = map[string]bool{"lrclib": true, "netease": false}
+	saved := getFeaturesLyricsSources()
+	defer func() { setFeaturesLyricsSources(saved) }()
+	setFeaturesLyricsSources(map[string]bool{"lrclib": true, "netease": false})
 	long := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1
 
 	e := enrichEntry{Lyrics: "x", LyricsSourcesSeen: []string{"lrclib"}, TS: long}

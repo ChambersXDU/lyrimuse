@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// 2026-09-02 接回 QQ GetPlayLyricInfo 的 trans/roma 两轨。下面的样本按当天直连接口看到的
+// 接回 QQ GetPlayLyricInfo 的 trans/roma 两轨。下面的样本按当天直连接口看到的
 // 真实形态仿写(米津玄師 Lemon / Taylor Swift Cruel Summer 的结构,正文换成占位文字),
 // 钉住的是清洗规则,不是某首歌的内容。
 
@@ -141,7 +141,7 @@ func TestAttachKanaLine(t *testing.T) {
 	}
 }
 
-// v11 回归:跨源共识正文要跳过 `[kana:]`/`[ti:]`/`[offset:]` 这类元数据标签行——E2E 实测
+// v11 回归:跨源共识正文要跳过 `[kana:]`/`[ti:]`/`[offset:]` 这类元数据标签行——E2E 测试
 // 《Lemon》的 QQ 候选拼上 1700+ 字符的假名行后,3-gram 相似度掉到阈值以下、250 分共识没了。
 // 同时守住两条边界:无时间戳的纯文本行(lrclib plainOnly 那种)仍算正文;时间戳行不受影响。
 func TestLyricConsensusBodyIgnoresMetaTagLines(t *testing.T) {

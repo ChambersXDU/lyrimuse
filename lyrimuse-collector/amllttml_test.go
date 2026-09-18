@@ -123,11 +123,11 @@ func TestParseAMLLTTMLGarbage(t *testing.T) {
 
 // 词间空白:amll-ttml-db 里两种写法并存,两种都必须出对的结果。
 //
-// 2026-08-24 回归测试。原来 ttmlLine/ttmlSpan 用 `Spans []ttmlSpan` + `,chardata`
+// 回归测试。原来 ttmlLine/ttmlSpan 用 `Spans []ttmlSpan` + `,chardata`
 // 声明式解析,Go 会把一个元素的全部直接文本合并成一个字符串、顺序全丢,于是
 // `<span>What</span> <span>a</span> <span>ride</span>` 拼成了 "Whataride"。
 // 用户看到的症状是**没有翻译**:粘住的假词翻译器原样返回,translate.go 那道
-// 「没翻动的行不写进译文」把整行丢掉了(实测那首歌 78 行只出了 32 行译文)。
+// 「没翻动的行不写进译文」把整行丢掉了(测试那首歌 78 行只出了 32 行译文)。
 func TestParseAMLLTTMLWordSpacing(t *testing.T) {
 	// L1 空格在 span **之间**;L2 空格在 span **内部**;L3 中文逐字(本来就没有空白);
 	// L4 行首行尾都有多余空白、词间是 4 个空格;
@@ -163,7 +163,7 @@ func TestParseAMLLTTMLWordSpacing(t *testing.T) {
 	}
 
 	// 不变式:YRC 每行的词原样拼起来必须**逐字节等于** LRC 同行正文。
-	// Swift 侧靠 `plainText == words.joined()` 判断这一行的逐字数据可不可信,对不上
+	// Swift 侧靠 `plainText == words.joined` 判断这一行的逐字数据可不可信,对不上
 	// 就整行不染色(见 MenuBarStatusItem.karaokeFillPath 那道守卫)。
 	yrc := strings.Split(strings.TrimRight(r.yrc, "\n"), "\n")
 	if len(yrc) != len(lrc) {
@@ -178,7 +178,7 @@ func TestParseAMLLTTMLWordSpacing(t *testing.T) {
 }
 
 // joinYRCWords 把一行 YRC 的词原样拼起来(丢掉 `[行始,行长]` 和每个 `(词始,词长,0)`),
-// 也就是 Swift 侧 `words.joined()` 会得到的东西。
+// 也就是 Swift 侧 `words.joined` 会得到的东西。
 func joinYRCWords(line string) string {
 	rest := line[strings.Index(line, "]")+1:]
 	var b strings.Builder

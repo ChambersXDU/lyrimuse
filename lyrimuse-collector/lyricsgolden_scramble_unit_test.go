@@ -144,11 +144,17 @@ func TestGoldenScramblerIsClassPreservingBijection(t *testing.T) {
 // 合成一组多源候选(占位文本),验证置乱前后打分链路结果逐项相同——共识、时长、署名、语言闸、
 // 逐字、译文/罗马音全部走到。
 func TestGoldenScrambleKeepsRankingParity(t *testing.T) {
+	featuresMu.Lock()
 	saved := features
-	t.Cleanup(func() { features = saved })
 	features.LyricsTranslationLanguage = "zh"
 	features.LyricsSources = nil
 	features.LyricsSourceMode = lyricsModeSmart
+	featuresMu.Unlock()
+	t.Cleanup(func() {
+		featuresMu.Lock()
+		features = saved
+		featuresMu.Unlock()
+	})
 
 	body := func(prefix string, n int, withCredit bool) string {
 		var b strings.Builder

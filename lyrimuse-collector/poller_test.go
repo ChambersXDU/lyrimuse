@@ -9,14 +9,14 @@ import (
 
 var baseTestTime = time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
 
-// nowAt 返回一个固定基准时间往后推 offsetSecs 秒的时间点,避免测试里用真实 time.Now()
-// (相邻两次 time.Now() 调用间隔是真实墙钟时间、不受控,会让 gap 计算失真)。
+// nowAt 返回一个固定基准时间往后推 offsetSecs 秒的时间点,避免测试里用真实 time.Now
+// (相邻两次 time.Now 调用间隔是真实墙钟时间、不受控,会让 gap 计算失真)。
 func nowAt(offsetSecs int) time.Time {
 	return baseTestTime.Add(time.Duration(offsetSecs) * time.Second)
 }
 
-// 回归测试:AppleScript 换掉 media-control 之后,Music.playerPosition() 每轮轮询都是
-// 新鲜的实时进度,不再像旧版 media-control 那样在稳定播放期间冻结。updatePosition()
+// 回归测试:AppleScript 换掉 media-control 之后,Music.playerPosition 每轮轮询都是
+// 新鲜的实时进度,不再像旧版 media-control 那样在稳定播放期间冻结。updatePosition
 // 里"是否需要重新锚定"的判断如果还用逐字节的 elapsed != prevElapse 比较,稳定播放时
 // 每一轮都会被误判成一次 seek,导致 pushRelayState 每个轮询间隔就写一次 KV,足以烧穿
 // 1000 写/天的免费额度。这里直接覆盖"稳定播放不应重锚"和"真实 seek 应该重锚"两个
@@ -56,11 +56,11 @@ func TestUpdatePosition_RealSeekReanchors(t *testing.T) {
 	}
 }
 
-// 回归测试:2026-08-04 实测排查坐实的 bug——poll() 里 appleMusicPosition() 校准
+// 回归测试:排查验证的 bug——poll 里 appleMusicPosition 校准
 // p.cur.Position/AnchorTS(这一轮推给网页的值)之后,如果不回写 p.trackPos/p.prevWall,
-// 下一轮 updatePosition() 的"稳定播放"分支(p.trackPos += gap*rate)会从校准前那个
-// 旧值继续累加,校准效果只在当轮昙花一现。这里直接模拟 poll() 里那次回写,验证下一轮
-// updatePosition() 确实从校准后的值(而不是校准前的旧 trackPos)继续外推。
+// 下一轮 updatePosition 的"稳定播放"分支(p.trackPos += gap*rate)会从校准前那个
+// 旧值继续累加,校准效果只在当轮昙花一现。这里直接模拟 poll 里那次回写,验证下一轮
+// updatePosition 确实从校准后的值(而不是校准前的旧 trackPos)继续外推。
 func TestAppleScriptCorrectionFeedsBackIntoTrackPos(t *testing.T) {
 	p := &poller{}
 	p.cur = snapshot{Title: "T", Artist: "A", Album: "Alb", Duration: 200, Playing: true, Elapsed: 10, Rate: 1}
@@ -74,8 +74,8 @@ func TestAppleScriptCorrectionFeedsBackIntoTrackPos(t *testing.T) {
 		t.Fatalf("trackPos before correction should be 15, got %v", p.trackPos)
 	}
 
-	// 模拟 poll() 里 appleMusicPosition() 校准命中:真实播放头比内部累加器悄悄快了
-	// 0.5s,poll() 应把 p.trackPos/p.prevWall 一并回写成校准后的值+对应时刻。
+	// 模拟 poll 里 appleMusicPosition 校准命中:真实播放头比内部累加器悄悄快了
+	// 0.5s,poll 应把 p.trackPos/p.prevWall 一并回写成校准后的值+对应时刻。
 	p.trackPos = 15.5
 	p.prevWall = nowAt(5)
 
@@ -108,7 +108,7 @@ func TestUpdatePosition_PauseDoesNotReanchor(t *testing.T) {
 	}
 }
 
-// ---- Spotify 自然切歌锚点超前校正(2026-08-20,机制见 poller.posBias 注释) ----------
+// ---- Spotify 自然切歌锚点超前校正 ----------
 
 func TestNaturalAdvanceCorrection(t *testing.T) {
 	cases := []struct {
@@ -117,7 +117,7 @@ func TestNaturalAdvanceCorrection(t *testing.T) {
 		wantOK             bool
 		wantSeed, wantBias float64
 	}{
-		// 实测样本(Forever Love→在那遙遠的地方):元数据提前 0.837s,首笔读数 0.048,
+		// 测试样本(Forever Love→在那遙遠的地方):元数据提前 0.837s,首笔读数 0.048,
 		// 整曲恒定偏置 +0.885s。
 		{"measured real transition", 0.048, -0.837, true, -0.837, 0.885},
 		// 元数据晚于真声切换(overrun 为正)同样成立:真值=越界量。
@@ -126,7 +126,7 @@ func TestNaturalAdvanceCorrection(t *testing.T) {
 		{"manual skip mid-track", 0.3, -188, false, 0, 0},
 		// 偏置太小(Apple Music 级精度/无预载):不值得校正。
 		{"bias below noise floor", 0.3, 0.28, false, 0, 0},
-		// 偏置超上限:换歌瞬间读数还挂着上一首的陈旧值(08-18 实测 30.3 vs 0.02),
+		// 偏置超上限:换歌瞬间读数还挂着上一首的陈旧值(08-18 测试 30.3 vs 0.02),
 		// 或模型失效——放弃,退回原样采信(seek 分支会兜住陈旧值)。
 		{"stale first sample", 30.3, -0.5, false, 0, 0},
 		// 偏置为负(读数落后连续性真值):模型外,不校正。
@@ -237,7 +237,7 @@ func TestUpdatePosition_PauseSubtractsNaturalAdvanceBias(t *testing.T) {
 }
 
 // 暂停→恢复(同曲)必须继承偏置:恢复时 Spotify 重打的锚点值来自仍超前的内部计数器,
-// 走 seek 分支清偏置会让恢复后整段重新偏快、且与 App 侧语义相反(2026-08-20 对抗审查 high)。
+// 走 seek 分支清偏置会让恢复后整段重新偏快、且与 App 侧语义相反。
 func TestUpdatePosition_ResumeKeepsNaturalAdvanceBias(t *testing.T) {
 	p := &poller{}
 	p.cur = snapshot{Title: "Old", Artist: "A", Album: "Alb", Duration: 293, Playing: true, Elapsed: 290, Rate: 1, Bundle: spotifyBundleID}

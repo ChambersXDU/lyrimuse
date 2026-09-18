@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// realQQClientSearchBody 是 2026-09-02 从 client_search_cp 实际抓下来的响应(new_json=1,
+// realQQClientSearchBody 是 从 client_search_cp 实际抓下来的响应(new_json=1,
 // n=3,查询词 "Have Gun, Will Travel Gravity Blues"),只裁掉了本文件用不到的字段。
 // 用真实响应而不是手搓 JSON:这个测试的头号目标就是守住 struct tag——mid/title/
 // interval/singer[].name/album.name 任何一个写错,下游身份闸会整片静默失效,而那种失效
@@ -351,7 +351,7 @@ func TestQQPickCandidateExactTitleBeatsCredit(t *testing.T) {
 	}
 }
 
-// 2026-09-05,用户报 PRINCE《319》"搜不到"(酷狗那边的同款用例见 kugousearchpick_test.go)。QQ 搜索结果
+// ,处理 PRINCE《319》"搜不到"(酷狗那边的同款用例见 kugousearchpick_test.go)。QQ 搜索结果
 // 第 1 条就是正主「319 (X-cerpt) / The VERSACE Experience (PRELUDE 2 GOLD) [Explicit]」88s,但专辑分支的挑选
 // 按"标题精确同名 > 专辑分"排,《The Gold Experience》185 秒的完整版「319」精确同名先赢。现在自报曲长
 // 对不上(>12%)的整组排到对得上的后面。字符串与时长全部取自真实搜索结果(client_search_cp 自带专辑名,

@@ -47,7 +47,7 @@ func runDeleteListenCLI(args []string) {
 		}
 		resolved = filepath.Join(configDir(), "config.json")
 	}
-	// 跟 main() 用同一条路径规则。这条一次性子命令不会走到 main 里 initListenLog 那行
+	// 跟 main 用同一条路径规则。这条一次性子命令不会走到 main 里 initListenLog 那行
 	// (它在 os.Args[1] 的提前分支里就 return 了),所以自己设一次。
 	// ⚠️ **不能**调 initListenLog:那个会顺带跑一次 compactListenLog,把超限的老记录一并
 	// 截掉 —— 用户点的是"删这一条",不该附带一次静默的历史清理。

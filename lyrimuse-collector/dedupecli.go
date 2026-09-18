@@ -13,7 +13,7 @@ import (
 
 // `collector dedupe-entries` —— 把 enrich 缓存里"其实是同一首歌"的重复条目并成一条。
 //
-// 为什么需要它:2026-08-16 用户在「歌词管理」里看到成对的重复,实测 108 条里有 14 组 29 条,
+// 为什么需要它:用户在「歌词管理」里看到成对的重复,测试 108 条里有 14 组 29 条,
 // 差异只在半角空格(`Susan 说` vs `Susan说`)或繁简(`千纸鹤` vs `千紙鶴`)。同一次 canonicalEnrichKey
 // 的扩展只能保证**以后不再新增**——它是查询期复用,从不改动 map 本身(见那边注释),已经
 // 躺在缓存里的这 29 条一条都不会消失。
@@ -95,7 +95,7 @@ func planDedupe(cache map[string]enrichEntry) dedupePlan {
 
 // pickDisplayKey 从一组等价 key 里挑出**最适合给用户看**的那个写法。
 //
-// 为什么不能直接用质量胜者:betterEnrichEntry 按歌词分数/来源挑,跟字形毫无关系。实测这批
+// 为什么不能直接用质量胜者:betterEnrichEntry 按歌词分数/来源挑,跟字形毫无关系。测试这批
 // 数据里 14 组有 10 组的质量胜者是**繁体**写法(`小師妹`/`千紙鶴`/`討厭紅樓夢`),而缓存
 // 条目没有独立的显示字段、列表显示的就是 key 拆出来的三段 —— 直接用质量胜者当 key,简体
 // 用户的歌词管理列表就会变成繁简混杂。而歌词内容跟 key 用谁的写法完全无关,分开选没有代价。
@@ -104,7 +104,7 @@ func planDedupe(cache map[string]enrichEntry) dedupePlan {
 //  1. **离简体更近的**优先(转简之后需要改动的字符更少)。这个库面向简体用户。
 //     ⚠️ 不能用"整串是不是纯简体"这个布尔判据 —— 专辑名本身就是繁体的情况很常见
 //     (`回到未來`/`神經志 The Journal` 是官方专辑名),那会让整串**恒**判为非简体,
-//     歌名那一段的繁简差异就完全失去作用,退化成按字典序挑,实测反而挑中繁体那条。
+//     歌名那一段的繁简差异就完全失去作用,退化成按字典序挑,测试反而挑中繁体那条。
 //  2. 同档时**更长的**优先。等价 key 之间的长度差只可能来自空格,所以"更长"就等于
 //     "中英文之间有空格"那个写法(`Susan 说` 胜过 `Susan说`),排版上更好看。
 //  3. 再并列取字典序最小,纯粹为了确定性。
@@ -236,7 +236,7 @@ func runDedupeEntries(apply bool) int {
 	if !apply {
 		fmt.Println("\n这是预演。确认无误后加 -apply 真正执行。")
 		fmt.Println("⚠️ 执行前请先备份 ~/.config/lyrimuse/lyrimuse-enrich-cache.json 和 lyrics/ 整个目录 ——")
-		fmt.Println("   删除不可逆,而这条路径 2026-08-16 有过把 lyrics/ 删到只剩 25 个文件的事故。")
+		fmt.Println("   删除不可逆,请务必做好数据备份。")
 		return 0
 	}
 
@@ -275,8 +275,8 @@ func runDedupeEntries(apply bool) int {
 
 // runDedupeEntriesCLI 是 `collector dedupe-entries [-apply]` 的入口。
 //
-// 跟其它一次性子命令一样走 main() 里 flag.Parse() 之前的提前分支,所以 features /
-// enrichCache / lyricsDir 这几个包级变量在这里都还是零值,必须按跟 main() 完全一致的
+// 跟其它一次性子命令一样走 main 里 flag.Parse 之前的提前分支,所以 features /
+// enrichCache / lyricsDir 这几个包级变量在这里都还是零值,必须按跟 main 完全一致的
 // 默认路径规则自己加载一遍(searchcli.go 里有同样的说明)。
 func runDedupeEntriesCLI(args []string) {
 	fs := flag.NewFlagSet("dedupe-entries", flag.ExitOnError)
@@ -299,7 +299,7 @@ func runDedupeEntriesCLI(args []string) {
 	//
 	// 常驻 collector 内存里持有一整份 enrichCache,并且会在自己的节奏上整份写回磁盘。
 	// 我们在它跑着的时候删掉磁盘上的条目,它下一次保存就会把删掉的原样盖回来 —— 而
-	// 导出文件已经被我们删了,于是缓存里有条目、磁盘上没文件,状态错开。2026-08-16 那次
+	// 导出文件已经被我们删了,于是缓存里有条目、磁盘上没文件,状态错开。那次
 	// 把 enrich 缓存从 204 条磨到 10 条,机制正是"两个实例各写各的"。
 	//
 	// 不复用 acquireSingleInstanceLock:那个函数在锁文件打不开时 **fail-open**(返回

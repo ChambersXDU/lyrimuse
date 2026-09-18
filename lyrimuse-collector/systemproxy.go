@@ -15,7 +15,7 @@ import (
 
 // ---- 读 macOS 系统代理设置 ----
 //
-// 2026-09-03 加。起因:用户在设置页点 Musixmatch 那颗「测试」,报「两首探测曲都没有响应,
+// 。起因:用户在设置页点 Musixmatch 那颗「测试」,报「两首探测曲都没有响应,
 // 这个源目前可能不可用」。逐层量下来根因既不在代码,也不在 Musixmatch:
 //
 //	ping 52.22.193.26 / 54.144.176.235(apic-appmobile 的两个 A 记录)  100% 丢包
@@ -30,7 +30,7 @@ import (
 //
 // 为什么会这样:**Go 标准库不读 macOS 系统代理**。http.ProxyFromEnvironment 只认
 // HTTP(S)_PROXY / ALL_PROXY 环境变量,而 collector 是被 Lyrimuse.app(GUI)拉起来的,
-// GUI 进程不继承 shell 环境 —— 实测运行中的 collector 进程环境里一个 proxy 变量都没有。
+// GUI 进程不继承 shell 环境 —— 测试运行中的 collector 进程环境里一个 proxy 变量都没有。
 // 三个形状完全一样、只差 Proxy 字段的 http.Client 打同一个 URL 的对照:
 //
 //	A 现状(Transport 没有 Proxy 字段)     FAILED after 8.001s: context deadline exceeded
@@ -40,7 +40,7 @@ import (
 // C 就是"指望标准库自己读系统代理"这条路走不通的直接证据。
 //
 // ⚠️ **这不是"让 collector 全局走系统代理"的理由,恰恰相反。** docs/features/12 章记着一组
-// 反向实测:App 进程(URLSession,默认就走系统代理)打 Last.fm 是 p50 1.2s / p90 6s / 16%
+// 反向测试:App 进程(URLSession,默认就走系统代理)打 Last.fm 是 p50 1.2s / p90 6s / 16%
 // 超时,同一时段 collector 的 Go 直连是 p50 0.4s / ~1% 失败;curl 对照直连 0.6~1.0s 全成功、
 // 经代理 1.7~2.5s 且 2/6 握手失败。**在这台机器上代理是更差的通道。** 所以这里读出来的代理
 // 只作为"直连失败后的兜底"(proxyfallback.go),而且只对 doh.go 那份域名清单(当前只有
@@ -121,7 +121,7 @@ func envProxyURL() *neturl.URL {
 // parseSCUtilProxy 从 `scutil --proxy` 的输出里挑出代理地址。单独拆成纯函数是为了能用固定
 // 样本做单测 —— 这台机器的代理开关状态随时会变,拿它当测试前提用例就不可复现了。
 //
-// 输出形状(2026-09-03 实测样本,ExceptionsList 已裁剪):
+// 输出形状:
 //
 //	<dictionary> {
 //	  ExceptionsList : <array> {

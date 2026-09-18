@@ -1,6 +1,6 @@
 // simevaltimeline_test.go — simeval 的追加维度:LRC↔YRC 时间轴自洽。
 //
-// 起因(2026-08-27《Rumour Has It》案)与完整机理见生产实现 lyricstimeline.go 的文件头。
+// 起因与完整机理见生产实现 lyricstimeline.go 的文件头。
 // 这里只放**消融维度**,判据实现一律复用包内真实函数,不重抄(README 三条纪律之一:
 // 维度实现与生产代码零漂移,才是这套评测区别于"另写一份打分"的全部价值)。
 //
@@ -9,7 +9,7 @@
 //	A endpointGate —— simeval_test.go 里 deltaWordTimingCoverage 自洽闸(b)的**单独**版本,
 //	  只比 |YRC 末行 start − LRC 末句 start|。拆出来单独测是因为原维度是组合体(覆盖率
 //	  阶梯 + 两道闸),混着测答不出"单独接这道闸值不值"。
-//	  实测结论:**不能接**。15s 阈值下 36 条翻盘里 34 条是误杀 —— lastLRCTimestampSecs
+//	  测试结论:**不能接**。15s 阈值下 36 条翻盘里 34 条是误杀 —— lastLRCTimestampSecs
 //	  只跳空行、不跳署名行,网易云 LRC 末尾那行 `[08:36.866] 人声 : Prince` 让
 //	  《Purple Rain》的端点差算出 292.4s,而两套轴对真实歌词行只差 0.2s。
 //	B skewGate —— 逐行中位偏差(按归一化文本唯一配对)。判别力远高于 A:全库正常条目

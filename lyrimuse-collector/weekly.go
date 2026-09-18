@@ -110,7 +110,7 @@ func lastfmWeeklyChartList(ctx context.Context, user, apiKey string) ([]lastfmCh
 }
 
 // lastfmWeeklyTopTracks/lastfmWeeklyTopArtists 拉指定周边界内的完整排行(该用户单周
-// 量级不会触发分页，实测同一账号一周 142 首/14 位歌手，一次请求就是全量)。
+// 量级不会触发分页，测试同一账号一周 142 首/14 位歌手，一次请求就是全量)。
 func lastfmWeeklyTopTracks(ctx context.Context, user, apiKey string, from, to int64) ([]lastfmChartEntry, error) {
 	var out struct {
 		WeeklyTrackChart struct {

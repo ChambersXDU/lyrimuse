@@ -19,7 +19,7 @@ import (
 
 // miguLyric 是歌词第九个候选来源(咪咕音乐,非官方接口:搜索→按元数据校验重排→并发拉
 // 前几条歌词→挑第一份真同步的;选中的那条带 trcUrl 就再拉一份中文译文)。接口契约
-// 2026-09-04 用 curl 实测过两个端点:`pd.musicapp.migu.cn/MIGUM2.0/v1.0/content/search_all.do`
+// 用 curl 测试过两个端点:`pd.musicapp.migu.cn/MIGUM2.0/v1.0/content/search_all.do`
 // 搜歌(带 `User-Agent` + `Referer: https://m.music.migu.cn/` 即可,不需要签名/登录),
 // 结果里每条直接给 `lyricUrl`(逐行 LRC 文件)和可选的 `trcUrl`(同一时间轴的中文译文
 // LRC,外语歌才有)——取词不用再多打一次接口,比酷我少一跳。
@@ -29,10 +29,10 @@ import (
 // 不信排序、按时长重新打分"——搜索结果里也没有时长字段可打——只套一遍跟别的源同一套
 // 身份闸(lyricTitleAccepted / lyricSourceArtistMatches / versionTagsMismatch)淘汰不对
 // 的,通过的保持咪咕原有顺序,取前几条并发拉词、按名次挑第一份真同步的。淘汰的必要性
-// 实测坐实:搜《稻香》第 4 条是 "周杰伦 - 稻香 / 稳重的牧牛铃"(用户上传的翻唱),歌手
+// 搜《稻香》第 4 条是 "周杰伦 - 稻香 / 稳重的牧牛铃"(用户上传的翻唱),歌手
 // 字段就不是周杰伦,身份闸能直接挡掉。
 //
-// LRC 文件本身有两处咪咕特有的形状(2026-09-04 实测):① 前四行是挂着 00:01～00:04
+// LRC 文件本身有两处咪咕特有的形状:① 前四行是挂着 00:01～00:04
 // 真时间戳的元数据行——"歌曲名 稻香 / 歌手名 周杰伦 / 作词：… / 作曲：…",不剥掉的话
 // 开头几秒会显示成歌词;前两行没有冒号,现有 creditLineRe / genericHanCreditLineRe
 // 都认不出来,所以在 miguStripMetaLines 里专门剥(作词/作曲那两行跟别的源一样留给
@@ -40,11 +40,11 @@ import (
 //
 // 没有时长字段(搜索结果只有码率/文件大小),sourceReportedDurationSecs 留 0 = 该项不
 // 参与打分,跟 amll 一样;`albums` 对不少曲目为空,专辑参与身份闸时按空处理。只有逐行,
-// 没有逐字(`mrcurl` 字段存在但实测样本里都是空的,格式也是加密的,先不碰)。
+// 没有逐字(`mrcurl` 字段存在但测试样本里都是空的,格式也是加密的,先不碰)。
 //
 // 合规提醒:这是网页/客户端接口、非公开 API 文档,"可能随时失效、要求验证码或发生变更"
 // ——跟 kuwo.go / musixmatch.go 同一类风险,不是新引入一种风险类别。healthcheck 走
-// enabledLyricSourceNames()(见 enrich.go lyricSourceNames),接进去自动被覆盖。
+// enabledLyricSourceNames(见 enrich.go lyricSourceNames),接进去自动被覆盖。
 type miguResult struct {
 	lyrics, tr, title, artist, album string
 	// cover:搜索结果自带 imgItems(三档尺寸),不用再多发请求——见 miguCoverURL。拿不到
@@ -78,7 +78,7 @@ func miguLyric(ctx context.Context, artist, title, album string, durationSecs fl
 	return r
 }
 
-// miguSearchItem 只挑了搜索响应 songResultData.result[] 里用得上的字段(2026-09-04 实测
+// miguSearchItem 只挑了搜索响应 songResultData.result[] 里用得上的字段(
 // 响应结构核实过)。
 type miguSearchItem struct {
 	Name        string `json:"name"`
@@ -134,7 +134,7 @@ func miguCoverURL(it miguSearchItem) string {
 }
 
 // miguSearch 请求搜索端点。searchSwitch 只开 song 一类,pageSize=10——身份闸淘汰后剩下
-// 的够挑;isCorrect=1 让咪咕自己纠一次错别字(实测不影响原版排第一)。
+// 的够挑;isCorrect=1 让咪咕自己纠一次错别字(测试不影响原版排第一)。
 func miguSearch(ctx context.Context, artist, title string) ([]miguSearchItem, error) {
 	q := strings.TrimSpace(artist + " " + title)
 	u := "https://pd.musicapp.migu.cn/MIGUM2.0/v1.0/content/search_all.do?text=" + neturl.QueryEscape(q) +

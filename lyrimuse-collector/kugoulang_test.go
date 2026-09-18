@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// 2026-09-02 接回酷狗 KRC `[language:<base64>]` 内嵌的译文 / 罗马音两轨。样本按当天直连接口
+// 接回酷狗 KRC `[language:<base64>]` 内嵌的译文 / 罗马音两轨。样本按当天直连接口
 // 看到的真实结构仿写(Lemon / Ditto 的形状,正文换成占位文字),钉住的是解析与对齐规则。
 
 func krcLanguageB64(t *testing.T, content []map[string]any) string {
@@ -71,7 +71,7 @@ func TestKRCLanguageTracksRejectLineCountMismatch(t *testing.T) {
 	}
 }
 
-// 韩文歌的 type 0 轨是中文谐音(实测 Ditto:「马列做 say it back」),不是罗马音——按汉字占比挡掉;
+// 韩文歌的 type 0 轨是中文谐音(测试 Ditto:「马列做 say it back」),不是罗马音——按汉字占比挡掉;
 // 译文轨不受影响。
 func TestKRCLanguageTracksDropHomophoneRomaTrack(t *testing.T) {
 	b64 := krcLanguageB64(t, []map[string]any{

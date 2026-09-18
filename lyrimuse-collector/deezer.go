@@ -18,24 +18,24 @@ import (
 	"time"
 )
 
-// deezerLyric 是歌词第十个候选来源(Deezer,2026-09-13 加)。跟 lyricfind(ytmusic.go)
+// deezerLyric 是歌词第十个候选来源(Deezer,)。跟 lyricfind(ytmusic.go)
 // **数据同源**:Deezer 的歌词由 LyricFind 供词、时间轴由 Deezer 自己做——接这一路的
 // 意义有两层:① 给 LyricFind 这家版权方补第二条管道(现在 lyricfind 只有 YouTube Music
 // 一条路,YTM 一改版或在某地区不可用,这家的数据就整体拿不到);② Deezer 是法国公司,
-// 法语曲库的覆盖比现有九源都好——接入实测见下。
+// 法语曲库的覆盖比现有九源都好——接入测试见下。
 //
-// 两段式(2026-09-13 逐段实测):
+// 两段式:
 //
 //	① 搜索走**公开** api.deezer.com/search —— 不需要认证,返回的 track 对象自带
 //	   id / title / title_version / duration / isrc / artist.name / album.title /
-//	   album.cover_xl(1000x1000)。字段是实测 dump 出来的,不是照文档猜的。
+//	   album.cover_xl(1000x1000)。字段是测试 dump 出来的,不是照文档猜的。
 //	② 取词走 **pipe.deezer.com 的 GraphQL**,认证用 auth.deezer.com/login/anonymous
 //	   换来的**匿名 JWT**(不需要账号、不需要 ARL、不碰用户登录态)。JWT 自带 exp,
-//	   实测有效期约 8 小时,进程级缓存 + 单飞锁(同 musixmatch token / ytmusic visitor id)。
+//	   测试有效期约 8 小时,进程级缓存 + 单飞锁(同 musixmatch token / ytmusic visitor id)。
 //	   响应 data.track.lyrics 里 synchronizedLines[] 是逐行(lrcTimestamp 形如
 //	   "[00:01.41]" + line),text 是整份纯文本。
 //
-// ⚠️ **别再走 gw-light.php 的 song.getLyrics —— 那条路已经废了**(2026-09-13 实测坐实,
+// ⚠️ **别再走 gw-light.php 的 song.getLyrics —— 那条路已经废了**(验证,
 // 这个源最初就是按它写的,错了一版)。它对**任何**歌都回
 // `{"DATA_ERROR":"No lyrics id for <id> and country XX"}`,错误文案里的国家极具误导性
 // ——第一眼会读成"这个国家没有歌词授权"。对照实验推翻了这个解读:换出口到 US 之后,
@@ -45,7 +45,7 @@ import (
 // 字段已经不再被填充,跟国家、跟登录与否都无关。公开实现 syncedlyrics 的 deezer provider
 // 至今标着 "Currently broken"、把病因归到 CSRF token,同样是被这条路带偏了。
 //
-// 实测覆盖(2026-09-13,匿名 JWT):Joseph Kamel《Crash》64 行、Zaho de Sagazan
+// 测试覆盖:Joseph Kamel《Crash》64 行、Zaho de Sagazan
 // 《Les dormantes》60 行、Hervé《Si bien du mal》22 行、Stromae《Alors on danse》61 行、
 // Aya Nakamura《Djadja》52 行、Adele《Hello》44 行 —— 前三首正是接入前"九源里只有
 // lrclib/netease 给得出低分候选"的法语小众歌。周杰伦《稻香》只有 584 字纯文本、没有
@@ -57,9 +57,9 @@ import (
 // 出自同一家。打分层的"跨源正文共识"按独立信源数给分,所以必须按**供词方**归组而不是按
 // 源名:见 match.go 的 lyricSourceConsensusFamily(deezer 与 lyricfind 归同一家)。不归组的
 // 后果有两个:两条管道互相印证各拿一份加分、第三方误以为有两家印证拿 +250。这条纪律
-// ytmusic.go 顶部早就写下了,2026-09-13 接这个源时从另一个方向又踩了一次。
+// ytmusic.go 顶部早就写下了,接这个源时从另一个方向又踩了一次。
 //
-// 只有逐行,没有逐字/译文/罗马音。搜索排序可信(原版排第一、acoustic 版排第二,实测),
+// 只有逐行,没有逐字/译文/罗马音。搜索排序可信(原版排第一、acoustic 版排第二,测试),
 // 所以跟 migu 一样不重排,只套跟别的源完全一致的身份闸;但 Deezer 的搜索结果**自带时长**,
 // 比 migu 多一道时长闸和时长加分(口径与 kuwo 一致,容差 0.25)。
 //
@@ -74,7 +74,7 @@ type deezerResult struct {
 	// durationSecs:Deezer 自报的曲长(秒),透传给打分的 sourceReportedDurationSecs。
 	durationSecs float64
 	// plainOnly:只拿到整份纯文本、没有 synchronizedLines —— 语义与取舍完全等同
-	// lrclibResult.plainOnly,见那边的头注(分数钉死 -1,只有用户在弹窗里手点才会采用)。
+	// lrclibResult.plainOnly,见那边的头注(分数固定 -1,只有用户在弹窗里手点才会采用)。
 	plainOnly bool
 }
 
@@ -90,7 +90,7 @@ const (
 	// 就是第一条,3 条足够覆盖"第一条恰好没词"的情况——理由同 migu,不必像 kuwo 拉 5 条。
 	deezerMaxCandidatesToFetch = 3
 	deezerHTTPTimeout          = 6 * time.Second
-	// deezerJWTFallbackTTL:JWT 里解不出 exp 时的保守有效期。实测 exp 给的是 ~8 小时,
+	// deezerJWTFallbackTTL:JWT 里解不出 exp 时的保守有效期。测试 exp 给的是 ~8 小时,
 	// 这里只在解析失败时兜底,宁可多换几次也不要拿着过期的票反复被拒。
 	deezerJWTFallbackTTL = time.Hour
 	// deezerJWTRenewMargin:提前这么久就当它过期,免得卡在边界上换票。
@@ -137,7 +137,7 @@ func deezerSetLastFailureReason(reason string) {
 }
 
 // deezerLastFailureReasonNow 供 search-lyrics / test-lyric-sources 用——本次进程里最近
-// 一次识别出的具体失败原因,识别不出就是空串。⚠️ 目前**只有一种**已实测的失败模式:
+// 一次识别出的具体失败原因,识别不出就是空串。⚠️ 目前**只有一种**已测试的失败模式:
 // 匿名 JWT 换不到(auth 端点不答或改了形状)。"这首歌没有歌词"(LyricsNotFoundError)
 // 不算失败,不往这里记 —— 那是正常结果,报上去会让用户以为源坏了。
 func deezerLastFailureReasonNow() string {
@@ -167,7 +167,7 @@ func deezerLyric(ctx context.Context, artist, title, album string, durationSecs 
 	return r
 }
 
-// deezerTrack 只挑这一路真正用得上的字段,字段名与 2026-09-13 实测 dump 的一致。
+// deezerTrack 只挑这一路真正用得上的字段,字段名与  dump 的一致。
 type deezerTrack struct {
 	ID           int64  `json:"id"`
 	Title        string `json:"title"`
@@ -324,7 +324,7 @@ func deezerClearJWT() {
 }
 
 // deezerFetchJWT 真的去换一张匿名票。拿不到时记下具体失败原因 —— 这是这一路目前**唯一**
-// 实测见过的失败模式(取词本身失败只会是"这首没有歌词",那不算源不可用)。
+// 测试见过的失败模式(取词本身失败只会是"这首没有歌词",那不算源不可用)。
 func deezerFetchJWT(ctx context.Context) string {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, deezerAuthAPI, nil)
 	if err != nil {
@@ -355,7 +355,7 @@ func deezerFetchJWT(ctx context.Context) string {
 	return strings.TrimSpace(out.JWT)
 }
 
-// deezerSyncLine 是 synchronizedLines 的一个元素(2026-09-13 实测形状)。
+// deezerSyncLine 是 synchronizedLines 的一个元素。
 type deezerSyncLine struct {
 	LRCTimestamp string `json:"lrcTimestamp"` // "[00:01.41]"
 	Line         string `json:"line"`
@@ -379,7 +379,7 @@ func deezerBuildLRC(lines []deezerSyncLine) string {
 	return b.String()
 }
 
-// deezerIsLyricsNotFound 认 GraphQL 的"这首歌没有歌词"错误。2026-09-13 实测原文:
+// deezerIsLyricsNotFound 认 GraphQL 的"这首歌没有歌词"错误。原文:
 // {"message":"Lyrics does not exists","type":"LyricsNotFoundError",…}。这是**正常结果**
 // 不是失败 —— 调用方据此安静返回空,不记失败原因、不惊动熔断。纯函数,便于单测。
 func deezerIsLyricsNotFound(errs string) bool {

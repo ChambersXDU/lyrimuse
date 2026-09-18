@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
 
-// 用户那首的真实形状(2026-09-08 iTunes Search 实测):YT Music MV「王子 - Why You Wanna Treat Me So Bad?」230.1s、
+// 用户那首的真实形状:YT Music MV「王子 - Why You Wanna Treat Me So Bad?」230.1s、
 // album 空;US 商店回 Prince「Prince」「The Hits/The B-Sides」(曲目级 releaseDate 都是 1979-10-19,只有专辑级日期
 // 分得开)、Tuesday Knight 的翻唱、几条时长差很多的翻唱;CN 商店对一切查询回空。
 func princeResults() []itunesResult {
@@ -51,7 +52,7 @@ func TestAlbumHintCandidatesFromResults(t *testing.T) {
 	}
 }
 
-// TestPickAppleAlbumHint:挑选规则。专辑级发行日期是从 lookup 补上的(实测「Prince」1979-10-19,
+// TestPickAppleAlbumHint:挑选规则。专辑级发行日期是从 lookup 补上的(测试「Prince」1979-10-19,
 // 「The Hits/The B-Sides」1993-09-13,「Tuesday Knight (2018 Remaster)」1987-05-27)。
 func TestPickAppleAlbumHint(t *testing.T) {
 	cands := albumHintCandidatesFromResults(princeResults(), "Why You Wanna Treat Me So Bad?", 230.121)
@@ -87,7 +88,7 @@ func TestPickAppleAlbumHint(t *testing.T) {
 }
 
 func TestPickAppleAlbumHintRanking(t *testing.T) {
-	// Seal《Kiss from a Rose》实测形状:原专辑「Seal II」(1994-05-31)、同专辑豪华版「Seal (Deluxe Edition)」
+	// Seal《Kiss from a Rose》测试形状:原专辑「Seal II」(1994-05-31)、同专辑豪华版「Seal (Deluxe Edition)」
 	// (1994-05-23,比原版还早一周)、精选「Seal: Best 1991-2004」(2004)、「Seal: Hits」(2009)。
 	seal := []albumHintCandidate{
 		{Artist: "Seal", Album: "Seal: Best 1991-2004 (Deluxe Version)", AlbumRelease: "2004-11-08T08:00:00Z", Order: 0},
@@ -223,7 +224,7 @@ func TestAppleAlbumHintHelpers(t *testing.T) {
 	}
 }
 
-// ---- 2026-09-08 晚:封面解析按回填专辑名打分(03 章决策 16) ----
+// ---- :封面解析按回填专辑名打分(03 章决策 16) ----
 
 func TestCoverNeedsHintCheck(t *testing.T) {
 	apple := enrichEntry{CoverURL: "https://is1-ssl.mzstatic.com/x.jpg", CoverSource: "apple", CoverAlbum: "The Hits/The B-Sides"}
@@ -441,7 +442,7 @@ func TestAlbumHintTitleSplit(t *testing.T) {
 	}
 }
 
-// buddyResults 是 2026-09-11 对「Musiq Soulchild Buddy」的 US 商店实测形状(录音室版都是 223.8s)。
+// buddyResults 是 对「Musiq Soulchild Buddy」的 US 商店测试形状(录音室版都是 223.8s)。
 func buddyResults() []itunesResult {
 	return []itunesResult{
 		{TrackName: "B.U.D.D.Y.", ArtistName: "Musiq Soulchild", CollectionName: "Luvanmusiq", CollectionID: 1, TrackTimeMillis: 223800, ReleaseDate: "2007-03-13T07:00:00Z"},
@@ -501,3 +502,52 @@ func TestPickAppleAlbumHintTitleArtist(t *testing.T) {
 		t.Fatalf("TitleArtist 与署名不符不该采, got %q", got)
 	}
 }
+
+func TestAppleAlbumHintSyncChannelCoordination(t *testing.T) {
+	savedCache, savedMisses, savedInflight, savedWaiters, savedLogged :=
+		appleAlbumHintCache, appleAlbumHintMisses, appleAlbumHintInflight, appleAlbumHintWaiters, appleAlbumHintLogged
+	defer func() {
+		appleAlbumHintCache, appleAlbumHintMisses, appleAlbumHintInflight, appleAlbumHintWaiters, appleAlbumHintLogged =
+			savedCache, savedMisses, savedInflight, savedWaiters, savedLogged
+	}()
+
+	key := appleAlbumHintKey("TestArtist", "TestTitle", 200)
+	appleAlbumHintCache = map[string][]albumHintCandidate{}
+	appleAlbumHintMisses = map[string]int{}
+	appleAlbumHintInflight = map[string]bool{key: true}
+	waitCh := make(chan struct{})
+	appleAlbumHintWaiters = map[string]chan struct{}{key: waitCh}
+	appleAlbumHintLogged = map[string]string{}
+
+	ctx := t.Context()
+	const numWaiters = 5
+	results := make([]string, numWaiters)
+	var wg sync.WaitGroup
+
+	for i := 0; i < numWaiters; i++ {
+		wg.Add(1)
+		idx := i
+		go func() {
+			defer wg.Done()
+			results[idx] = appleAlbumHintSync(ctx, "TestArtist", "TestTitle", 200, nil)
+		}()
+	}
+
+	// Give goroutines time to park on waitCh
+	time.Sleep(50 * time.Millisecond)
+
+	// Simulate background completion
+	testCands := []albumHintCandidate{
+		{Artist: "TestArtist", Album: "ExpectedAlbum"},
+	}
+	storeAppleAlbumHintResult(key, testCands, true)
+
+	wg.Wait()
+
+	for i, res := range results {
+		if res != "ExpectedAlbum" {
+			t.Errorf("waiter %d got %q, want ExpectedAlbum", i, res)
+		}
+	}
+}
+

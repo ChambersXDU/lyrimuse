@@ -6,7 +6,7 @@ import (
 )
 
 // 电台曲内时钟:换歌归零、播放中按墙钟走、暂停冻结、单拍有上限。
-// 实测背景见 radioclock.go 头注(位置换歌不复位,实测偏了 304 秒)。
+// 测试背景见 radioclock.go 头注(位置换歌不复位,测试偏了 304 秒)。
 func TestAdvanceRadioClock(t *testing.T) {
 	base := time.Date(2026, 9, 10, 7, 15, 35, 0, time.UTC)
 	// 第一次见:归零起表。
@@ -20,7 +20,7 @@ func TestAdvanceRadioClock(t *testing.T) {
 	if s.position != 10 {
 		t.Fatalf("playing should accumulate wall clock, got %.3f want 10", s.position)
 	}
-	// 换歌:归零 —— 这正是系统那块表不做的事(实测 07:20:39 换歌位置照旧往上走)。
+	// 换歌:归零 —— 这正是系统那块表不做的事(测试 07:20:39 换歌位置照旧往上走)。
 	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(11*time.Second))
 	if s.position != 0 || s.trackKey != "Clairo|Juna" {
 		t.Fatalf("track change must reset to 0, got %+v", s)
@@ -39,7 +39,7 @@ func TestAdvanceRadioClock(t *testing.T) {
 		t.Fatalf("pause must freeze the position, got %.3f", s.position)
 	}
 	// ⚠️ 回归守卫:恢复那一拍**绝不能**把整段暂停间隔算成播放时间。按"这一拍在播"累加的老写法
-	// 会在这里跳到 12+97=109 —— 用户实测的 3.5~5.8 秒前跳就是这么来的。
+	// 会在这里跳到 12+97=109 —— 用户测试的 3.5~5.8 秒前跳就是这么来的。
 	s = advanceRadioClock(s, "Clairo|Juna", true, base.Add(125*time.Second))
 	if s.position != 12 {
 		t.Fatalf("resume must not count the paused span, got %.3f want 12", s.position)
@@ -97,7 +97,7 @@ func TestApplyRadioClockOnlyTouchesRadio(t *testing.T) {
 	}
 }
 
-// extract():电台的 duration 当未知,普通播放原样保留。
+// extract:电台的 duration 当未知,普通播放原样保留。
 func TestExtractRadioDuration(t *testing.T) {
 	radioState := map[string]any{
 		"title": "Juna", "artist": "Clairo", "bundleIdentifier": "com.apple.Music",
@@ -128,7 +128,7 @@ func TestExtractRadioDuration(t *testing.T) {
 
 // mergeRadioKeys:AppleScript 那份 state 拿不到 MediaRemote 独有的两个键,靠 media-control
 // 那份 raw 补。两条路共用它(refineAppleMusicState 走 auto / 多选,getAppleMusicOnlyState
-// 走"只勾了 Apple Music")—— 后者 2026-09-11 之前根本不问 media-control,电台整层不生效。
+// 走"只勾了 Apple Music")—— 后者 之前根本不问 media-control,电台整层不生效。
 func TestMergeRadioKeys(t *testing.T) {
 	// 电台 + 目录已经给出权威曲长:两个键都补进去,AppleScript 自己的字段一个不动。
 	state := map[string]any{"title": "Juna", "artist": "Clairo", "duration": 3390.1220703125}
@@ -146,7 +146,7 @@ func TestMergeRadioKeys(t *testing.T) {
 	}
 
 	// 电台但目录还没查到(异步,刚换歌那几拍就是 0):只补判据,**不**把 0 当成曲长写进去 ——
-	// 写了会让 extract() 把"未知"当成事实,而下一拍目录到位了也没人回头改。
+	// 写了会让 extract 把"未知"当成事实,而下一拍目录到位了也没人回头改。
 	state = map[string]any{"title": "Juna", "duration": 3390.122}
 	mergeRadioKeys(state, map[string]any{"radioStationHash": "CgkIBRoFwOSKqxkQBA", "catalogDurationSecs": 0.0})
 	if state["radioStationHash"] != "CgkIBRoFwOSKqxkQBA" {
@@ -157,7 +157,7 @@ func TestMergeRadioKeys(t *testing.T) {
 	}
 
 	// 不是电台:一个字段都不许动。AppleScript 的 duration 精度比目录高
-	// (实测 289.7659912109375 vs 289.766),拿目录值去盖是降精度。
+	// (测试 289.7659912109375 vs 289.766),拿目录值去盖是降精度。
 	state = map[string]any{"title": "Fushigi", "duration": 289.7659912109375}
 	mergeRadioKeys(state, map[string]any{"radioStationHash": "", "catalogDurationSecs": 289.766})
 	if len(state) != 2 || state["duration"] != 289.7659912109375 {
@@ -167,9 +167,9 @@ func TestMergeRadioKeys(t *testing.T) {
 
 // borrowAppleScriptPosition:电台一律不借 AppleScript 那份播放头。
 //
-// 2026-09-11 修的真实缺陷 —— 借过来会把 applyRadioClock 刚换好的单曲表覆盖成整档节目的位置,
+// 的真实缺陷 —— 借过来会把 applyRadioClock 刚换好的单曲表覆盖成整档节目的位置,
 // 下一拍必然命中单曲循环判定、会话每 5 秒被重建一次,playedSecs 永远涨不过一拍,于是电台上
-// 一条收听都提交不了(实测 4.5 小时里 loop restart 2397 次、listen recorded 只有 4 条)。
+// 一条收听都提交不了(测试 4.5 小时里 loop restart 2397 次、listen recorded 只有 4 条)。
 // Swift 侧同义的闸在 refinedAppleMusicSnapshotIfNeeded,两边必须同时成立。
 func TestBorrowAppleScriptPosition(t *testing.T) {
 	const am = appleMusicBundleID
@@ -197,7 +197,7 @@ func TestBorrowAppleScriptPosition(t *testing.T) {
 
 // needsRadioDurationBackfill:电台真曲长比会话起点晚到,要补进 sess.meta。
 //
-// 2026-09-11 修 borrowAppleScriptPosition 之后剩下的第二道闸。实测 Dolly Parton《Dumb Blonde》:
+//  borrowAppleScriptPosition 之后剩下的第二道闸。测试 Dolly Parton《Dumb Blonde》:
 // 会话 20:15:45.030 建立、Apple 目录 20:15:49.740 才给出 150.447s,晚 4.7 秒;sess.meta 是会话
 // 创建那一刻的快照,不补的话 listenThreshold 拿到 0 → 退回 240s 上限 → 150 秒的歌永远够不着。
 func TestNeedsRadioDurationBackfill(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 // 报错、selftest 也不报错,只会在用户界面上印一个英文串出来 —— 2026-08 已经为此翻过两次车
 // (决策 path "manual-rematch"、打分项 "sourceDurationOff")。
 //
-// queryReasonLabel 的 default 同样是 `return reason ?? ""`,所以这一类从加进来的第一天就钉死。
+// queryReasonLabel 的 default 同样是 `return reason ?? ""`,所以这一类从加进来的第一天就固定。
 func TestLyricQueryReasonsHaveChineseLabels(t *testing.T) {
 	const sheet = "../lyrimuse/Sources/lyrimuse/LyricsManager/LyricsDecisionSheet.swift"
 	data, err := os.ReadFile(sheet)
@@ -39,13 +39,13 @@ func TestLyricQueryReasonsHaveChineseLabels(t *testing.T) {
 				"不补的话界面上会直接把这个英文串印给用户看", reason, needle)
 		}
 	}
-	// 首轮那一档取值是空串,单独钉一次:它不在 lyricQueryReasons() 里(那份清单刻意不含空串),
-	// 但界面上必须有话说 —— 缺了它 default 会回一个空字符串,渲染成「歌手 - 曲名（）」。
+	// 首轮那一档取值是空串,单独钉一次:它不在 lyricQueryReasons 里(那份清单刻意不含空串),
+	// 但界面上必须有话说 —— 缺了它 default 会回一个空字符串,渲染成「歌手 - 曲名」。
 	if !strings.Contains(body, `case "":`) {
 		t.Error(`queryReasonLabel 缺 case ""(首轮)—— 没有它首轮那一行会渲染成「歌手 - 曲名（）」`)
 	}
 
-	// 反方向:Swift 写了译名、Go 这边没登记进 lyricQueryReasons(),说明清单漏了。
+	// 反方向:Swift 写了译名、Go 这边没登记进 lyricQueryReasons,说明清单漏了。
 	for _, line := range strings.Split(body, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, `case "`) {

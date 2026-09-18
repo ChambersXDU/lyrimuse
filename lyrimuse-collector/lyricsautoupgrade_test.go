@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-// 「自动跟进算法升级」这个开关(2026-09-03 用户要求:「控制是否会有自动按照最新版本的算法
+// 「自动跟进算法升级」这个开关(用户要求:「控制是否会有自动按照最新版本的算法
 // 优化调整歌词的能力;开了就是现状,不开就是一开始选了什么就不会后台自动给换了」)。
 //
-// 闸门只加在**换掉已有歌词**的两条路径上,这组断言把"该挡的挡住、不该挡的一个都别挡"钉死:
+// 闸门只加在**换掉已有歌词**的两条路径上,这组断言把"该挡的挡住、不该挡的一个都别挡"固定:
 // 关掉之后重打分和升级重搜都不该发生,而首次填充(needsLyricsFirstFill)必须照常 —— 那是
 // "这首歌一条歌词都没有",不属于"把用户已经拿到的那份换掉"。
 func TestLyricsAutoUpgradeGate(t *testing.T) {
@@ -22,9 +22,9 @@ func TestLyricsAutoUpgradeGate(t *testing.T) {
 	}
 
 	// 有源当初缺席、且已过节流窗口 → 开着时该升级重搜(构造方式照 lyricsretry_test.go 那组)
-	savedFeatures := features
-	defer func() { features = savedFeatures }()
-	features.LyricsSources = map[string]bool{"netease": true, "qq": true, "lrclib": true}
+	savedFeatures := getFeaturesLyricsSources()
+	defer func() { setFeaturesLyricsSources(savedFeatures) }()
+	setFeaturesLyricsSources(map[string]bool{"netease": true, "qq": true, "lrclib": true})
 	long := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1
 	missed := enrichEntry{Lyrics: "[00:01.00]x", LyricsSourcesSeen: []string{"lrclib"}, TS: long}
 	if !needsLyricsRetry(missed, false, false, true) {

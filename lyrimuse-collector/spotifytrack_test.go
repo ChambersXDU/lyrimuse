@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// Spotify 真曲目 ID(2026-09-09):URI 解析、真链接派生、提示表消费、LB 标准字段。
+// Spotify 真曲目 ID:URI 解析、真链接派生、提示表消费、LB 标准字段。
 // 全是纯函数 / 内存表,不碰网络与磁盘。
 
 func TestSpotifyTrackIDFromURI(t *testing.T) {
@@ -45,7 +45,7 @@ func TestSpotifyLinkPrefersTrackID(t *testing.T) {
 	if (enrichEntry{}).spotifyLink() != "" {
 		t.Fatal("两者都没有时是空串")
 	}
-	// fields() 是 relay / LB 读的那份:spotify_url 走 spotifyLink,spotify_track_id 原样带出。
+	// fields 是 relay / LB 读的那份:spotify_url 走 spotifyLink,spotify_track_id 原样带出。
 	f := e.fields()
 	if f["spotify_url"] != "https://open.spotify.com/track/7HuBDWi18s4aJM8UFnNheH" || f["spotify_track_id"] != "7HuBDWi18s4aJM8UFnNheH" {
 		t.Fatalf("fields() 里的 spotify_url / spotify_track_id 不对: %v", f)

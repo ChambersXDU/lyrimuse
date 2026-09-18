@@ -10,7 +10,7 @@ import (
 // 自相矛盾的行为。改动任一侧都要同步改另一侧和这两组断言。
 func TestLastfmEscape(t *testing.T) {
 	cases := []struct{ in, want string }{
-		// 实测:只有 %252B 这一串能命中《夜曲+窃爱 (Live)》(userplaycount=2),
+		// 测试:只有 %252B 这一串能命中《夜曲+窃爱 (Live)》(userplaycount=2),
 		// 标准编码的 %2B 返回 error 6 Track not found。
 		{"夜曲+窃爱 (Live)", "%E5%A4%9C%E6%9B%B2%252B%E7%AA%83%E7%88%B1%20%28Live%29"},
 		{"+44", "%252B44"},   // 真实乐队,端点级行为的独立验证样本

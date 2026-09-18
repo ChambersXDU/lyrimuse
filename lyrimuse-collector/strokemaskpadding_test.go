@@ -9,7 +9,7 @@ import (
 
 // 描边剪影必须跟被描边的内容吃同一道 padding —— 源码守卫。
 //
-// 2026-08-23 的真 bug:`OptionalTextStroke` 把 content 先 `.padding(width*2)` 再用
+// 的真 bug:`OptionalTextStroke` 把 content 先 `.padding(width*2)` 再用
 // Canvas 画剪影,而 Canvas 是**居中**绘制剪影的,只有"剪影与 content 在 canvas 里占同一块
 // 矩形"时才逐点对齐。原来 symbols 里的剪影没有那道 padding:
 //
@@ -19,7 +19,7 @@ import (
 //
 // 居中排版(非对唱歌)时两边各差一半、抵消掉,完全看不出来;一旦按 leading/trailing 靠边
 // (对唱歌的左右声部),文字各自贴在自己矩形的边上,偏移 width*2 = 2.4pt —— 而描边本身才
-// 1.2pt,整圈描边甩到一侧。实测探针:修前 canvas=323 symbol=323(内部差 2.4)、普通行差 5.0;
+// 1.2pt,整圈描边甩到一侧。测试探针:修前 canvas=323 symbol=323(内部差 2.4)、普通行差 5.0;
 // 修后全部同框(差 0.2,取整误差)。
 //
 // 这个 bug 用 selftest 覆盖不了(纯 SwiftUI 布局行为,没有可抽出的几何函数),只能钉源码:

@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-// 2026-08-05 用户反馈坐实的真实 bug 的回归测试:「打开 Music 时顺带启动 Lyrimuse」在
+// 处理验证的真实 bug 的回归测试:「打开 Music 时顺带启动 Lyrimuse」在
 // Lyrimuse 已经在跑的情况下仍然去 `open`,而那不是空操作 —— 会让设置窗口自己弹出来,
 // 甚至起出第二个 App 实例。详见 shouldCompanionLaunch 的注释。
 func TestShouldCompanionLaunch(t *testing.T) {
@@ -38,8 +38,8 @@ func TestShouldCompanionLaunch(t *testing.T) {
 	}
 }
 
-// 2026-08-22 加的回归测试:酷狗当初接进 collector 时(system.go / features.go 都补了
-// playerKugou)漏了 companionLaunch 这一路 —— playerProcessName() 的 switch 没有 kugou
+// 的回归测试:酷狗当初接进 collector 时(system.go / features.go 都补了
+// playerKugou)漏了 companionLaunch 这一路 —— playerProcessName 的 switch 没有 kugou
 // 分支,落进 `default: return "Music"`,于是**选了酷狗的用户,这个联动实际在盯 Music.app**:
 // 打开酷狗不会唤起 Lyrimuse,反倒是打开 Apple Music 会。knownPlayerProcessNames 同样漏了
 // 它,连"自动识别"档也盖不住。
@@ -56,8 +56,8 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 		{playerNetease, "NeteaseMusic"},
 		{playerSpotify, "Spotify"},
 		// 可执行文件名是中文:/Applications/酷狗音乐.app 的 CFBundleExecutable 就是这个
-		// (PlistBuddy 实测)。UTF-8 下 12 字节,没超过内核 p_comm 的 16 字节上限,
-		// `pgrep -x` 能精确匹配(2026-08-22 拿中文名进程实测过)。
+		// (PlistBuddy 测试)。UTF-8 下 12 字节,没超过内核 p_comm 的 16 字节上限,
+		// `pgrep -x` 能精确匹配。
 		{playerKugou, "酷狗音乐"},
 	}
 	for _, c := range cases {
@@ -67,7 +67,7 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 	}
 
 	// 多选年代同一个道理:选中集合里每个成员各自的进程名都要出现在
-	// companionLaunchProcessNames() 的结果里,不能只盯着某一个。
+	// companionLaunchProcessNames 的结果里,不能只盯着某一个。
 	features.Players = map[string]bool{playerQQMusic: true, playerKugou: true}
 	multi := companionLaunchProcessNames()
 	for _, want := range []string{"QQMusic", "酷狗音乐"} {
@@ -112,7 +112,7 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 	}
 }
 
-// 2026-09-03「跟随播放器启动」逐播放器勾选:勾选集合与候选(选中集合 / auto 全量)取交,键缺失退回旧语义。
+// 「跟随播放器启动」逐播放器勾选:勾选集合与候选(选中集合 / auto 全量)取交,键缺失退回旧语义。
 func TestCompanionLaunchProcessNamesHonorsChosenPlayers(t *testing.T) {
 	defer func() {
 		features.Players = map[string]bool{playerAuto: true}
@@ -159,3 +159,54 @@ func TestCompanionLaunchProcessNamesHonorsChosenPlayers(t *testing.T) {
 		t.Errorf("nil 应原样透传(表示键缺失), got %v", got)
 	}
 }
+
+func TestBatchRunningProcesses(t *testing.T) {
+	ctx := t.Context()
+
+	// Empty candidate list should return empty map immediately
+	emptyRes, err := batchRunningProcesses(ctx, nil)
+	if err != nil {
+		t.Fatalf("batchRunningProcesses with nil failed: %v", err)
+	}
+	if len(emptyRes) != 0 {
+		t.Fatalf("batchRunningProcesses with nil returned non-empty map: %v", emptyRes)
+	}
+
+	// Non-existent process names should return empty map (all false) without error
+	bogusNames := []string{"NonExistentProc_12345", "AnotherNonExistentProc_67890"}
+	res, err := batchRunningProcesses(ctx, bogusNames)
+	if err != nil {
+		t.Fatalf("batchRunningProcesses with bogus names failed: %v", err)
+	}
+	for _, name := range bogusNames {
+		if res[name] {
+			t.Errorf("expected %s to be false, got true", name)
+		}
+	}
+}
+
+func TestCheckCompanionLaunchBypass(t *testing.T) {
+	ctx := t.Context()
+	savedEnabled := features.LaunchLyrimuseOnMusicOpen
+	savedLastRunning := lastRunningByName
+	savedWasEnabled := wasCompanionEnabled
+	defer func() {
+		features.LaunchLyrimuseOnMusicOpen = savedEnabled
+		lastRunningByName = savedLastRunning
+		wasCompanionEnabled = savedWasEnabled
+	}()
+
+	// When LaunchLyrimuseOnMusicOpen is false, checkCompanionLaunch must bypass
+	features.LaunchLyrimuseOnMusicOpen = false
+	lastRunningByName = map[string]bool{"Music": true}
+	wasCompanionEnabled = true
+
+	checkCompanionLaunch(ctx)
+	if len(lastRunningByName) != 0 {
+		t.Errorf("checkCompanionLaunch when disabled should clear lastRunningByName, got: %v", lastRunningByName)
+	}
+	if wasCompanionEnabled {
+		t.Errorf("checkCompanionLaunch when disabled should set wasCompanionEnabled to false")
+	}
+}
+

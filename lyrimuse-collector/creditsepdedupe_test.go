@@ -2,9 +2,9 @@ package main
 
 import "testing"
 
-// 合 credit 分隔符必须参与宽松比对(2026-08-20)。
+// 合 credit 分隔符必须参与宽松比对。
 //
-// 实测形态:同一次播放里两条路径对多歌手串的写法系统性不同 —— 播放器(media-control)
+// 测试形态:同一次播放里两条路径对多歌手串的写法系统性不同 —— 播放器(media-control)
 // 报 `VALORANT/Grabbitz/bbno$`,专辑预取从 Apple Music 自己的曲目表(AppleScript
 // `artist of t`)拿到的是 `VALORANT & Grabbitz & bbno$`。缓存里因此长出 12 组、24 条
 // 只差分隔符的重复条目(Arcane 原声带 / VALORANT / K/DA 这些多歌手曲目),两条相隔只有

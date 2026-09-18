@@ -165,3 +165,19 @@ func TestIsDaemonInvocation(t *testing.T) {
 		t.Fatalf("a subcommand must not count as daemon")
 	}
 }
+
+func TestLogSinkMaintenanceLoop_StopsCleanly(t *testing.T) {
+	stopCh := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		logSinkMaintenanceLoop(stopCh)
+		close(done)
+	}()
+	close(stopCh)
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("logSinkMaintenanceLoop did not stop after stopCh was closed")
+	}
+}
+

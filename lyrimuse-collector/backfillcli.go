@@ -21,7 +21,7 @@ import (
 //     不可删除的数据,必须由人按下按钮
 //   - 常驻进程每次设置变更都会被 kickstart 重启,把一个跨分钟级的批量任务挂在它身上,
 //     随时可能被拦腰打断;子命令的生命周期由这次点击决定,清楚得多
-//   - dry-run 能在不发任何请求的前提下先给用户报数
+//   - dry-run 能在不发任何请求的前提下先给处理数
 func runBackfillLastfmCLI(args []string) {
 	fs := flag.NewFlagSet("backfill-lastfm", flag.ExitOnError)
 	dryRun := fs.Bool("dry-run", false, "count what would be submitted without sending anything")
@@ -35,7 +35,7 @@ func runBackfillLastfmCLI(args []string) {
 	cfgDir := configDir()
 	cfgPath := filepath.Join(cfgDir, "config.json")
 
-	// 跟 searchcli.go 同一个理由:这条子命令走的是 main() 里那串提前 return 分支,
+	// 跟 searchcli.go 同一个理由:这条子命令走的是 main 里那串提前 return 分支,
 	// 包级变量 features / listenLogPath 此刻都还是零值,必须自己按同样的路径规则装一遍。
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
 	// 只记路径、**不做压缩**:压缩会重写整份日志,而这条命令可能与常驻 collector 的

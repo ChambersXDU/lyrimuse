@@ -10,9 +10,9 @@ import (
 
 // LRC↔YRC 时间轴自洽修复。
 //
-// 起因(2026-08-27,用户报《Rumour Has It》"明显进度对不上"):Musixmatch 在同一个
+// 起因:Musixmatch 在同一个
 // track_id 下挂着两份**不同年份做的、互不兼容**的资产 —— track.subtitle.get 那份
-// 行级 LRC(2023-01-29 制,自报 215s)与 track.richsync.get 那份逐字(2026-06-21 制,
+// 行级 LRC(2023-01-29 制,自报 215s)与 track.richsync.get 那份逐字(制,
 // 自报 232s),曲长实际 223.3s。实调把两边原始 body 拉回来比 sha256,证实都是上游原样
 // 落库、我们零清洗 —— 坏的是上游数据本身。
 //
@@ -24,7 +24,7 @@ import (
 //
 // 为什么是"修数据"而不是"改打分":
 //
-//	实测本机 86 条 musixmatch 双轴条目,LRC 与 YRC **逐行文本 100% 相同、行数 100% 相同**
+//	测试本机 86 条 musixmatch 双轴条目,LRC 与 YRC **逐行文本 100% 相同、行数 100% 相同**
 //	—— subtitle.get 那一趟请求除了带回一份坏时间轴,没提供任何 richsync 没有的信息。
 //	既然文本一一对应,直接把行级时间戳换成逐字轴的行起点即可,不必换源、不必动打分,
 //	因此**不需要 bump lyricsScoringVersion**(全库不会被拖去重跑全源检索)。
@@ -37,7 +37,7 @@ import (
 //	netease 只有 24/568 满足 —— 它的两份是**根本不同的资产**(LRC 常带署名行、行数对不上),
 //	对它重挂会挂错,判据会自动放弃。
 //
-// ⚠️ "以逐字轴为准"不是无条件成立的,必须带安全闸:消融过程中抓到反例
+// ⚠️ "以逐字轴为准"不是无条件成立的,必须带安全闸:消融过程中匹配到反例
 // MJ《Rock With You (Single Version)》—— 两套轴同样打架,但坏的是 **YRC** 那边,重挂后
 // 末句从 176.1s 跳到 216.6s,而曲长只有 204.2s,歌词尾巴反而甩出曲目 12 秒。全库 516 条
 // 可判时长的条目里正好有这么 1 条会被改坏,闸把它挡住了。
@@ -52,7 +52,7 @@ type yrcLineHead struct {
 //
 // ⚠️ 抓词文本只能用"把词标记整体删掉、剩下的就是文本",不能用
 // `\((\d+),(\d+),\d+\)([^(]*)` 这种"标记后面跟非左括号"的写法 —— 歌词正文里本来就有
-// 字面左括号(和声/伴唱标注),`[^(]*` 会在它那里截断。实测《Rumour Has It》第 14 行
+// 字面左括号(和声/伴唱标注),`[^(]*` 会在它那里截断。测试《Rumour Has It》第 14 行
 // `(59954,1182,0)(rumour)` 会被解析成空串,整行从 "Rumour has it (rumour)" 缩成
 // "Rumour has it",于是与 LRC 侧字面对不上,本该重挂的条目被静默放弃。
 func yrcLineHeads(yrc string) []yrcLineHead {
@@ -79,7 +79,7 @@ func yrcLineHeads(yrc string) []yrcLineHead {
 	return out
 }
 
-// normTimelineText 是配对用的归一化 —— 繁转简(实测有条目 LRC 繁体、YRC 简体,不归一化
+// normTimelineText 是配对用的归一化 —— 繁转简(测试有条目 LRC 繁体、YRC 简体,不归一化
 // 配对数直接 0)、小写、只留字母/数字/汉字/假名(unicode.IsLetter 同时覆盖三者)。
 func normTimelineText(s string) string {
 	s = toSimplified(strings.ToLower(s))
@@ -180,7 +180,7 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 	// ⚠️ 判"要不要改"必须带容差,不能直接比毫秒:输出格式 [mm:ss.xx] 只到百分秒,
 	// 18315ms 写出去是 [00:18.31]、读回来就成了 18310ms。按精确相等判的话,重挂过的
 	// 内容每次读回都还差那 5ms,启动期迁移会**每次开机都重写一遍整份缓存**(单测
-	// TestRehangLRCOnYRCIdempotent 抓到的就是这个)。容差取 10ms = 一个百分秒位。
+	// TestRehangLRCOnYRCIdempotent 匹配到的就是这个)。容差取 10ms = 一个百分秒位。
 	const stampQuantMs = 10
 	changed := false
 	for i := range oldMs {
@@ -198,7 +198,7 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 	}
 	// ⚠️ 只替换内容行的时间戳,**原样保留**元数据行([ti:]/[ar:]/[al:]/[by:])与空行。
 	// 打分的 lines 项按 len(strings.Split(lyrics,"\n")) 计分(match.go),把元数据行和
-	// 空行也数进去 —— 按内容行重新生成整个文件会把它们丢掉,实测会让全库最干净的 kugou
+	// 空行也数进去 —— 按内容行重新生成整个文件会把它们丢掉,测试会让全库最干净的 kugou
 	// 集体掉分被 qq 反超(消融里假翻盘 175 条)。修数据的改动只动该动的那一维。
 	out := make([]string, len(lines))
 	copy(out, lines)
@@ -215,7 +215,7 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 	}
 	if guard {
 		// 曲长未知时**放弃重挂**:闸校验不了,就没法保证"改完不会更坏"。
-		// 实测本机 41 条候选里有 22 条属于这种(从没真正播放过、缓存里没记时长),其中
+		// 测试本机 41 条候选里有 22 条属于这种(从没真正播放过、缓存里没记时长),其中
 		// 《大内低手》重挂后末句会从 190.31s 缩到 140.18s —— 到底是 LRC 多转写了 50 秒
 		// 还是 YRC 少覆盖了 50 秒,没有曲长根本判不了。这些条目等它真正被播放时(那条
 		// 路径带着 durationSecs 走 rehangCandidateTimelines)自然会修,不必在这里赌。
@@ -231,13 +231,13 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 	return newLRC, remap, true
 }
 
-// ---- 逐字轴与行级轴自相矛盾时弃用逐字轴(2026-09-01,陈奕迅《2001太空漫游 (Live)》案) ----
+// ---- 逐字轴与行级轴自相矛盾时弃用逐字轴》案) ----
 //
 // rehangLRCOnYRC 只能修"两边逐行文本严格一一对应"的打架(musixmatch 的病正是那个形态)。
 // netease 的两套轴是**两条独立产线**(行级 /api/song/lyric 老接口 vs 逐字 /api/song/lyric/v1
 // 新接口),同一首歌可能**断行方式都不一样**(LRC 拆两行的,YRC 合成一行)、还夹着对方没有的
 // 署名行/纯音乐占位行 —— 行结构对不上,重挂在前提检查那一步就放弃,打架原样留给播放。
-// 用户报的《2001太空漫游 (Live)》:LRC 首句 32.3s、YRC 同一句 74.3s,差 42 秒,配对行
+// 处理《2001太空漫游 (Live)》:LRC 首句 32.3s、YRC 同一句 74.3s,差 42 秒,配对行
 // 中位偏差 55.5s;播放走 YRC,「歌词管理」显示的是 LRC —— 用户看着 32 秒该有词,播放到
 // 32 秒(人已开唱)什么都不出。
 //
@@ -249,7 +249,7 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 // 等于让播放跟系统其余全部判断对着干。代价是这几首歌没有逐字卡拉OK效果 —— 正确的逐行
 // 显示胜过错 42 秒的逐字显示。
 //
-// 阈值 10s 从全库分布量出来(2026-09-01,2915 条可分析双轴条目):99.3%(2894 条)中位
+// 阈值 10s 从全库分布量出来:99.3%(2894 条)中位
 // 偏差 <3s(其中 92% <0.5s —— qq/kugou/amll 的 LRC 本来就是从逐字轴转出来的,天生自洽),
 // ≥10s 的只有 10 条、逐条核对全部是无可争辩的坏数据(含已知旧案 Rock With You 19.4s ——
 // 那条当年确认坏的是 YRC 侧,rehang 的时长闸拦下了"修",但没有"弃",坏 YRC 一直在驱动
@@ -449,7 +449,7 @@ func migrateLyricTimelines() {
 	if fixed > 0 || dropped > 0 {
 		// ⚠️ 必须显式置脏:saveEnrichCache 只在 enrichDirty 时才真的写盘。这里不置的话,
 		// 迁移结果能不能落盘取决于同一次启动里**别的路径**有没有恰好把标志置过 true ——
-		// 2026-09-01 实测坐实这个潜伏 bug:弃用逐字轴的迁移连续两次启动都报"dropped 10
+		// 验证这个潜伏 bug:弃用逐字轴的迁移连续两次启动都报"dropped 10
 		// entries"、JSON 的 mtime 却纹丝不动,每次开机白干一遍;而 08-28 那次 1010 条
 		// 重挂能落盘纯属搭了别的脏标志的顺风车。
 		enrichDirty = true

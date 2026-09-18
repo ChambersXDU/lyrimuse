@@ -13,10 +13,10 @@ import (
 
 // 后台「补空扫描」:不等这首歌再被播到,主动给存量的空歌词条目再搜一轮。
 //
-// 为什么需要(2026-09-05):needsLyricsFirstFill 那条补空路径设计上**只在这首歌再次被播放时**
+// 为什么需要:needsLyricsFirstFill 那条补空路径设计上**只在这首歌再次被播放时**
 // 触发(enrich.go trackEnrichment 缓存命中后的分派链)。对"正在听的歌"这是对的——省网络、
 // 只修用户真会看到的;但「歌词管理」把全库摊开给用户看,里面躺着的空条目用户不重播就永远
-// 不会动。实测 82 条非纯音乐的空条目里,范逸臣《革命》《Dalala-Dila》8-31 首解析时一个源
+// 不会动。测试 82 条非纯音乐的空条目里,范逸臣《革命》《Dalala-Dila》8-31 首解析时一个源
 // 都没应答(偶发网络),五天后手动重搜 QQ 1057 / 971 分——不是没词,是没人再去问过。
 //
 // 两条触发:
@@ -25,7 +25,7 @@ import (
 //     补空本身是"每条最多每天一次、指数退避"的节奏,这里只是把"要不要问"的时机从"被播到"
 //     改成"到点了",不改每条的退避账。
 //   - 手动:App 侧(「歌词管理」的「重试无歌词条目」按钮)往 lyricsFillRequestPath 写一个
-//     请求文件(见 lyricsFillRequest),这里 2 秒内读到就开一轮,**忽略退避**(用户明确要求
+//     请求文件(见 lyricsFillRequest),这里 2 秒内读到就开一轮,**忽略退避**(
 //     现在就搜)、不设条数上限,但仍然只碰"没歌词、没人工修正、没确证纯音乐"的条目。
 //     进度写到 lyricsFillStatusPath 给界面看(形制同 collectorstatus.go / lastfm 状态通道:
 //     collector 落盘、Swift 按 mtime 读,写失败只记日志)。
@@ -69,7 +69,7 @@ type lyricsFillStatus struct {
 	Cancelled  bool   `json:"cancelled,omitempty"`
 }
 
-// setLyricsFillPaths 在 main() 启动时调一次。顺带清掉上一次运行遗留的请求/状态文件:请求跟这次
+// setLyricsFillPaths 在 main 启动时调一次。顺带清掉上一次运行遗留的请求/状态文件:请求跟这次
 // 进程无关(理由同 setEnrichCancelRequestPath),状态则是上一轮的陈旧进度。
 func setLyricsFillPaths() {
 	lyricsFillRequestPath = configFilePath(clientName + "-lyrics-fill-request.txt")
@@ -78,7 +78,7 @@ func setLyricsFillPaths() {
 	_ = os.Remove(lyricsFillStatusPath)
 }
 
-// startLyricsFillSweeper 由 run() 单开一个 goroutine(跟 startEnrichCancelWatcher 同款),
+// startLyricsFillSweeper 由 run 单开一个 goroutine(跟 startEnrichCancelWatcher 同款),
 // ctx 取消时退出。两个节奏合在一个循环里:定时器管自动扫描,ticker 管请求文件。
 // 每一轮扫描都另起 goroutine 跑——这个循环必须一直转着读请求文件,否则一轮几十分钟的
 // 手动扫描期间用户写下的 "cancel" 要等扫完才被看到,等于没有取消。一次只允许一轮在跑,
@@ -99,6 +99,9 @@ func startLyricsFillSweeper(ctx context.Context) {
 			go runLyricsFillSweep(ctx, lyricsFillRequest{})
 			next.Reset(lyricsFillSweepInterval)
 		case <-poll.C:
+			if ctx.Err() != nil {
+				return
+			}
 			req, ok := readLyricsFillRequest()
 			if !ok {
 				continue
@@ -144,7 +147,14 @@ func parseLyricsFillRequest(text string) lyricsFillRequest {
 }
 
 // readLyricsFillRequest 读一次请求文件并无条件消费掉(一次性信号,同 checkEnrichCancelRequest)。
+// 读之前先以 os.Stat 确认文件存在,避免无谓的文件读取分配。
 func readLyricsFillRequest() (lyricsFillRequest, bool) {
+	if lyricsFillRequestPath == "" {
+		return lyricsFillRequest{}, false
+	}
+	if _, err := os.Stat(lyricsFillRequestPath); err != nil {
+		return lyricsFillRequest{}, false
+	}
 	data, err := os.ReadFile(lyricsFillRequestPath)
 	if err != nil {
 		return lyricsFillRequest{}, false
@@ -266,7 +276,7 @@ func lyricsFillSweepOne(key string) bool {
 	enrichInflight[key] = true
 	enrichMu.Unlock()
 	// 同步跑:retryLyricsUpgrade 自己负责清 enrichInflight、落盘、导出、通知重推。
-	retryLyricsUpgrade(key, artist, title, album, dur, true)
+	retryLyricsUpgrade(context.Background(), key, artist, title, album, dur, true)
 	enrichMu.Lock()
 	after := enrichCache[key]
 	enrichMu.Unlock()

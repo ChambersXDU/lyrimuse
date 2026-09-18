@@ -25,8 +25,8 @@ import (
 //
 // 后果不只是"歌词管理里多一行"。两份歌词的**断行和时间轴根本不是一份东西**(43 行 vs
 // 83 行,后者把每个短句单独成行),于是用哪个播放器听,歌词推进的节奏就不一样 ——
-// 2026-08-14 用户报的"Spotify 的进度比 Apple Music 快"就是这么来的:位置读数两边都准到
-// 40 毫秒以内(实测),真正不同的是**读到了两份不同的歌词**。而且选中哪一份纯看播放器怎么
+// 处理"Spotify 的进度比 Apple Music 快"就是这么来的:位置读数两边都准到
+// 40 毫秒以内(测试),真正不同的是**读到了两份不同的歌词**。而且选中哪一份纯看播放器怎么
 // 拼歌名,跟 collector 自己算出来的 lyrics_score 谁高谁低毫无关系 —— 这条更要命,等于把
 // 已经算好的质量判断丢掉了。
 //
@@ -43,7 +43,7 @@ import (
 // 两首不同的音频当成同一首。默认行为是"去掉",这份清单是唯一的例外表,所以宁可写长。
 //
 // interlude/intro/outro 这几个尤其不能漏:它们是独立成轨的短片段,跟同名正式曲目是两个
-// 录音。实测这张《神經志 The Journal》里就同时存在 `The Girl In Red (Interlude)` 和
+// 录音。测试这张《神經志 The Journal》里就同时存在 `The Girl In Red (Interlude)` 和
 // `Interlude : The Girl In Red` 两种拼法 —— 去掉括号会得到 `The Girl In Red`,而那可能是
 // 另一首完整曲目。
 var enrichKeyVersionWords = []string{
@@ -52,7 +52,7 @@ var enrichKeyVersionWords = []string{
 	"reprise", "feat", "ft.", "featuring", "session", "mono", "stereo", "dub",
 	"unplugged", "acappella", "a cappella",
 	"interlude", "intro", "outro", "skit", "prelude", "overture",
-	// 2026-08-31 真实bug(周杰伦《不能说的秘密》电影原声带"Secret (慢板)"):"慢板"不在
+	// (周杰伦《不能说的秘密》电影原声带"Secret (慢板)"):"慢板"不在
 	// 这张表里,归一化把整段括号连着"慢板"一起剥掉,存进缓存的 key 变成"Secret"——跟
 	// 正式完整版的《Secret》撞成同一个 key,而"(慢板)"这版实际时长只有 68 秒,是电影原声带
 	// 里单独收录的钢琴慢版重奏,跟正式版是**两个不同的录音**(理由跟"版"字那条一致:剥掉
@@ -112,7 +112,7 @@ func enrichExportedFileNames(key string) []string {
 // betterEnrichEntry 在两条要被合并的记录里挑留下来的那条。返回 true 表示 a 更值得留。
 //
 // 顺序是有讲究的:
-//   - 人工修正过的永远赢。它是这套缓存里唯一删了就找不回来的东西(重新解析只会又抓到
+//   - 人工修正过的永远赢。它是这套缓存里唯一删了就找不回来的东西(重新解析只会又匹配到
 //     当初那份不准的),见 ManualLyrics 字段注释。
 //   - 其次"有歌词"压过"没歌词"——空条目留着毫无意义。
 //   - 再次比 lyrics_score。这正是 collector 自己那套全源打分的结论,而重复条目的问题恰恰
@@ -182,7 +182,7 @@ func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 // 名字、而且正是胜出的那条"能留着自己的文件;其余(改了名的胜者、以及所有落选者)一律删,
 // 由紧随其后的 exportLyricsFiles 用胜出条目重新写一份。
 //
-// ⚠️ 2026-08-14 实测踩到的坑,这个函数存在的全部理由:第一版的判据是"k != newKey 才删",
+// ⚠️ 踩到的坑,这个函数存在的全部理由:第一版的判据是"k != newKey 才删",
 // 于是**落选**条目只要它的 key 恰好等于归一化后的 key(带译名的那条胜出时必然如此),它的
 // .lrc 就被留在盘上;紧接着 importLyricsFromFiles 按文件头部标签算出同一个 key,把落选那份
 // 正文又盖回胜出条目上 —— 得到一条 lyrics_score/lyrics_source 记着胜者、正文却是败者的
@@ -279,7 +279,7 @@ const maxEnrichKeyDurationVariants = 8
 // 分支本来就只在**关键词清单漏词**这种边界情况下才会触发,不追求好看,追求的是这个
 // 标记本身就是"该去补关键词清单了"的信号。
 //
-// 用序号而不是把时长本身编进后缀:实测时长读数有几百毫秒抖动(trackEnrichment 头注释),
+// 用序号而不是把时长本身编进后缀:测试时长读数有几百毫秒抖动(trackEnrichment 头注释),
 // 编时长进 key 会让同一份录音因为读数差一点就长出新 key,反而破坏缓存;序号 + 每次都用
 // durationMismatch 判兼容,才能做到"抖动内还是同一条,差太多才另开一条"。
 func enrichKeyDurationVariant(key string, n int) string {
@@ -314,10 +314,10 @@ func resolveEnrichKeyForDuration(cache map[string]enrichEntry, key string, durat
 
 // migrateEnrichKeys 把存量缓存迁到归一化 key 上,并清掉合并后不再对应任何条目的导出文件。
 //
-// ⚠️ 必须在 importLyricsFromFiles() **之前**跑。lyrics/ 里的文件是按文件**头部标签**反查
+// ⚠️ 必须在 importLyricsFromFiles **之前**跑。lyrics/ 里的文件是按文件**头部标签**反查
 // key 的(不看文件名),合并之后同一个 key 会同时对应两份内容不同的文件,import 遍历 map
 // 的顺序又是随机的 —— 不先把落选的那份文件删掉,条目内容会在每次重启时随机在两份歌词之间
-// 反复横跳。删掉之后,紧跟其后的 exportLyricsFiles() 会用胜出条目重新写出新文件名那一份。
+// 反复横跳。删掉之后,紧跟其后的 exportLyricsFiles 会用胜出条目重新写出新文件名那一份。
 //
 // 幂等:归一化过的 key 再算一次还是它自己,没有任何一组需要改动时直接返回,不写盘不备份。
 func migrateEnrichKeys() {

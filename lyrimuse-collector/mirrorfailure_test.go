@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// 这一组守的是 2026-08-30 修的那条真实数据丢失:Last.fm 镜像失败时,收听在三个地方
+// 这一组守的是 的那条真实数据丢失:Last.fm 镜像失败时,收听在三个地方
 // 同时不留痕(lfmMirrored 已标记 → 幂等守卫永久挡死;mirrorAsync 只打日志不重试;
 // p.lfm != nil 时 appendListen 被跳过),一次网络抖动就永久少一条 scrobble。
 // 用户真实日志:2618 次成功收听里有 13 条这样丢掉的。
@@ -29,7 +29,7 @@ func TestProvablyNeverSent(t *testing.T) {
 		want bool
 	}{
 		{
-			// 实测日志里最多的一类:08-15 一次 40 分钟 DNS 故障丢了 10 条。
+			// 测试日志里最多的一类:08-15 一次 40 分钟 DNS 故障丢了 10 条。
 			// 连 TCP 都没建起来,服务端不可能见过它 → 补提交零重复风险。
 			name: "DNS 解析失败 = 确定没发出去",
 			err:  fmt.Errorf("post: %w", &net.DNSError{Err: "no such host", Name: "ws.audioscrobbler.com"}),
@@ -140,7 +140,7 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 		defer func() { listenLogPath = saved }()
 		listenLogPath = filepath.Join(dir, "l.jsonl")
 
-		// 实测成因:艺人名是"群星"(Various Artists),Last.fm 当非艺人拒收。
+		// 测试成因:艺人名是"群星"(Various Artists),Last.fm 当非艺人拒收。
 		// 换多少次也还是这首歌,重发必然同样被拒。
 		recordFailedMirror(
 			&lastfmIgnoredError{Method: "track.scrobble", Reason: "1 Artist was ignored"},
@@ -151,7 +151,7 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 		}
 	})
 
-	// ⚠️ 这一组守的是 2026-08-30 当天抓出来的回归:首版把**全部** lastfmAPIError 都当成
+	// ⚠️ 这一组守的是 当天抓出来的回归:首版把**全部** lastfmAPIError 都当成
 	// "拒收"直接 return,于是一次限流/凭据失效就让这首歌在 Last.fm 和 listens.jsonl 两边
 	// 同时没有 —— 正是这个函数本身要修的那个洞,换个门又开了一遍。
 	t.Run("应用层错误按 mayHaveStored 分档,绝不一律丢弃", func(t *testing.T) {

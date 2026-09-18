@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// 2026-08-17 用户报「这首歌找不到歌词」:D'Angelo《Voodoo》里那首,Apple Music 报的标题是
+// 处理「这首歌找不到歌词」:D'Angelo《Voodoo》里那首,Apple Music 报的标题是
 // "Medley: Greatdayndamornin' / Booty",而五个歌词源的曲库里都叫
-// "Greatdayndamornin'/Booty"。实测带前缀搜 **五源全 0 条**,去掉前缀(歌手/专辑不动)
+// "Greatdayndamornin'/Booty"。测试带前缀搜 **五源全 0 条**,去掉前缀(歌手/专辑不动)
 // **五源全命中**、最高 1270 分。
 //
 // 两道闸都得改:searchTitleVariants(拿什么去搜)和 lyricTitleAccepted(候选算不算这首歌)。

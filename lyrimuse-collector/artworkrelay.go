@@ -16,11 +16,11 @@ import (
 	"time"
 )
 
-// 把「设备直送封面」托管到状态中继上,让这台机器**外面**的消费者也能加载它(2026-09-02)。
+// 把「设备直送封面」托管到状态中继上,让这台机器**外面**的消费者也能加载它。
 //
 // ## 要修的是什么
 //
-// 2026-08-31 起 deviceartwork.go 会把 media-control 直送的封面落到本机
+//  deviceartwork.go 会把 media-control 直送的封面落到本机
 // `~/.config/lyrimuse/artwork/<sha>.jpg`,并把 `cover_url` 写成
 // `file:///Users/<用户名>/.config/lyrimuse/artwork/<sha>.jpg`。对本机 App 这是纯升级
 // (封面身份由"读取时刻"保证,比按文字去网易云/Apple/QQ 猜准得多,见 deviceartwork.go 头注)。
@@ -28,13 +28,13 @@ import (
 // 问题在于这个值被**原样带出了这台机器**:
 //
 //   - relay.go 的 relayState 把它当 artwork 推给网页。浏览器不可能读别人机器上的本地
-//     文件,表现是网页封面整个空白(2026-09-02 用户报「为什么我的网页上没有封面了」)。
+//     文件,表现是网页封面整个空白。
 //     更隐蔽的是网页那条 iTunes 兜底的闸写的是 `if (!art)` —— `file://…` 是个**非空**
 //     字符串,顺利绕过这道闸,于是兜底根本不触发,直接把 file:// 塞进 <img src>。
 //   - lb.go 把它写进提交给 ListenBrainz 的 `additional_info.cover_url`。既是彻头彻尾的
 //     无用数据,又把本机用户名和目录结构发到了公开的第三方服务上。
 //
-// 撞上的规模不小:实测本机 90 条曲目的封面是这种形态(占有封面条目的 3.5%),而且**每播
+// 撞上的规模不小:测试本机 90 条曲目的封面是这种形态(占有封面条目的 3.5%),而且**每播
 // 一首新歌就多一条** —— 最近在听的那批基本全中,体感就是"网页封面没了"。
 //
 // ## 为什么是"把图传上去",不是"退回远程封面"
@@ -53,7 +53,7 @@ import (
 // 中继是 Cloudflare Worker + KV,**免费版 1000 写/天**,而 /push 播放中每几秒就写一次,
 // 这份额度本来就紧张(见 state-worker/src/index.js 头注)。所以:
 //   - 键是**内容寻址**的(sha = 图内容 sha256 前 8 字节,落盘时就是按它命名的),同一张
-//     专辑封面被多首曲目共用只存一份(实测 90 条曲目只对应 31 张图);
+//     专辑封面被多首曲目共用只存一份(测试 90 条曲目只对应 31 张图);
 //   - 上传前先 HEAD 问一句"传过没有",命中就一个字节都不写(读额度 100k/天,便宜得多);
 //   - Worker 侧再兜一层:已存在就直接返回 existed,不写。
 //
@@ -62,7 +62,7 @@ import (
 const (
 	// artworkRelayPath 跟 state-worker 的路由前缀逐字一致,改一边必须改另一边。
 	artworkRelayPath = "/artwork/"
-	// artworkMaxUploadBytes 跟 Worker 侧的 ART_MAX_BYTES 对齐。本机实测 31 张图平均
+	// artworkMaxUploadBytes 跟 Worker 侧的 ART_MAX_BYTES 对齐。本机测试 31 张图平均
 	// 111 KB、最大 238 KB,1 MB 是"明显传错了东西"的量级,不是正常封面会碰到的线。
 	artworkMaxUploadBytes = 1024 * 1024
 	// artworkUploadRetryAfter:传失败之后多久才准再试。没有这道闸的话,lbMeta 每次轮询

@@ -18,7 +18,7 @@ import (
 // 首歌时,大概率已经在后台解析完了,不用现等。跟正常路径复用同一套 enrichCache/
 // enrichInflight 去重,不会跟真播放到那首歌时的解析撞车重复跑。
 //
-// 曲目表从哪来,2026-08-14 起按**歌词来源**分流,而不是按播放器:
+// 曲目表从哪来,按**歌词来源**分流,而不是按播放器:
 //
 //   Apple Music → AppleScript 问 Music.app 的本地资料库。最准,因为曲目字符串跟播放器
 //                 上报的逐字节一致,算出来的 enrich key 必然对得上。
@@ -29,23 +29,23 @@ import (
 // 有哪些歌"(那需要 Spotify Web API 的 OAuth 凭据,仓库里没有也不该硬编码),而是"这张
 // 专辑有哪些歌" —— 后者网易云就能答,且对 Spotify / QQ 音乐 / 网易云三个播放器通用。
 //
-// 2026-08-14 之前这里**只有** Music.app 那一条,而调用点没有任何播放器判断:用别的播放器
+// 之前这里**只有** Music.app 那一条,而调用点没有任何播放器判断:用别的播放器
 // 听歌时,它拿着别家的专辑名去查 Apple Music 资料库,必然查不到,每换一张专辑白跑一次
 // osascript;更糟的是那段脚本没有 running 守卫,会把没开的 Music.app 拉起来。
 
 // albumPrefetchMaxTracks 是安全阀——防止专辑名字段被打上"整个作品集"这类离谱大合集
 // (几十上百首)时,一次性炸出上百个并发解析请求。正常专辑几首到二十来首都远低于这个数,
 // 不会被这个上限影响。
-// 2026-08-14 从 60 收到 30:闸门从"专辑名必须完全相等"放宽到"宽松包含"之后,这个上限
+// 从 60 收到 30:闸门从"专辑名必须完全相等"放宽到"宽松包含"之后,这个上限
 // 才真正开始起兜底作用 —— 放进来的可能是同一张专辑的加长版(Bad 25th Anniversary 24 首
 // vs 原版 11 首)。正常专辑几首到二十来首,30 够用;超过的多半是合集,不值得为它一次性
 // 炸出几十个解析请求。
 const albumPrefetchMaxTracks = 30
 
-// albumPrefetchStagger:2026-08-31 加——预取这条路径本身就是"自己把自己打限流"最大的
+// albumPrefetchStagger:——预取这条路径本身就是"自己把自己打限流"最大的
 // 放大器。neteaseThrottle(netease.go)那道 250ms 全局节流只挡住了"单个请求发得太快",
 // 挡不住"这一批请求总量太大":换到一张全新专辑时,原来的写法是给最多 30 首曲目**各自**
-// 立即起一个 goroutine 解析,越难匹配的歌触发的重试轮越多(实测《Can We Dance》一首在
+// 立即起一个 goroutine 解析,越难匹配的歌触发的重试轮越多(测试《Can We Dance》一首在
 // "标题反查轮"里就打了 6 次网易云请求),二十来首曲目里只要有几首难搜,几秒内堆起几十次
 // 网易云请求毫不夸张——而且这些请求跟共享同一把 neteaseThrottle 锁,会把"正在播的这首"
 // 自己的封面/歌词请求也一起排在后面堵住。
@@ -64,7 +64,10 @@ var (
 
 // prefetchAlbumSiblings 在真正换到一首新歌时调用(不含单曲循环重新起播那种"同一首歌"
 // 的场景)。整个函数体在独立 goroutine 里跑,不阻塞 poller 的正常处理。
-func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) {
+func prefetchAlbumSiblings(ctx context.Context, currentArtist, currentTitle, album, bundleID string) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if album == "" {
 		return
 	}
@@ -88,10 +91,10 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 		queued := 0
 		// 当前正在播的这首的宽松键 —— 用来把它从预取名单里剔掉。
 		//
-		// 2026-08-20 从"两个字段逐字节相等"改成这个:曲目表跟播放器对同一首歌的拼法
+		// 从"两个字段逐字节相等"改成这个:曲目表跟播放器对同一首歌的拼法
 		// 系统性不同(专辑名括号、中英文空格、繁简,以及多歌手串的分隔符 `A/B` vs
 		// `A & B`),逐字节比几乎必然漏 —— 于是正在播的这首被当成"另一首"又预取一遍,
-		// 在缓存里留下一条只差写法的重复条目(实测 Ticking Away 就是这么来的:那张专辑
+		// 在缓存里留下一条只差写法的重复条目(测试 Ticking Away 就是这么来的:那张专辑
 		// 只有 1 首,预取队列里那一首正是它自己)。
 		currentLoose := loosenEnrichKey(enrichKey(currentArtist, currentTitle, album))
 		for _, t := range tracks {
@@ -105,10 +108,10 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 			enrichMu.Lock()
 			_, exists := enrichCache[key]
 			if !exists {
-				// 2026-08-16 补上:预取是重复条目最大的产生源 —— 曲目名来自**网易云曲库**,
+				// 上:预取是重复条目最大的产生源 —— 曲目名来自**网易云曲库**,
 				// 跟播放器报的拼法在"中英文之间加不加空格""繁体还是简体"上系统性不一致。
 				// 上面那句"走 enrichKey 而不是自己拼"只挡住了译名括号这一档,挡不住这两档。
-				// 精确没命中时再宽松找一次,已经有等价条目就不预取了(实测那 14 组重复里,
+				// 精确没命中时再宽松找一次,已经有等价条目就不预取了(测试那 14 组重复里,
 				// 丁世光/方大同/孙燕姿那批繁简对就是这么来的)。
 				if _, found := canonicalEnrichKey(key); found {
 					exists = true
@@ -128,7 +131,11 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 			if queued > 0 {
 				// 只在真正要起下一个解析前才等——跳过的曲目(已解析/在途)不占错峰配额,
 				// 不然一张大半已经解析过的专辑,光是跳过那些曲目就会被拖慢一路。
-				time.Sleep(albumPrefetchStagger)
+				select {
+				case <-time.After(albumPrefetchStagger):
+				case <-ctx.Done():
+					return
+				}
 			}
 			queued++
 			// 专辑预取没有对应的"停止"入口(不是首次搜索占位行,没有 UI 可以取消它),
@@ -136,7 +143,7 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 			// isNewTrack 传 false:预取的是同专辑里**没在播**的其它曲目,这一刻的设备
 			// Now Playing 数据对应的是当前正在播的那首,不能拿来当这些曲目的封面——见
 			// trackEnrichment 参数注释。
-			go resolveEnrichAsync(context.Background(), key, t.artist, t.title, album, "", t.duration, false)
+			go resolveEnrichAsync(ctx, key, t.artist, t.title, album, "", t.duration, false)
 		}
 		// 成功也打一条。原来这个函数**只在超上限被跳过时**才打日志,正常路径一行不打 ——
 		// 于是"预取到底跑没跑"完全不可观测:日志里没记录,既可能是没跑、也可能是跑得好好的,
@@ -164,7 +171,7 @@ func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
 	}
 	// 复用解析歌词时那次搜索的结果 —— neteaseLookup 带 30 天缓存,当前这首歌刚解析过,
 	// 这里是缓存命中、零网络;拿到的 AlbumID 是**这首歌自己所属**的那张专辑。缓存命中
-	// 路径不会真的发请求,没有可取消的对象,context.Background() 就够。
+	// 路径不会真的发请求,没有可取消的对象,context.Background 就够。
 	// durationSecs 传 0:这条路径查的是"这首歌属于哪张专辑"(要 AlbumID),时长锚定档
 	// 用不上也不该用 —— 预取时还没有真实播放时长。
 	ne := neteaseLookup(context.Background(), artist, title, album, 0)
@@ -173,7 +180,7 @@ func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
 	}
 	// 专辑名至少要"宽松包含"(albumScore >= 100)才预取。
 	//
-	// 2026-08-14 修正过一次:这里原来要求满分 200(normLoose 后完全相等),理由是怕选到
+	// 正过一次:这里原来要求满分 200(normLoose 后完全相等),理由是怕选到
 	// 精选集。把三档分数真的量出来之后,那个担心站不住:
 	//
 	//   albumScore("神经志",                "神經志 The Journal")   = 100  ← 想要的
@@ -182,7 +189,7 @@ func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
 	//
 	// 真正灾难性的那种(76 首的合集、上百首的作品集)名字跟本地专辑毫不沾边,天然是 0 分,
 	// 不需要 200 这道闸去挡。而 200 挡掉的全是"同一张专辑、写法不同"——繁简(normLoose
-	// 已经归一)、带英文副标题、带 (Remastered) 后缀,这些在中文曲库里极其常见。用户实测:
+	// 已经归一)、带英文副标题、带 (Remastered) 后缀,这些在中文曲库里极其常见。用户测试:
 	// 用 Spotify 放《神經志 The Journal》,每首歌都被这一行拦下,功能等于没上线。
 	//
 	// 100 这档剩下的风险只是"同一张专辑的另一个版本"(25 周年版 24 首 vs 原版 11 首),
@@ -208,7 +215,7 @@ func albumTracksFromMusicApp(album string) ([]albumTrack, bool) {
 	// Music。本仓其它几段 Music/Spotify 脚本(getStateScript、spotifyPositionScript)
 	// 开头都有同样的守卫,同一个理由。
 	// `media kind is song` 把专辑里混的非歌曲轨道(演唱会/豪华版常见的 music video 花絮、
-	// 纪录片)挡在 AppleScript 这一层——2026-08-26 实测坐实:Michael Jackson《XSCAPE
+	// 纪录片)挡在 AppleScript 这一层——验证:Michael Jackson《XSCAPE
 	// (Deluxe)》第 18/19 轨"XSCAPE Documentary"/"XSCAPE Documentary Outtakes"的
 	// `media kind` 是 "music video" 不是 "song"（Apple 官方目录里 `kind` 字段也是
 	// "music-video"），本来就没有歌词可言,预取会拿它们去问全部歌词源,注定全军覆没,
