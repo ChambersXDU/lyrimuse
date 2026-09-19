@@ -1124,6 +1124,15 @@ func runMenuBarTests() {
     // ---- 同曲目单调槽宽地板 (MenuBarSlotFloor, upstream 761df776) ----
     do {
         typealias F = MenuBarSlotFloor
+        var prepared = F()
+        expectEqual(prepared.width(target: 40, preparedWidth: 260, maxWidth: 200, trackKey: "song"), 200,
+                    "短首句出现前为后续长句预留空间且不超出设置上限")
+        expectEqual(prepared.width(target: 260, preparedWidth: 260, maxWidth: 200, trackKey: "song"), 200,
+                    "长句出现时不再触发槽位扩宽")
+        expectEqual(prepared.width(target: 30, preparedWidth: 90, maxWidth: 200, trackKey: "next"), 90,
+                    "下一首短歌词歌曲按自身需要分配空间")
+        expectEqual(prepared.width(target: 30, preparedWidth: 90, maxWidth: 60, trackKey: "next"), 60,
+                    "用户缩小最大宽度时立即服从设置")
         var f = F()
         expectEqual(f.width(target: 100, trackKey: "A"), 100, "地板: 第一句定基线")
         expectEqual(f.width(target: 80, trackKey: "A"), 100, "地板: 同曲内更窄的句子不缩")

@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 // 读 collector 自己维护的那份磁盘缓存(collector/enrich.go 的 enrichEntry,持久化路径
 // 由 collector/main.go:68 拼出来,这台机器上固定是这个路径)。key 是
@@ -42,6 +43,7 @@ public struct EnrichCacheEntry: Decodable, Equatable {
     public let resolvedDurationSecs: Double?
     // 因源熔断跳过的歌词源与补搜尝试次数，供 searchIncomplete 判定。
     public let lyricsSourcesSkipped: [String]?
+    public let lyricsSourcesFailed: [String]?
     public let lyricsFillCount: Int?
 
     public init(
@@ -68,6 +70,7 @@ public struct EnrichCacheEntry: Decodable, Equatable {
         durationSecs: Double? = nil,
         resolvedDurationSecs: Double? = nil,
         lyricsSourcesSkipped: [String]? = nil,
+        lyricsSourcesFailed: [String]? = nil,
         lyricsFillCount: Int? = nil
     ) {
         self.lyrics = lyrics
@@ -93,6 +96,7 @@ public struct EnrichCacheEntry: Decodable, Equatable {
         self.durationSecs = durationSecs
         self.resolvedDurationSecs = resolvedDurationSecs
         self.lyricsSourcesSkipped = lyricsSourcesSkipped
+        self.lyricsSourcesFailed = lyricsSourcesFailed
         self.lyricsFillCount = lyricsFillCount
     }
 
@@ -120,6 +124,7 @@ public struct EnrichCacheEntry: Decodable, Equatable {
         case durationSecs = "duration_secs"
         case resolvedDurationSecs = "resolved_duration_secs"
         case lyricsSourcesSkipped = "lyrics_sources_skipped"
+        case lyricsSourcesFailed = "lyrics_sources_failed"
         case lyricsFillCount = "lyrics_fill_count"
     }
 }
@@ -129,8 +134,8 @@ public struct EnrichCacheEntry: Decodable, Equatable {
 /// 抽成自由函数只为可测:EnrichCacheReader 整体是 @MainActor、而且读的是固定路径上的那份
 /// 真缓存文件,selftest 没法喂输入进去跑真值表。判据本身要跟 collector 侧
 /// needsLyricsFirstFill 那道"快速补搜"闸口逐条对上,见 searchIncomplete 的头注。
-public func enrichLyricsSearchIncomplete(lyrics: String, sourcesSkipped: [String], fillCount: Int) -> Bool {
-    lyrics.isEmpty && !sourcesSkipped.isEmpty && fillCount == 0
+public func enrichLyricsSearchIncomplete(lyrics: String, sourcesSkipped: [String], fillCount: Int, sourcesFailed: [String] = []) -> Bool {
+    lyrics.isEmpty && (!sourcesSkipped.isEmpty || !sourcesFailed.isEmpty) && fillCount == 0
 }
 
 // collector 那边 songLanguageCantonese 的取值("yue"),两边必须完全一致——match.go/enrich.go
@@ -172,6 +177,28 @@ public struct EnrichCacheLyrics: Equatable {
 
 @MainActor
 public enum EnrichCacheReader {
+    private static var cacheWatcher: DispatchSourceFileSystemObject?
+
+    public static func startWatching() {
+        guard cacheWatcher == nil else { return }
+        let fd = open(cacheURL.deletingLastPathComponent().path, O_EVTONLY)
+        guard fd >= 0 else { return } // Existing playback poll remains the fallback.
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd, eventMask: [.write, .rename, .delete], queue: .main)
+        source.setEventHandler {
+            MainActor.assumeIsolated { refreshIfNeeded() }
+        }
+        source.setCancelHandler { close(fd) }
+        cacheWatcher = source
+        source.resume()
+        refreshIfNeeded()
+    }
+
+    public static func stopWatching() {
+        cacheWatcher?.cancel()
+        cacheWatcher = nil
+    }
+
     private static let cacheURL = LyrimusePaths.configFile("lyrimuse-enrich-cache.json")
 
     // 缓存文件设计上永久不清理,会攒到几百条、几 MB——如果每次 lookup() 都全量读+解析,
@@ -324,7 +351,8 @@ public enum EnrichCacheReader {
             searchIncomplete: enrichLyricsSearchIncomplete(
                 lyrics: entry.lyrics ?? "",
                 sourcesSkipped: entry.lyricsSourcesSkipped ?? [],
-                fillCount: entry.lyricsFillCount ?? 0)
+                fillCount: entry.lyricsFillCount ?? 0,
+                sourcesFailed: entry.lyricsSourcesFailed ?? [])
         )
     }
 
@@ -897,6 +925,7 @@ public enum EnrichCacheReader {
                 guard gen == decodeGeneration else { return } // 被 reloadNow/压力清空顶掉
                 guard let decoded else { return }             // 失败保留旧缓存,下一拍重试
                 adopt(entries: decoded, mtime: mtime, notify: true)
+                if fileModificationDate != mtime { refreshIfNeeded() }
             }
         }
     }

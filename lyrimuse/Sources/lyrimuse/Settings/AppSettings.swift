@@ -48,7 +48,7 @@ enum NotchLyricRowArtworkPosition: String, Codable, Hashable, CaseIterable {
 
 // Layout width mode for menu bar lyrics:
 // - `.fixed`: Retains the configured slot width for short lines to prevent adjacent status item shifting.
-// - `.adaptive`: Dynamically sizes the status item to lyric text width to conserve menu bar space.
+// - `.adaptive`: Reserves the current song’s measured width, capped by the configured maximum.
 enum MenuBarLyricsWidthMode: String, Codable, Hashable, CaseIterable {
     case fixed
     case adaptive

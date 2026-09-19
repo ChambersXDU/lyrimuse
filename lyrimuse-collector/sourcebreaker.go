@@ -301,12 +301,13 @@ func (b *lyricSourceBreaker) coolingDown(source string) (time.Duration, bool) {
 type lyricSourceRound struct {
 	mu      sync.Mutex
 	skipped map[string]bool
+	failed  map[string]bool
 }
 
 type lyricSourceRoundKey struct{}
 
 func withLyricSourceRound(ctx context.Context) (context.Context, *lyricSourceRound) {
-	r := &lyricSourceRound{skipped: map[string]bool{}}
+	r := &lyricSourceRound{skipped: map[string]bool{}, failed: map[string]bool{}}
 	return context.WithValue(ctx, lyricSourceRoundKey{}, r), r
 }
 
@@ -354,6 +355,42 @@ func (r *lyricSourceRound) markSkipped(source string) {
 	r.mu.Lock()
 	r.skipped[source] = true
 	r.mu.Unlock()
+}
+
+func (r *lyricSourceRound) markFailed(source string) {
+	if r == nil || source == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.failed == nil {
+		r.failed = map[string]bool{}
+	}
+	r.failed[source] = true
+}
+
+func (r *lyricSourceRound) failedSources() []string {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var result []string
+	for source := range r.failed {
+		result = append(result, source)
+	}
+	sort.Strings(result)
+	return result
+}
+
+// A failed request is different from a successful search with no matching song.
+func noteLyricRoundFailure(ctx context.Context, host string, err error, status int) {
+	if errors.Is(err, context.Canceled) {
+		return
+	}
+	if err != nil || status >= 500 || status == http.StatusTooManyRequests {
+		lyricSourceRoundFrom(ctx).markFailed(lyricSourceForHost(host))
+	}
 }
 
 func (r *lyricSourceRound) skippedSources() []string {

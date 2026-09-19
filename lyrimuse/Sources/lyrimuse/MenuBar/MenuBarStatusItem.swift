@@ -112,6 +112,8 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         settings.$menuBarSecondaryLine.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
+        coordinator.$allLines.dropFirst().receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         coordinator.$nextLineText.dropFirst().removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // Custom color adjustments.
@@ -155,7 +157,20 @@ final class MenuBarStatusItem: NSObject {
 
     /// 把播放时钟(外推位置 + 歌词时间轴校准)喂给标签的填色动画。位置公式与歌词窗口
     /// KaraokeWordText 逐字填色完全同一条:anchor 外推 ?? 暂停位置,再加偏移校准。
+    private var correctionEndRefresh: DispatchWorkItem?
+
     private func syncKaraokeClock(force: Bool = false) {
+        correctionEndRefresh?.cancel()
+        correctionEndRefresh = nil
+        if let anchor = PlaybackCoordinator.shared.anchor, let end = anchor.correctionEndDate,
+           end.timeIntervalSinceNow > 0 {
+            let work = DispatchWorkItem { [weak self] in
+                self?.syncKaraokeClock(force: true)
+                self?.syncProgressClock(force: true)
+            }
+            correctionEndRefresh = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + end.timeIntervalSinceNow, execute: work)
+        }
         let coordinator = PlaybackCoordinator.shared
         let raw: Int?
         if let anchor = coordinator.anchor {
@@ -165,7 +180,7 @@ final class MenuBarStatusItem: NSObject {
         }
         scrollingLabel.updateKaraokeClock(
             positionMs: raw.map { $0 + coordinator.currentLyricsOffsetMs },
-            rate: coordinator.anchor?.rate ?? 0,
+            rate: coordinator.anchor?.instantaneousRate() ?? 0,
             playing: coordinator.isPlayingNow,
             force: force)
     }
@@ -189,7 +204,7 @@ final class MenuBarStatusItem: NSObject {
             .compactMap { $0 }.first { $0 > 0 }
         scrollingLabel.updateProgressClock(
             positionMs: raw, durationMs: duration,
-            rate: anchor?.rate ?? 0, playing: coordinator.isPlayingNow, force: force)
+            rate: anchor?.instantaneousRate() ?? 0, playing: coordinator.isPlayingNow, force: force)
     }
 
     /// 歌词旁那枚带播放进度的图标(nil = 设置里关着)。
@@ -308,6 +323,37 @@ final class MenuBarStatusItem: NSObject {
     private var iconExitSettleBegan: Date?
     /// Per-song monotonic slot floor in adaptive mode to eliminate oscillation (upstream 761df776).
     private var slotFloor = MenuBarSlotFloor()
+    private struct SongWidthKey: Equatable {
+        let lines: [LyricsWindowLine]
+        let fontWeight: OverlayFontWeight
+        let fontSize: CGFloat
+        let secondary: LyricSecondaryLine
+        let maxWidth: CGFloat
+    }
+    private var songWidthKey: SongWidthKey?
+    private var songWidth: CGFloat = 0
+
+    private func preparedSongWidth() -> CGFloat {
+        let settings = AppSettings.shared
+        let lines = PlaybackCoordinator.shared.allLines
+        let key = SongWidthKey(lines: lines, fontWeight: settings.menuBarLyricsFontWeight,
+                               fontSize: settings.menuBarLyricsFontSize,
+                               secondary: settings.menuBarSecondaryLine, maxWidth: settings.menuBarLyricsWidth)
+        guard key != songWidthKey else { return songWidth }
+        songWidthKey = key
+        slotFloor.reset()
+        songWidth = 0
+        for (index, entry) in lines.enumerated() {
+            let text = entry.line.plainText ?? ""
+            let main = MenuBarMarqueeRenderer.width(of: text,
+                font: MenuBarMarqueeRenderer.mainFont(for: text, twoRows: key.secondary.showsSecondaryRow))
+            let next = index + 1 < lines.count ? lines[index + 1].line.plainText : nil
+            let secondary = key.secondary.secondaryText(currentLine: entry.line, nextLineText: next)
+                .map { MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont) } ?? 0
+            songWidth = min(key.maxWidth, max(songWidth, main, secondary))
+        }
+        return songWidth
+    }
 
     /// Presents layout changes to the status bar.
     /// macOS status bar layout invariants:
@@ -690,10 +736,7 @@ final class MenuBarStatusItem: NSObject {
                 ? secondaryKind.secondaryText(currentLine: line, nextLineText: coordinator.nextLineText) : nil,
             mainFont: MenuBarMarqueeRenderer.mainFont(for: text, twoRows: twoRows))
         let lyricsActive = display != nil
-        // Placeholder state ("♪ Title" fallback or interlude ♪) sizes the slot based on the upcoming line
-        // to prevent double slot-width resizes when the first lyric line arrives (see `upcomingLineSlotWidth`).
         let placeholderNow = titleFallbackActive || text == MenuBarMarqueeRenderer.placeholderGlyph
-        let upcomingW = upcomingLineSlotWidth(isPlaceholder: placeholderNow)
 
         // When menu bar lyrics are disabled, paused, or text is empty: collapse to icon slot.
         // Slot width = icon width + fixed padding, preserving the explicit initial width rule
@@ -710,9 +753,20 @@ final class MenuBarStatusItem: NSObject {
         }
         // "装得下还是要滚"这个判定跟设置页那条预览共用同一个函数,两边不可能漂 ——
         // 见 MenuBarMarqueeRenderer.Presentation。
+        // Reserve the song's required space before its first long line arrives. The floor alone
+        // cannot do this: it only discovers long lines after they have already been clipped.
+        var renderWidth = settings.menuBarLyricsWidth
+        if settings.menuBarLyricsWidthMode == .adaptive, renderWidth > 0 {
+            let preparedWidth = preparedSongWidth()
+            let natural = MenuBarMarqueeRenderer.width(of: text, font: rowState.mainFont)
+            let target = coordinator.allLines.isEmpty ? renderWidth : min(renderWidth, max(preparedWidth, natural))
+            renderWidth = slotFloor.width(target: target, preparedWidth: preparedWidth, maxWidth: renderWidth,
+                trackKey: coordinator.title + "\u{1F}" + coordinator.artist + "\u{1F}" + coordinator.album)
+        }
+        let provisional = placeholderNow || slotFloor.didResetOnLastCall
         switch MenuBarMarqueeRenderer.presentation(
             for: text,
-            windowWidth: settings.menuBarLyricsWidth,
+            windowWidth: renderWidth,
             // 让长句子在换到下一句之前滚完,而不是永远按固定速度爬。
             // 单行用 compactDwellSeconds 而不是 currentLineDwellSeconds:显示窗口变了(唱完就
             // 切走),用旧口径会把 dwell 算大 —— 长句后面接长间奏时按偏大的 dwell 配速,
@@ -720,84 +774,27 @@ final class MenuBarStatusItem: NSObject {
             // .displayDurationMs。双排显示的就是 currentLine,用它自己的时长。
             dwellSeconds: dwell,
             leadInSeconds: leadIn,
-            widthMode: settings.menuBarLyricsWidthMode,
+            widthMode: renderWidth > 0 ? .fixed : settings.menuBarLyricsWidthMode,
             font: rowState.mainFont
         ) {
         case .text(let visible):
-            // 自适应态:槽宽跟着这一句的文字宽走 —— 每次变宽都是一次重建
-            // (macOS 26 下这是唯一能让邻居让位的做法,见 present 头注)。
-            //
-            // visible != text 只发生在 windowWidth<=0 的截断退化路径 —— 那里既不染色也不
-            // 画图标(格子小到画不出来),所以 icon 直接跟着这个条件取 nil,槽宽自然也不会
-            // 白让出一块空地。
-            let icon = visible == text ? lyricsIconBadge() : nil
-            let reserved = MenuBarProgressIcon.reservedWidth(for: icon?.style)
-            let mainW = MenuBarMarqueeRenderer.width(of: visible, font: rowState.mainFont)
-            // 双排:格宽取两行里宽的那个(副行比主行宽是常态 —— 译文往往更长),上限仍是「最大宽度」;
-            // 超过上限的副行在格里尾部渐隐。单行:就是主行宽,跟改动前逐点相同。
-            let secondaryW = rowState.secondaryText.map {
-                MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont)
-            } ?? 0
-            let naturalW = rowState.twoRows ? min(settings.menuBarLyricsWidth, max(mainW, secondaryW)) : mainW
-            // 占位态给槽宽兜个底:让它现在就有即将到来那一句要的宽度,那一句出现时几何
-            // 已经到位、不必再改一次。判据是 Core 的纯函数(有 selftest),这里只喂数 ——
-            // "下一句"怎么量在 `upcomingLineSlotWidth`,"该不该用它"在 `MenuBarSlotPolicy.slotWidth`。
-            let textW = MenuBarSlotPolicy.slotWidth(
-                naturalWidth: naturalW, upcomingWidth: upcomingW,
-                isPlaceholder: placeholderNow, maxWidth: settings.menuBarLyricsWidth)
-            let w = slotFloor.width(
-                target: textW + reserved + Self.fixedSlotPadding,
-                trackKey: coordinator.title + "\u{1F}" + coordinator.artist)
-            let provisional = placeholderNow || slotFloor.didResetOnLastCall
-            let fillPath = visible == text ? karaokeFillPath(for: text) : nil
-            if fillPath != nil || icon != nil || rowState.twoRows {
-                // Layer-based rendering via `scrollingLabel` is required for:
-                // 1. Karaoke syllable highlighting (AppKit `button.title` cannot overlay accent color fills).
-                // 2. Progress icons (dynamic partial fill cannot be drawn in standard button image/title).
-                // 3. Dual-row layout (`button.title` only supports single-line text).
-                // Slot width formula matches static text, preserving the identical footprint.
-                present(class: "text", length: w, collapseDelay: 0,
-                        dwellSeconds: dwell, targetIsProvisional: provisional,
-                        interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
-                    showFixedWidth($0, text: text, windowWidth: textW,
-                                   pacing: nil, fillPath: fillPath, icon: icon)
-                }
-            } else {
-                present(class: "text", length: w, collapseDelay: 0,
-                        dwellSeconds: dwell, targetIsProvisional: provisional,
-                        interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
-                    showStaticText($0, visible: visible, full: text)
-                }
+            let width = MenuBarMarqueeRenderer.width(of: visible, font: rowState.mainFont)
+            present(class: "text", length: width + Self.fixedSlotPadding, collapseDelay: 0,
+                    dwellSeconds: dwell, targetIsProvisional: provisional,
+                    interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
+                showStaticText($0, visible: visible, full: text)
             }
         case .fixed(let lineText, let windowWidth, let pacing):
             let icon = lyricsIconBadge()
             let slotWidth = windowWidth + MenuBarProgressIcon.reservedWidth(for: icon?.style)
             present(class: "fixed", length: slotWidth + Self.fixedSlotPadding, collapseDelay: 0,
-                    dwellSeconds: dwell,
+                    dwellSeconds: dwell, targetIsProvisional: provisional,
                     interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
                 showFixedWidth($0, text: lineText, windowWidth: windowWidth, pacing: pacing,
                                fillPath: karaokeFillPath(for: lineText),
                                followPath: followReadingPath(for: lineText), icon: icon)
             }
         }
-    }
-
-    /// In placeholder state ("♪ Title" fallback or interlude ♪), calculates the slot width required by
-    /// the upcoming lyric line (returns 0 in non-placeholder states).
-    ///
-    /// Pre-allocating slot width during the placeholder prevents a double resize:
-    /// 1. Without pre-allocation: icon -> text (placeholder width) -> fixed/text (lyric line width).
-    /// 2. With pre-allocation: icon -> target width directly, avoiding layout shifts when lyrics begin.
-    ///
-    /// If lyrics are not yet parsed or `nextLineText` is nil, returns 0 and sizes by placeholder text.
-    private func upcomingLineSlotWidth(isPlaceholder: Bool) -> CGFloat {
-        guard isPlaceholder,
-              let next = PlaybackCoordinator.shared.nextLineText?
-                  .trimmingCharacters(in: .whitespacesAndNewlines),
-              !next.isEmpty
-        else { return 0 }
-        return MenuBarMarqueeRenderer.width(
-            of: next, font: MenuBarMarqueeRenderer.mainFont(for: next, twoRows: false))
     }
 
     /// Interim rendering while slot geometry change is postponed: renders the latest lyric line

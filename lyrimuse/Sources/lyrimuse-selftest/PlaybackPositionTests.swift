@@ -7,6 +7,37 @@ import Foundation
 
 @MainActor
 func runPlaybackPositionTests() {
+    do {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        for correction in [-1000, -500, 500, 1000] {
+            let anchor = ProgressAnchor(durationMs: 200_000, progressMs: 40_000, rate: 1,
+                progressTs: nil, baseAgeMs: 0, fetchedAt: start, fresh: true, correctionMs: correction)
+            var previous = 40_000
+            for step in 0...200 {
+                let position = anchor.extrapolatedPositionMs(now: start.addingTimeInterval(Double(step) / 20))
+                expectEqual(position >= previous, true, "小幅纠偏的每一帧都不能回退")
+                previous = position
+            }
+            expectEqual(previous, 50_000 + correction, "纠偏应收敛到真实播放时间")
+            expectEqual(anchor.instantaneousRate(now: start), correction < 0 ? 0.8 : 1.2,
+                        "菜单栏动画跟随纠偏速率")
+            expectEqual(anchor.instantaneousRate(now: start.addingTimeInterval(10)), 1,
+                        "纠偏结束恢复正常速度")
+        }
+        expectEqual(ProgressAnchor.correctionForContinuousPlayback(displayedMs: 40_000,
+            targetMs: 39_000, continuous: true), -1000, "连续播放的小幅回拨改为平滑纠偏")
+        expectEqual(ProgressAnchor.correctionForContinuousPlayback(displayedMs: 40_000,
+            targetMs: 39_000, continuous: false), 0, "换歌与主动 seek 立即跳转")
+        expectEqual(ProgressAnchor.correctionForContinuousPlayback(displayedMs: 40_000,
+            targetMs: 10_000, continuous: true), 0, "大幅 seek 不平滑")
+        expectEqual(enrichLyricsSearchIncomplete(lyrics: "", sourcesSkipped: [], fillCount: 0,
+            sourcesFailed: ["netease"]), true, "请求失败不能立即认定为没有歌词")
+        expectEqual(enrichLyricsSearchIncomplete(lyrics: "", sourcesSkipped: [], fillCount: 1,
+            sourcesFailed: ["netease"]), false, "补搜结束后不无限显示搜索中")
+        let legacy = try? JSONDecoder().decode(EnrichCacheEntry.self, from: Data("{\"lyrics\":\"line\"}".utf8))
+        expectEqual(legacy?.lyrics, "line", "新增失败字段兼容旧缓存")
+    }
+
     // ---- MediaControlClient.ageCompensatedCachedElapsed: 借用后台 AppleScript 缓存 ----
     // 快照前的年龄补偿+合理性核对(2026-08-04 实测排查坐实的回归:缓存值不补偿年龄直接
     // 当"当前位置"用,本地整条展示链慢 ~1.8s,详见该函数注释)。

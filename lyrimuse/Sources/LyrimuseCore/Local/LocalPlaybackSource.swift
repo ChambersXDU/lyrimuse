@@ -657,12 +657,15 @@ public final class LocalPlaybackSource: ObservableObject {
         // poll 还要异步读取播放器快照,并受 pollGeneration 去乱序保护;恰好撞上另一轮 poll
         // 时这次“歌词已到达”的刷新可能被延后到下一拍。
         EnrichCacheReader.onContentAdopted = { [weak self] in self?.handleEnrichContentAdopted() }
+        EnrichCacheReader.startWatching()
         // 快速 tick 不在这里无条件启动——是否需要它取决于第一次 poll() 拿到的播放
         // 状态,交给 apply() 里的 ensureFastTimerRunning()/stopFastTimer() 决定。
         poll()
     }
 
     public func stop() {
+        EnrichCacheReader.stopWatching()
+        EnrichCacheReader.onContentAdopted = nil
         pollTimer?.invalidate(); pollTimer = nil
         for observer in [playerInfoObserver, spotifyInfoObserver].compactMap({ $0 }) {
             DistributedNotificationCenter.default().removeObserver(observer)
@@ -1304,14 +1307,19 @@ public final class LocalPlaybackSource: ObservableObject {
             let needsNewAnchor = anchor == nil || trackChanged || didReanchor
                 || anchor?.rate != rate || anchor?.durationMs != Int(duration * 1000)
             if needsNewAnchor {
+                let targetMs = Int(positionSeconds * 1000)
+                let correction = ProgressAnchor.correctionForContinuousPlayback(
+                    displayedMs: anchor?.extrapolatedPositionMs(now: now), targetMs: targetMs,
+                    continuous: !trackChanged && posWasPlaying && anchor?.rate == rate
+                        && (lastSeekAt.map { now.timeIntervalSince($0) >= Self.seekSettleWindow } ?? true))
                 anchor = ProgressAnchor(
                     durationMs: Int(duration * 1000),
-                    progressMs: Int(positionSeconds * 1000),
+                    progressMs: targetMs - correction,
                     rate: rate,
                     progressTs: nil,
                     baseAgeMs: 0, // 本机直接读取,没有网络延迟需要外推的锚点年龄
                     fetchedAt: now,
-                    fresh: true // 本地读取,始终当作新鲜锚点,不封顶外推
+                    fresh: true, correctionMs: correction
                 )
             }
         } else {

@@ -14,13 +14,15 @@ public struct MenuBarSlotFloor: Sendable, Equatable {
 
     public init() {}
 
-    /// Calculates slot width for the given target length within the current track.
+    /// Calculates slot width using both the current line and the premeasured song width.
+    /// Reserving future lines at the first frame avoids delayed expansion during a long line.
     ///
     /// When `trackKey` changes, resets floor to `target` and flags `didResetOnLastCall`.
     /// Otherwise, maintains monotonic expansion by returning `max(floor, target)`.
-    public mutating func width(target: CGFloat, trackKey: String) -> CGFloat {
+    public mutating func width(target: CGFloat, preparedWidth: CGFloat = 0,
+                               maxWidth: CGFloat = .greatestFiniteMagnitude, trackKey: String) -> CGFloat {
         guard !target.isNaN else { return floor }
-        let clampedTarget = max(0, target)
+        let clampedTarget = max(0, min(maxWidth, max(target, preparedWidth)))
         if trackKey != self.trackKey {
             self.trackKey = trackKey
             floor = clampedTarget
@@ -28,7 +30,7 @@ public struct MenuBarSlotFloor: Sendable, Equatable {
         } else {
             didResetOnLastCall = false
         }
-        floor = max(floor, clampedTarget)
+        floor = min(maxWidth, max(floor, clampedTarget))
         return floor
     }
 

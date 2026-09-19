@@ -106,9 +106,11 @@ func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) 
 		recordAPICall(summaryKey, elapsed, true, time.Now())
 		// 歌词源级熔断的失败观察(见 sourcebreaker.go):只有歌词源的主机会被记,别的请求
 		// 在 lyricSourceForHost 那里直接归零。
+		noteLyricRoundFailure(req.Context(), req.URL.Host, err, 0)
 		lyricSourceBreakerShared.observeTraced(req.URL.Host, err, 0, "", tr)
 		return resp, err
 	}
+	noteLyricRoundFailure(req.Context(), req.URL.Host, nil, resp.StatusCode)
 	lyricSourceBreakerShared.observeTraced(req.URL.Host, nil, resp.StatusCode, resp.Header.Get("Retry-After"), tr)
 	failed := resp.StatusCode >= 400
 	if failed {

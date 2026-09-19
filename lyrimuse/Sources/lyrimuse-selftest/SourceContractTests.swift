@@ -891,7 +891,7 @@ func runSourceContractTests() {
         if let item = read("MenuBar/MenuBarStatusItem.swift") {
             expectEqual(item.contains("secondaryKind.showsSecondaryRow ? coordinator.currentLine : coordinator.compactLine"), true,
                         "菜单栏双排: 副行开着取 currentLine、关着取 compactLine(跟灵动岛同一条决策)")
-            expectEqual(item.contains("fillPath != nil || icon != nil || rowState.twoRows"), true,
+            expectEqual(item.contains("widthMode: renderWidth > 0 ? .fixed : settings.menuBarLyricsWidthMode"), true,
                         "菜单栏双排: 自适应装得下的句子双排时也走图层渲染")
             expectEqual(item.contains("MenuBarMarqueeRenderer.mainFont(for: text, twoRows: twoRows)"), true,
                         "菜单栏双排: 主行字体只从 mainFont(for:twoRows:) 一个入口取")
@@ -1800,12 +1800,13 @@ func runSourceContractTests() {
         let source = read(packageDir.appendingPathComponent("Sources/LyrimuseCore/Local/LocalPlaybackSource.swift"))
         if let enrichGo, let breakerGo, let reader, let source {
             // ① collector 侧闸口:三个条件 + 冷却与否分两档。
-            expectEqual(enrichGo.contains("if len(e.LyricsSourcesSkipped) > 0 && e.LyricsFillCount == 0 {"), true,
-                        "没跑完整: collector 快速补搜的闸口仍是「有源被跳过 + 还没补过」")
-            expectEqual(enrichGo.contains("if !anyLyricSourceCooling(e.LyricsSourcesSkipped) {"), true,
+            expectEqual(enrichGo.contains("if (len(e.LyricsSourcesSkipped) > 0 || len(e.LyricsSourcesFailed) > 0) && e.LyricsFillCount == 0 {"), true,
+                        "没跑完整: collector 快速补搜的闸口仍是「有源被跳过或请求失败 + 还没补过」")
+            expectEqual(enrichGo.contains("if !anyLyricSourceCooling(e.LyricsSourcesSkipped) && !anyLyricSourceCooling(e.LyricsSourcesFailed) {"), true,
                         "没跑完整: 快速补搜要先问熔断器那些源还冷不冷却")
             // ② 两个 JSON 键:Go 的 struct tag 与 Swift 的 CodingKeys 一一对上。
             for (tag, codingKey) in [("lyrics_sources_skipped", "case lyricsSourcesSkipped = \"lyrics_sources_skipped\""),
+                                     ("lyrics_sources_failed", "case lyricsSourcesFailed = \"lyrics_sources_failed\""),
                                      ("lyrics_fill_count", "case lyricsFillCount = \"lyrics_fill_count\"")] {
                 expectEqual(enrichGo.contains("json:\"\(tag),omitempty\""), true,
                             "没跑完整: collector 的 \(tag) struct tag")
@@ -1813,7 +1814,7 @@ func runSourceContractTests() {
                             "没跑完整: Swift 侧解码 \(tag)(键没对上就恒为 nil,功能静默失效)")
             }
             // ③ App 侧判据本体,以及它真的被 currentTrackHasNoLyrics 读到。
-            expectEqual(reader.contains("lyrics.isEmpty && !sourcesSkipped.isEmpty && fillCount == 0"), true,
+            expectEqual(reader.contains("lyrics.isEmpty && (!sourcesSkipped.isEmpty || !sourcesFailed.isEmpty) && fillCount == 0"), true,
                         "没跑完整: App 侧判据跟 collector 闸口逐条对上")
             expectEqual(source.contains("&& !(found?.searchIncomplete ?? false)"), true,
                         "没跑完整: currentTrackHasNoLyrics 要把这一位算进去")

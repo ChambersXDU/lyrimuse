@@ -1628,6 +1628,15 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	go startEnrichCancelWatcher(ctx)      // 独立节奏,见 enrichcancel.go 顶部注释
 	go startLyricsFillSweeper(ctx)        // 存量空歌词的定时/手动补空扫描,见 lyricsfillsweep.go 顶部注释
 
+	playbackWake := make(chan struct{}, 1)
+	go watchPlaybackEvents(ctx, mediaControlBinaryPath(), playbackWake)
+	var playbackDebounce *time.Timer
+	var playbackReady <-chan time.Time
+	defer func() {
+		if playbackDebounce != nil {
+			playbackDebounce.Stop()
+		}
+	}()
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 	for {
@@ -1675,6 +1684,14 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			return nil
 		case <-enrichNotify:
 			p.poll() // 后台 enrichment 完成,立刻带完整封面/歌词重推一轮
+		case <-playbackWake:
+			if playbackReady == nil {
+				playbackDebounce = time.NewTimer(120 * time.Millisecond)
+				playbackReady = playbackDebounce.C
+			}
+		case <-playbackReady:
+			playbackReady = nil
+			p.poll()
 		case <-ticker.C:
 			p.poll()
 		case r := <-p.submitDoneCh:

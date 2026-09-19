@@ -169,6 +169,8 @@ type enrichEntry struct {
 	// 这一轮因源级熔断被跳过的源(sourcebreaker.go)。非空且歌词为空时 needsLyricsFirstFill
 	// 把补空间隔缩到 10 分钟——那不是"查过了没有",是"没问它"。每次写缓存都整体覆盖(含清空)。
 	LyricsSourcesSkipped []string `json:"lyrics_sources_skipped,omitempty"`
+	// 实际请求失败或搜索截止时未返回的源，同样需要一次快速补搜。
+	LyricsSourcesFailed []string `json:"lyrics_sources_failed,omitempty"`
 	// 最近一次完整评估的决策记录(候选表+得分明细,只存元数据),见 decision.go。
 	// ⚠️ 只写不读:解析逻辑不许拿它当输入。
 	LyricsDecision *lyricsDecision `json:"lyrics_decision,omitempty"`
@@ -547,11 +549,14 @@ func trackEnrichment(ctx context.Context, artist, title, album, bundleID string,
 		wrongDuration := observeWrongDuration(key,
 			durationMismatch(e.ResolvedDurationSecs, durationSecs), durationSecs, time.Now().Unix())
 		// 一次只跑一路后台任务(都会重新取锁改同一条记录),下次播放时轮到下一个。
-		// 设备直送封面排最前面:只在"新曲目开始播放" + 现有封面还不是设备直送这一档时才
+		// 空歌词补搜优先于外围信息。设备直送封面只在"新曲目开始播放" + 现有封面还不是设备直送这一档时才
 		// 起——后一条门槛避免同一首歌每次重播都重新问一遍 media-control(coverSource 一旦
 		// 变成 "device" 就此定案,不再需要每次播放都重新验证,见 applyDeviceCoverUpgrade
 		// 头注)。
-		if isNewTrack && e.CoverSource != "device" && !enrichInflight[key] {
+		if needsLyricsFirstFill(e) && !enrichInflight[key] {
+			enrichInflight[key] = true
+			go retryLyricsUpgrade(ctx, key, artist, title, album, durationSecs, true)
+		} else if isNewTrack && e.CoverSource != "device" && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go applyDeviceCoverUpgrade(ctx, key, artist, title, album, bundleID)
 		} else if (needsPeripheralBackfill(e, artist, album) ||
@@ -566,12 +571,6 @@ func trackEnrichment(ctx context.Context, artist, title, album, bundleID string,
 			// 三态判据见 motionCoverWorthBackfill。
 			enrichInflight[key] = true
 			go backfillPeripheralFields(ctx, key, artist, title, album, durationSecs)
-		} else if needsLyricsFirstFill(e) && !enrichInflight[key] {
-			// "条目已存在但一条歌词都没有" —— 这条 才补上,在此之前它落在所有
-			// 路径之外、一首歌搜砸一次就永久卡住,见 needsLyricsFirstFill 的注释。
-			// 排在下面两条前面无所谓先后:那两条对空歌词条目都直接 return false。
-			enrichInflight[key] = true
-			go retryLyricsUpgrade(ctx, key, artist, title, album, durationSecs, true)
 		} else if needsLyricsRescore(e, pinned, features.LyricsAutoUpgrade) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go rescoreLyrics(ctx, key, artist, title, album, durationSecs)
@@ -1111,9 +1110,9 @@ func needsLyricsFirstFill(e enrichEntry) bool {
 	// 快速补空烧掉(补完 LyricsFillCount 就是 1,直接掉回 24 小时起步的退避)。30 秒是给
 	// "抖动型故障"留的观察期——熔断第一档就是 15 秒,等满 30 秒意味着至少有一档冷却完整
 	// 过完、且没有新的失败把它重新点着。
-	if len(e.LyricsSourcesSkipped) > 0 && e.LyricsFillCount == 0 {
+	if (len(e.LyricsSourcesSkipped) > 0 || len(e.LyricsSourcesFailed) > 0) && e.LyricsFillCount == 0 {
 		interval = lyricsFillSkippedRetryInterval
-		if !anyLyricSourceCooling(e.LyricsSourcesSkipped) {
+		if !anyLyricSourceCooling(e.LyricsSourcesSkipped) && !anyLyricSourceCooling(e.LyricsSourcesFailed) {
 			interval = lyricsFillSkippedReadyRetryInterval
 		}
 	}
@@ -1418,6 +1417,7 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 		e.LyricsSourcesResponded = responded
 	}
 	e.LyricsSourcesSkipped = round.skippedSources()
+	e.LyricsSourcesFailed = round.failedSources()
 	baseline, comparable := lyricsUpgradeBaseline(e, scored)
 	upgraded := picked != nil && comparable && picked.Score > baseline
 	path := lyricsDecisionPathUpgrade
@@ -1653,6 +1653,7 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 		e.LyricsSourcesResponded = responded
 	}
 	e.LyricsSourcesSkipped = round.skippedSources()
+	e.LyricsSourcesFailed = round.failedSources()
 	// 不可判(当前源这轮没应答)时不写决策记录 —— 那一轮没有做出任何决定,盖掉上一份
 	// 完整评估的证据反而是损失。可判的两个分支都写(见 decision.go 的 Applied 语义)。
 	if decidable {
@@ -1758,6 +1759,8 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		// 不走下面的网络健康度分类:那一段统计的是"这一轮请求失败得多不多",用户
 		// 主动取消会让全部还在飞的请求同时失败,拿这个去判"网络是不是不通"是一次
 		// 必然的误报,而不是巧合。
+		e.LyricsSourcesSkipped = nil
+		e.LyricsSourcesFailed = nil
 		commitEnrichEntry(key, e)
 		return
 	}
@@ -2237,6 +2240,7 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	e.LyricsSourcesSeen = lyricSourcesWithCandidates(scored)
 	e.LyricsSourcesResponded = lyricSourcesResponded(scored)
 	e.LyricsSourcesSkipped = round.skippedSources()
+	e.LyricsSourcesFailed = round.failedSources()
 	picked := pickLyricCandidate(scored)
 	// 决策固化(见 decision.go):首次解析是最要紧的一份 —— 缓存永久保留,这一刻的运气
 	// 就是这首歌以后一直显示的东西,不记下来事后无从复盘。
@@ -3786,6 +3790,11 @@ collect:
 			}
 			onUpdate(raw["netease"].ne, scoreAndSort(), enabledDone(), totalSources)
 		case <-deadline:
+			for _, source := range lyricSourceNames {
+				if !doneSources[source] && lyricSourceEnabled(source) && (only == nil || only[source]) {
+					round.markFailed(source)
+				}
+			}
 			log.Printf("lyrics: search deadline (%s) hit for artist=%q title=%q, proceeding with %d/%d sources back", lyricSearchDeadline, artist, title, i, totalSources)
 			break collect
 		case <-ctx.Done():

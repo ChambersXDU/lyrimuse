@@ -10,9 +10,10 @@ public struct ProgressAnchor {
     public let progressTs: Int?   // 服务器锚点的 epoch 毫秒;没有 ageMs 时的兜底基准
     public let baseAgeMs: Int?    // 服务器算好的锚点年龄(Cloudflare 时钟,不受本机时钟偏差影响)
     public let fetchedAt: Date    // 本机收到这份数据的时刻
+    public let correctionMs: Int
     public let fresh: Bool        // true = 来自 KV(采集器直推,准确)→ 不限龄外推
 
-    public init(durationMs: Int, progressMs: Int, rate: Double, progressTs: Int?, baseAgeMs: Int?, fetchedAt: Date, fresh: Bool) {
+    public init(durationMs: Int, progressMs: Int, rate: Double, progressTs: Int?, baseAgeMs: Int?, fetchedAt: Date, fresh: Bool, correctionMs: Int = 0) {
         self.durationMs = durationMs
         self.progressMs = progressMs
         self.rate = rate
@@ -20,6 +21,24 @@ public struct ProgressAnchor {
         self.baseAgeMs = baseAgeMs
         self.fetchedAt = fetchedAt
         self.fresh = fresh
+        self.correctionMs = correctionMs
+    }
+
+    public var correctionEndDate: Date? {
+        guard correctionMs != 0, rate > 0 else { return nil }
+        return fetchedAt.addingTimeInterval(Double(abs(correctionMs)) / (1000 * rate * 0.2))
+    }
+
+    public func instantaneousRate(now: Date = Date()) -> Double {
+        guard let end = correctionEndDate, now < end else { return rate }
+        return rate * (correctionMs < 0 ? 0.8 : 1.2)
+    }
+
+    public static func correctionForContinuousPlayback(
+        displayedMs: Int?, targetMs: Int, continuous: Bool
+    ) -> Int {
+        guard continuous, let displayedMs, abs(targetMs - displayedMs) <= 2000 else { return 0 }
+        return targetMs - displayedMs
     }
 
     // from(_ state: NowPlayingState, fetchedAt:) 工厂方法已删(2026-08-20):它与
@@ -42,6 +61,9 @@ public struct ProgressAnchor {
         var pos = Double(progressMs)
         if rate > 0, ageMs > 0, ageMs < cap {
             pos += ageMs * rate
+            // 小幅纠偏最多改变 20% 的播放速度，赶上真实时钟时不会重播已经高亮的字。
+            let adjustment = min(Double(abs(correctionMs)), ageMs * rate * 0.2)
+            pos += correctionMs < 0 ? -adjustment : adjustment
         }
         pos = max(0, min(Double(durationMs), pos))
         return Int(pos)

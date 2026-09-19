@@ -29589,25 +29589,25 @@
         }
       }
     },
-    "只影响装得下的句子。\n固定：短句也占满设定宽度，位置不变。\n自适应：短句按自己的宽度占位，这一项随句变宽变窄，旁边的图标跟着挪。" : {
+    "固定：始终占满设定宽度。\n自适应：提前按整首歌的歌词预留宽度，不超过设定上限；同一首歌换句时保持稳定。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Only affects lines that already fit.\nFixed: short lines still fill the set width, so the item never moves.\nAdaptive: short lines take only what they need; the item's width changes with each line and the icons beside it shift along."
+            "value" : "Fixed: always uses the configured width.\nAdaptive: reserves space for the whole song, up to the configured maximum, and stays steady between lines."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只影响装得下的句子。\n固定：短句也占满设定宽度，位置不变。\n自适应：短句按自己的宽度占位，这一项随句变宽变窄，旁边的图标跟着挪。"
+            "value" : "固定：始终占满设定宽度。\n自适应：提前按整首歌的歌词预留宽度，不超过设定上限；同一首歌换句时保持稳定。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只影響裝得下的句子。\n固定：短句也佔滿設定寬度，位置不變。\n自適應：短句按自己的寬度佔位，這一項隨句變寬變窄，旁邊的圖像跟著挪。"
+            "value" : "固定：始終佔滿設定寬度。\n自適應：提前按整首歌的歌詞預留寬度，不超過設定上限；同一首歌換句時保持穩定。"
           }
         }
       }
