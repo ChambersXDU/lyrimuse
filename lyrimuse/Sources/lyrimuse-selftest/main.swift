@@ -11,6 +11,7 @@ struct TestGroup {
 }
 
 let groups: [TestGroup] = [
+    TestGroup(name: "file-transaction", summary: "文件提交失败回滚 / 歌词与索引一致性", run: runFileTransactionTests),
     TestGroup(name: "parsing", summary: "歌词解析:LRC / YRC / 逐字时间轴归一化", run: runLyricsParsingTests),
     TestGroup(name: "sync-engine", summary: "歌词同步引擎:当前行 / 滚动 / 填色 / 提前量 / 对唱分栏", run: runSyncEngineTests),
     TestGroup(name: "credit-lines", summary: "署名行 / 噪声行过滤(含全库语料回归)", run: runCreditLineTests),

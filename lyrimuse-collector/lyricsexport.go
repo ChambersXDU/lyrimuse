@@ -38,6 +38,40 @@ func exportLyricsFiles() {
 	if lyricsDir == "" {
 		return
 	}
+	enrichSaveMu.Lock()
+	defer enrichSaveMu.Unlock()
+	enrichMu.Lock()
+	// Hold the same sidecar lock through export so an old snapshot cannot restore
+	// files the app just deleted, or overwrite its newly edited lyrics.
+	if enrichPath != "" {
+		lock, err := enrichCacheLock(enrichPath)
+		if err != nil {
+			enrichMu.Unlock()
+			log.Printf("lyrics export lock: %v", err)
+			return
+		}
+		defer unlockEnrichCache(lock)
+		disk, err := readEnrichCacheDisk(enrichPath)
+		if err != nil {
+			enrichMu.Unlock()
+			log.Printf("lyrics export cache: %v", err)
+			return
+		}
+		baseline := enrichBaseline
+		if !enrichBaselineReady || enrichBaselinePath != enrichPath {
+			baseline = map[string]enrichEntry{}
+		}
+		merged, err := mergeEnrichCache(baseline, enrichCache, disk)
+		if err != nil {
+			enrichMu.Unlock()
+			log.Printf("lyrics export merge: %v", err)
+			return
+		}
+		noteExternalEnrichChanges(baseline, disk)
+		enrichCache = merged
+		enrichBaseline = cloneEnrichMap(disk)
+		enrichBaselinePath, enrichBaselineReady = enrichPath, true
+	}
 	type entryJob struct {
 		key                  string
 		artist, title, album string
@@ -45,7 +79,6 @@ func exportLyricsFiles() {
 		manual               bool
 		variants             [4]string
 	}
-	enrichMu.Lock()
 	jobs := make([]entryJob, 0, len(enrichCache))
 	for key, e := range enrichCache {
 		if e.Lyrics == "" {

@@ -8,8 +8,6 @@ import (
 	"log"
 	"math"
 	neturl "net/url"
-	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
@@ -167,11 +165,14 @@ func (e enrichEntry) fields() map[string]string {
 const enrichPeripheralRetryInterval = 10 * time.Minute
 
 var (
-	enrichMu       sync.Mutex
-	enrichCache    = map[string]enrichEntry{}
-	enrichPath     string
-	enrichDirty    bool
-	enrichInflight = map[string]bool{}
+	enrichMu            sync.Mutex
+	enrichCache         = map[string]enrichEntry{}
+	enrichPath          string
+	enrichDirty         bool
+	enrichBaseline      map[string]enrichEntry
+	enrichBaselinePath  string
+	enrichBaselineReady bool
+	enrichInflight      = map[string]bool{}
 
 	enrichCancelFuncs = map[string]context.CancelFunc{}
 	enrichNotify      chan struct{}
@@ -690,6 +691,7 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 	}()
 	enrichMu.Lock()
 	sourceChoice := enrichCache[key].LyricsSourceChoice
+	generation := enrichExternalGeneration[key]
 	enrichMu.Unlock()
 
 	roundCtx, round := withLyricSourceRound(ctx)
@@ -718,7 +720,7 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 		}
 	}()
 	e, ok := enrichCache[key]
-	if !ok {
+	if !ok || enrichExternalGeneration[key] != generation {
 
 		return
 	}
@@ -843,6 +845,7 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	enrichMu.Lock()
 	currentSource := enrichCache[key].LyricsSource
 	sourceChoice := enrichCache[key].LyricsSourceChoice
+	generation := enrichExternalGeneration[key]
 	enrichMu.Unlock()
 
 	roundCtx, round := withLyricSourceRound(ctx)
@@ -873,7 +876,7 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 		}
 	}()
 	e, ok := enrichCache[key]
-	if !ok {
+	if !ok || enrichExternalGeneration[key] != generation {
 
 		return
 	}
@@ -943,6 +946,9 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 }
 
 func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID string, durationSecs float64, isNewTrack bool) {
+	enrichMu.Lock()
+	generation := enrichExternalGeneration[key]
+	enrichMu.Unlock()
 	defer func() {
 		enrichMu.Lock()
 		delete(enrichInflight, key)
@@ -967,7 +973,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 
 		e.LyricsSourcesSkipped = nil
 		e.LyricsSourcesFailed = nil
-		commitEnrichEntry(key, e)
+		commitEnrichEntry(key, e, generation)
 		return
 	}
 
@@ -986,15 +992,19 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 	if e.CoverURL == "" && e.Lyrics == "" && e.AppleURL == "" && !hasRealQQURL && e.NeteaseURL == "" {
 
 		if lyricsRoundConfirmsNoResult(attempts, failures) {
-			commitEnrichEntry(key, e)
+			commitEnrichEntry(key, e, generation)
 		}
 		return
 	}
-	commitEnrichEntry(key, e)
+	commitEnrichEntry(key, e, generation)
 }
 
-func commitEnrichEntry(key string, e enrichEntry) {
+func commitEnrichEntry(key string, e enrichEntry, generation uint64) {
 	enrichMu.Lock()
+	if enrichExternalGeneration[key] != generation {
+		enrichMu.Unlock()
+		return
+	}
 	enrichCache[key] = e
 	enrichDirty = true
 	enrichMu.Unlock()
@@ -1978,7 +1988,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 type lyricSourceSkip int
 
 const (
-	lyricSourceQuery        lyricSourceSkip = iota
+	lyricSourceQuery lyricSourceSkip = iota
 	lyricSourceSkipDisabled
 	lyricSourceSkipCooling
 )
@@ -2202,82 +2212,4 @@ collect:
 	}
 
 	return raw["netease"].ne, scoreAndSort()
-}
-
-func loadEnrichCache(path string) {
-	enrichPath = path
-	data, err := os.ReadFile(path)
-	if err != nil {
-
-		if !os.IsNotExist(err) {
-			log.Printf("load enrich cache: %v — starting empty, existing file left untouched", err)
-		}
-		return
-	}
-	var m map[string]enrichEntry
-	if err := json.Unmarshal(data, &m); err != nil || m == nil {
-
-		side := path + ".corrupt"
-		if renameErr := os.Rename(path, side); renameErr == nil {
-			log.Printf("enrich cache unreadable (%v) — moved aside to %s, starting empty", err, side)
-		} else {
-			log.Printf("enrich cache unreadable (%v) and could not move aside (%v)", err, renameErr)
-		}
-		return
-	}
-	enrichMu.Lock()
-	enrichCache = m
-	enrichMu.Unlock()
-	log.Printf("cache: loaded %d track enrichments from %s", len(m), path)
-	warnEnrichUnknownKeys(m)
-}
-
-var enrichSaveMu sync.Mutex
-
-func saveEnrichCache() {
-	enrichSaveMu.Lock()
-	defer enrichSaveMu.Unlock()
-	enrichMu.Lock()
-	if !enrichDirty || enrichPath == "" {
-		enrichMu.Unlock()
-		return
-	}
-	data, err := json.Marshal(enrichCache)
-	enrichDirty = false
-	enrichMu.Unlock()
-	if err != nil {
-		return
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(enrichPath), filepath.Base(enrichPath)+".tmp.*")
-	if err != nil {
-		enrichMu.Lock()
-		enrichDirty = true
-		enrichMu.Unlock()
-		log.Printf("save enrich cache: %v", err)
-		return
-	}
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
-		enrichMu.Lock()
-		enrichDirty = true
-		enrichMu.Unlock()
-		log.Printf("save enrich cache: %v", err)
-		return
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmp.Name())
-		enrichMu.Lock()
-		enrichDirty = true
-		enrichMu.Unlock()
-		log.Printf("save enrich cache: %v", err)
-		return
-	}
-	if err := os.Rename(tmp.Name(), enrichPath); err != nil {
-		os.Remove(tmp.Name())
-		enrichMu.Lock()
-		enrichDirty = true
-		enrichMu.Unlock()
-		log.Printf("save enrich cache: %v", err)
-	}
 }

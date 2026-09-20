@@ -91,17 +91,23 @@ public final class EnrichCacheStore: ObservableObject {
     private static var lyricsDir: URL { FeatureSettingsStore.shared.effectiveLyricsDir }
 
     private var raw: [String: [String: Any]] = [:]
+    private var persistedRaw: [String: [String: Any]] = [:]
 
     private var knownKeys: Set<String> = []
 
     private var locallyEditedKeys: Set<String> = []
     private var locallyDeletedKeys: Set<String> = []
+    private var pendingExportKeys: Set<String> = []
+    private var pendingFileChanges: [URL: ReversibleFileChanges.Change] = [:]
+    private var pendingPersistCount = 0
+    private var editGeneration = 0
 
     private var lastPersistPulledInNewKeys = false
 
     private init() {}
 
     private func markLocallyEdited(_ key: String) {
+        editGeneration += 1
         locallyEditedKeys.insert(key)
         locallyDeletedKeys.remove(key)
     }
@@ -120,6 +126,8 @@ public final class EnrichCacheStore: ObservableObject {
     }
 
     public func reload(onlyIfChanged: Bool = false) async {
+        guard pendingPersistCount == 0, locallyEditedKeys.isEmpty, locallyDeletedKeys.isEmpty else { return }
+        let generation = editGeneration
         let cacheURL = Self.cacheURL
         if onlyIfChanged,
            let fp = Self.fileFingerprint(cacheURL),
@@ -155,8 +163,10 @@ public final class EnrichCacheStore: ObservableObject {
 
             box.bundle = Self.buildSummaries(from: obj, offsetsSnapshot: offsetsSnapshot, lyricsDir: lyricsDir)
         }.value
+        guard generation == editGeneration, pendingPersistCount == 0 else { return }
         if let obj = box.obj, let bundle = box.bundle {
             raw = obj
+            persistedRaw = obj
             knownKeys = Set(obj.keys)
             lastLoadedFingerprint = box.fingerprint
 
@@ -439,12 +449,7 @@ public final class EnrichCacheStore: ObservableObject {
         }
         raw[key] = entry
         markLocallyEdited(key)
-        writeLyricsFiles(
-            key: key, lyrics: lyrics, tr: tr, roma: effectiveRoma,
-            yrc: entry["lyrics_yrc"] as? String ?? "",
-            source: entry["lyrics_source"] as? String ?? "",
-            manual: markManual
-        )
+        pendingExportKeys.insert(key)
 
         rebuildSummaries()
         guard await persist() else { return false }
@@ -501,15 +506,7 @@ public final class EnrichCacheStore: ObservableObject {
             }
             raw[key] = entry
             markLocallyEdited(key)
-            writeLyricsFiles(
-                key: key,
-                lyrics: entry["lyrics"] as? String ?? "",
-                tr: entry["lyrics_tr"] as? String ?? "",
-                roma: entry["lyrics_roma"] as? String ?? "",
-                yrc: entry["lyrics_yrc"] as? String ?? "",
-                source: entry["lyrics_source"] as? String ?? "",
-                manual: locking
-            )
+            pendingExportKeys.insert(key)
         }
         rebuildSummaries()
         guard await persist() else { return 0 }
@@ -600,22 +597,20 @@ public final class EnrichCacheStore: ObservableObject {
         if victims.count >= Self.autoSnapshotDeleteThreshold {
             lastAutoSnapshotURL = await LyricsBackupStore.writeAutoSnapshot(reason: "delete")
         }
+        editGeneration += 1
         var removed: [String: [String: Any]] = [:]
         removed.reserveCapacity(victims.count)
         for key in victims {
             if let entry = raw.removeValue(forKey: key) { removed[key] = entry }
             locallyDeletedKeys.insert(key)
             locallyEditedKeys.remove(key)
-            deleteExportedLyricsFile(forKey: key)
+            pendingExportKeys.remove(key)
+            stageExportedLyricsDeletion(forKey: key)
         }
         rebuildSummaries()
         guard await persist() else {
 
-            for (key, entry) in removed {
-                raw[key] = entry
-                locallyDeletedKeys.remove(key)
-            }
-            rebuildSummaries()
+            restoreFailedDeletion(removed)
             return
         }
 
@@ -627,44 +622,36 @@ public final class EnrichCacheStore: ObservableObject {
     }
 
     public func clearAll() async {
-
         lastAutoSnapshotURL = await LyricsBackupStore.writeAutoSnapshot(reason: "clear")
+        let removed = raw
+        editGeneration += 1
         raw = [:]
-
-        deleteAllLyricsFiles()
+        locallyDeletedKeys.formUnion(removed.keys)
+        locallyEditedKeys.subtract(removed.keys)
+        pendingFileChanges.removeAll()
+        pendingExportKeys.removeAll()
         rebuildSummaries()
-        totalSizeBytes = 0
-        guard await persist(replacingEverything: true) else { return }
-
+        guard await persist(replacingEverything: true) else {
+            restoreFailedDeletion(removed)
+            return
+        }
         LyricsPinStore.shared.removeAll()
-
-        for attempt in 1...2 {
-            _ = await CollectorControl.restartAndWaitAsync()
-            PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
-            if !cacheFileHasEntries() {
-                return
-            }
-            logger.notice("clearAll: cache came back after restart (attempt \(attempt, privacy: .public)), wiping again")
-            raw = [:]
-            knownKeys = []
-            deleteAllLyricsFiles()
-            guard await persist(replacingEverything: true) else { return }
-            rebuildSummaries()
-            totalSizeBytes = 0
-        }
-        if cacheFileHasEntries() {
-
-            lastError = L10n.t("清空没有完全生效，请稍后再试一次")
-            await reload()
-        }
+        scheduleCollectorRestart()
+        refreshSizeBytes()
     }
 
-    private func cacheFileHasEntries() -> Bool {
-        guard let data = try? Data(contentsOf: Self.cacheURL),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return false
+    private func restoreFailedDeletion(_ removed: [String: [String: Any]]) {
+        for (key, entry) in removed where raw[key] == nil && locallyDeletedKeys.contains(key) {
+            raw[key] = entry
+            locallyDeletedKeys.remove(key)
+            for name in EnrichCacheKeys.exportedFileNames(forKey: key) {
+                let url = Self.lyricsDir.appendingPathComponent(name)
+                if let change = pendingFileChanges[url], change.content == nil {
+                    pendingFileChanges.removeValue(forKey: url)
+                }
+            }
         }
-        return !obj.isEmpty
+        rebuildSummaries()
     }
 
     static let autoSnapshotDeleteThreshold = 5
@@ -679,71 +666,11 @@ public final class EnrichCacheStore: ObservableObject {
                       result.total, result.added, result.overwritten)
     }
 
-    private static func trashOrRemove(_ url: URL) {
-        do {
-            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-        } catch {
-            try? FileManager.default.removeItem(at: url)
-        }
-    }
-
-    private func deleteAllLyricsFiles() {
-        guard let urls = try? FileManager.default.contentsOfDirectory(at: Self.lyricsDir, includingPropertiesForKeys: nil) else {
-            return
-        }
-        for url in urls where EnrichCacheKeys.lyricsFileSuffixes.contains(where: { url.lastPathComponent.hasSuffix($0) }) {
-            Self.trashOrRemove(url)
-        }
-    }
-
-    private static func sanitizeLyricsFilename(_ key: String) -> String {
-        EnrichCacheKeys.sanitizeFilename(key)
-    }
-
-    private func exportBaseName(forKey key: String) -> String {
-        let fold = EnrichCacheKeys.sanitizeFilename(key).lowercased()
-        let collides = raw.keys.contains { other in
-            other != key && EnrichCacheKeys.sanitizeFilename(other).lowercased() == fold
-        }
-        return collides ? EnrichCacheKeys.disambiguatedName(forKey: key) : EnrichCacheKeys.sanitizeFilename(key)
-    }
-
-    private func deleteExportedLyricsFile(forKey key: String) {
+    private func stageExportedLyricsDeletion(forKey key: String) {
         for name in EnrichCacheKeys.exportedFileNames(forKey: key) {
             let url = Self.lyricsDir.appendingPathComponent(name)
 
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            Self.trashOrRemove(url)
-        }
-    }
-
-    private static let lyricsFileSuffixes = EnrichCacheKeys.lyricsFileSuffixes
-
-    private func writeLyricsFiles(key: String, lyrics: String, tr: String, roma: String, yrc: String, source: String, manual: Bool) {
-        guard let parts = Self.splitKey(key) else { return }
-        let base = exportBaseName(forKey: key)
-
-        let plainBase = EnrichCacheKeys.sanitizeFilename(key)
-        let staleBase = base == plainBase ? EnrichCacheKeys.disambiguatedName(forKey: key) : plainBase
-        for suffix in EnrichCacheKeys.lyricsFileSuffixes {
-            try? FileManager.default.removeItem(at: Self.lyricsDir.appendingPathComponent(staleBase + suffix))
-        }
-        var header = "[ar:\(parts.artist)]\n[ti:\(parts.title)]\n[al:\(parts.album)]\n"
-        if !source.isEmpty { header += "[source:\(source)]\n" }
-        if manual { header += "[manual:1]\n" }
-        header += "\n"
-
-        let variants: [(suffix: String, content: String)] = [
-            (".lrc", lyrics), (".tr.lrc", tr), (".roma.lrc", roma), (".yrc", yrc),
-        ]
-        try? FileManager.default.createDirectory(at: Self.lyricsDir, withIntermediateDirectories: true)
-        for v in variants {
-            let url = Self.lyricsDir.appendingPathComponent(base + v.suffix)
-            if v.content.isEmpty {
-                try? FileManager.default.removeItem(at: url)
-                continue
-            }
-            try? (header + v.content).write(to: url, atomically: true, encoding: .utf8)
+            pendingFileChanges[url] = .init(url: url, content: nil)
         }
     }
 
@@ -751,6 +678,8 @@ public final class EnrichCacheStore: ObservableObject {
 
     @discardableResult
     private func persist(replacingEverything: Bool = false) async -> Bool {
+        pendingPersistCount += 1
+        defer { pendingPersistCount -= 1 }
         let previous = persistChain
         let task = Task { [weak self] () -> Bool in
             _ = await previous?.value
@@ -763,7 +692,8 @@ public final class EnrichCacheStore: ObservableObject {
 
     private func performPersist(replacingEverything: Bool) async -> Bool {
         guard JSONSerialization.isValidJSONObject(raw),
-              let memoryData = try? JSONSerialization.data(withJSONObject: raw) else {
+              let memoryData = try? JSONSerialization.data(withJSONObject: raw),
+              let baselineData = try? JSONSerialization.data(withJSONObject: persistedRaw) else {
             lastError = L10n.t("内部数据不是合法 JSON,已放弃保存")
             logger.error("raw dict is not valid JSON, aborting save")
             return false
@@ -771,6 +701,10 @@ public final class EnrichCacheStore: ObservableObject {
 
         let edited = locallyEditedKeys
         let deleted = locallyDeletedKeys
+        let fileChanges = pendingFileChanges
+        let exportKeys = pendingExportKeys
+        pendingExportKeys.removeAll()
+        pendingFileChanges.removeAll()
         locallyEditedKeys.removeAll()
         locallyDeletedKeys.removeAll()
         let cacheURL = Self.cacheURL
@@ -782,53 +716,45 @@ public final class EnrichCacheStore: ObservableObject {
             var ok: Bool = false
         }
 
+        let lyricsDir = Self.lyricsDir
         let result = await Task.detached(priority: .userInitiated) { () -> PersistResult in
-
-            guard let memoryObj = (try? JSONSerialization.jsonObject(with: memoryData)) as? [String: [String: Any]] else {
-                return PersistResult(mergedData: nil, pulledNew: false, errorMessage: "Failed to deserialize memory snapshot", ok: false)
-            }
-            var target = memoryObj
-            var pulledNew = false
-            if !replacingEverything,
-               let disk = try? Data(contentsOf: cacheURL),
-               let diskObj = try? JSONSerialization.jsonObject(with: disk) as? [String: [String: Any]] {
-                let merged = EnrichCacheMerge.merge(
-                    disk: diskObj, memory: memoryObj, edited: edited, deleted: deleted)
-                pulledNew = !Set(merged.keys).subtracting(memoryObj.keys).isEmpty
-                target = merged
-            }
             do {
-                let data = try JSONSerialization.data(withJSONObject: target)
-                try data.write(to: cacheURL, options: .atomic)
-                return PersistResult(mergedData: data, pulledNew: pulledNew, errorMessage: nil, ok: true)
+                let saved = try EnrichCachePersistence.save(
+                    cacheURL: cacheURL, memoryData: memoryData, baselineData: baselineData,
+                    edited: edited, deleted: deleted,
+                    replacingEverything: replacingEverything, fileChanges: Array(fileChanges.values),
+                    clearLyricsDirectory: replacingEverything ? lyricsDir : nil,
+                    exportKeys: exportKeys, lyricsDirectory: lyricsDir)
+                return PersistResult(mergedData: saved.data, pulledNew: saved.pulledNewKeys, ok: true)
             } catch {
-                return PersistResult(mergedData: nil, pulledNew: false, errorMessage: error.localizedDescription, ok: false)
+                return PersistResult(errorMessage: error.localizedDescription, ok: false)
             }
         }.value
 
         guard result.ok else {
 
-            locallyEditedKeys.formUnion(edited)
-            locallyDeletedKeys.formUnion(deleted)
+            // Newer edits/deletions queued while this save ran take precedence on retry.
+            pendingExportKeys.formUnion(exportKeys.subtracting(locallyDeletedKeys))
+            locallyEditedKeys.formUnion(edited.subtracting(locallyDeletedKeys))
+            locallyDeletedKeys.formUnion(deleted.subtracting(locallyEditedKeys))
+            for (url, change) in fileChanges where pendingFileChanges[url] == nil {
+                pendingFileChanges[url] = change
+            }
             lastError = String(format: L10n.t("写入本地记录文件失败: %@"), result.errorMessage ?? "")
             logger.error("write failed: \(result.errorMessage ?? "", privacy: .public)")
             lastPersistPulledInNewKeys = false
             return false
         }
+        lastError = nil
+        lastLoadedFingerprint = nil
         lastPersistPulledInNewKeys = result.pulledNew
         if let data = result.mergedData,
            let merged = (try? JSONSerialization.jsonObject(with: data)) as? [String: [String: Any]] {
-            if locallyEditedKeys.isEmpty && locallyDeletedKeys.isEmpty {
-
-                raw = merged
-                knownKeys = Set(merged.keys)
-            } else {
-
-                for (k, v) in merged where raw[k] == nil && !locallyDeletedKeys.contains(k) {
-                    raw[k] = v
-                }
-                knownKeys = Set(raw.keys)
-            }
+            let snapshot = (try? JSONSerialization.jsonObject(with: memoryData)) as? [String: [String: Any]]
+            raw = EnrichCacheMerge.merge(disk: merged, memory: raw, edited: locallyEditedKeys,
+                                        deleted: locallyDeletedKeys, baseline: snapshot)
+            persistedRaw = merged
+            knownKeys = Set(raw.keys)
         }
         return true
     }

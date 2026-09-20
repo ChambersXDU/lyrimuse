@@ -1,8 +1,96 @@
 import LyrimuseCore
 import Foundation
+import Darwin
 
 @MainActor
 func runLyricsManagerTests() {
+
+    do {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("lyrimuse-cache-save-" + UUID().uuidString)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        let cache = dir.appendingPathComponent("cache.json")
+        let lyricsDir = dir.appendingPathComponent("lyrics")
+        let lyric = lyricsDir.appendingPathComponent("song.lrc")
+        let disk: [String: [String: Any]] = [
+            "song": ["lyrics": "old"], "collector": ["lyrics": "fresh", "future_field": true]
+        ]
+        try JSONSerialization.data(withJSONObject: disk).write(to: cache)
+        let memory = try JSONSerialization.data(withJSONObject: ["song": ["lyrics": "manual"]])
+        let saved = try EnrichCachePersistence.save(
+            cacheURL: cache, memoryData: memory, edited: ["song"], deleted: [],
+            fileChanges: [.init(url: lyric, content: Data("manual".utf8))])
+        let merged = try JSONSerialization.jsonObject(with: saved.data) as! [String: [String: Any]]
+        expectEqual(merged["song"]?["lyrics"] as? String, "manual")
+        expectEqual(merged["collector"]?["lyrics"] as? String, "fresh")
+        expectEqual(merged["collector"]?["future_field"] as? Bool, true)
+        expectEqual(saved.pulledNewKeys, true)
+        expectEqual(try String(contentsOf: lyric), "manual")
+
+        let deleted = try EnrichCachePersistence.save(
+            cacheURL: cache, memoryData: Data("{}".utf8), edited: [], deleted: ["song"],
+            fileChanges: [.init(url: lyric, content: nil)])
+        let afterDelete = try JSONSerialization.jsonObject(with: deleted.data) as! [String: [String: Any]]
+        expectEqual(afterDelete["song"] == nil, true)
+        expectEqual(afterDelete["collector"] != nil, true)
+        expectEqual(fm.fileExists(atPath: lyric.path), false)
+
+        try Data("keep".utf8).write(to: lyric)
+        try Data("broken json".utf8).write(to: cache)
+        do {
+            _ = try EnrichCachePersistence.save(
+                cacheURL: cache, memoryData: memory, edited: ["song"], deleted: [],
+                fileChanges: [.init(url: lyric, content: Data("overwrite".utf8))])
+            expectEqual(false, true, "corrupt cache must refuse writes")
+        } catch {
+            expectEqual(try String(contentsOf: cache), "broken json")
+            expectEqual(try String(contentsOf: lyric), "keep")
+        }
+
+        try Data("{}".utf8).write(to: cache)
+        let unrelated = lyricsDir.appendingPathComponent("notes.txt")
+        try Data("notes".utf8).write(to: unrelated)
+        _ = try EnrichCachePersistence.save(
+            cacheURL: cache, memoryData: Data("{}".utf8), edited: [], deleted: [],
+            replacingEverything: true, clearLyricsDirectory: lyricsDir)
+        expectEqual(fm.fileExists(atPath: lyric.path), false)
+        expectEqual(try String(contentsOf: unrelated), "notes")
+        expectEqual(try String(contentsOf: cache), "{}")
+
+        let key = "Artist|Title|Album"
+        let original: [String: [String: Any]] = [key: ["lyrics": "old", "lyrics_tr": "old translation", "lyrics_source": "old source"]]
+        let latest: [String: [String: Any]] = [key: ["lyrics": "old", "lyrics_tr": "new translation", "lyrics_source": "old source", "cover_url": "new cover"]]
+        let edited: [String: [String: Any]] = [key: ["lyrics": "manual", "lyrics_tr": "old translation"]]
+        try JSONSerialization.data(withJSONObject: latest).write(to: cache)
+        let fieldSave = try EnrichCachePersistence.save(
+            cacheURL: cache, memoryData: JSONSerialization.data(withJSONObject: edited),
+            baselineData: JSONSerialization.data(withJSONObject: original), edited: [key], deleted: [],
+            exportKeys: [key], lyricsDirectory: lyricsDir)
+        let fieldMerged = try JSONSerialization.jsonObject(with: fieldSave.data) as! [String: [String: Any]]
+        expectEqual(fieldMerged[key]?["lyrics"] as? String, "manual")
+        expectEqual(fieldMerged[key]?["lyrics_tr"] as? String, "new translation")
+        expectEqual(fieldMerged[key]?["cover_url"] as? String, "new cover")
+        expectEqual(fieldMerged[key]?["lyrics_source"] == nil, true, "explicit field removal survives merge")
+        let translationFile = lyricsDir.appendingPathComponent(EnrichCacheKeys.sanitizeFilename(key) + ".tr.lrc")
+        expectEqual(try String(contentsOf: translationFile).hasSuffix("new translation"), true, "export uses merged cache, not stale editor fields")
+
+        let fd = open(cache.path + ".lock", O_RDWR)
+        guard fd >= 0 else { throw POSIXError(.EIO) }
+        defer { close(fd) }
+        guard flock(fd, LOCK_EX | LOCK_NB) == 0 else { throw POSIXError(.EIO) }
+        do {
+            _ = try EnrichCachePersistence.withLock(cacheURL: cache, timeout: 0.03) { true }
+            expectEqual(false, true, "cache lock must exclude other open file descriptions")
+        } catch let error as POSIXError {
+            expectEqual(error.code, .ETIMEDOUT)
+        }
+        flock(fd, LOCK_UN)
+        expectEqual(try EnrichCachePersistence.withLock(cacheURL: cache) { true }, true)
+        expectEqual(fm.fileExists(atPath: cache.path + ".lock"), true, "lock sidecar must survive commits")
+    } catch {
+        expectEqual(String(describing: error), "no error", "cache persistence filesystem regression")
+    }
 
     do {
         let W = LyricsColumnWidths.self

@@ -1,5 +1,6 @@
 import LyrimuseCore
 import Foundation
+import Darwin
 
 @MainActor
 func runOpsDiagnosticsTests() {
@@ -356,6 +357,30 @@ func runOpsDiagnosticsTests() {
         expectEqual(slept?.timedOut, true)
         expectEqual(slept?.succeeded, false)
         expectEqual(elapsed < 5, true)
+
+        let stubbornStart = Date()
+        let stubborn = ProcessRunner.run("/bin/sh", ["-c", "trap '' TERM; echo $$; while :; do :; done"], timeout: 0.15)
+        expectEqual(stubborn?.timedOut, true)
+        expectEqual(stubborn?.status, SIGKILL)
+        expectEqual(Date().timeIntervalSince(stubbornStart) < 2, true, "SIGTERM-ignoring command has bounded timeout")
+        if let pidText = stubborn?.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines), let pid = Int32(pidText) {
+            expectEqual(kill(pid, 0), -1, "timed-out direct child was reaped")
+            expectEqual(errno, ESRCH)
+        } else {
+            expectEqual(false, true, "stubborn command must emit its pid")
+        }
+
+        let inheritedPipeStart = Date()
+        let inheritedPipe = ProcessRunner.run("/bin/sh", ["-c", "/bin/sleep 20 & echo parent-exited"], timeout: 0.15)
+        expectEqual(inheritedPipe?.timedOut, true)
+        expectEqual(inheritedPipe?.stdoutText, "parent-exited\n")
+        expectEqual(Date().timeIntervalSince(inheritedPipeStart) < 2, true, "inherited stdout cannot keep the caller waiting")
+
+        let streamStart = Date()
+        let stream = ProcessRunner.run("/bin/sh", ["-c", "while :; do printf streaming; done"], timeout: 0.05)
+        expectEqual(stream?.timedOut, true)
+        expectEqual((stream?.stdout.count ?? 0) > 0, true)
+        expectEqual(Date().timeIntervalSince(streamStart) < 2, true, "continuous stdout cannot starve timeout checks")
 
         let big = ProcessRunner.run("/bin/sh", ["-c", "/usr/bin/yes ABCDEFGH | /usr/bin/head -c 1000000"], timeout: 20)
         expectEqual(big?.stdout.count, 1_000_000)
