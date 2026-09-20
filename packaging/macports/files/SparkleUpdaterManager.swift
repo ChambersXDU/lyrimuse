@@ -1,11 +1,3 @@
-// MacPorts-only replacement for Sources/lyrimuse/Settings/SparkleUpdaterManager.swift.
-//
-// An app installed by a package manager must not update itself — `port upgrade`
-// is the supported path — so this port drops the Sparkle dependency entirely
-// (the same call aqua/Ice makes). Upstream code calls into this manager from
-// several places; rather than patching every call site, this stub keeps the
-// same surface and does nothing. The updater UI reads `updatesSupported` and
-// hides itself.
 import Foundation
 
 @MainActor
@@ -18,7 +10,6 @@ final class SparkleUpdaterManager: ObservableObject {
         var downloaded: Bool
     }
 
-    /// Always false in this build: there is no in-app updater.
     static let updatesSupported = false
 
     @Published private(set) var availableUpdate: AvailableUpdate?

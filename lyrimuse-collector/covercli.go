@@ -9,27 +9,6 @@ import (
 	"path/filepath"
 )
 
-// `collector recheck-cover` —— 对指定的几条 enrich 缓存记录重新解析一次**封面**。
-//
-// 为什么需要它:封面一旦解析出来就永久保留,自动路径里只有"这首歌又被播到"时才会经
-// backfillPeripheralFields 复查一次(见 coverNeedsAlbumCheck)。发现某首歌封面选错时,
-// 除了等它下次被播放没有别的办法 —— 而"等它自己好"对一次已经看见的错误不是个交代。
-//
-// 三条跟 dedupe-entries 一致的约束:
-//
-//  1. **dry-run 跑同一条代码路径**,只在落盘前停手:重新解析、按 coverSwapAllowed 判断,
-//     然后打印计划。不另写一份"预演版",省掉"验收 A 实现、真跑 B 实现"这种分叉。
-//  2. **-apply 必须独占**(fail-closed):常驻 collector 内存里持有一整份 enrichCache 并
-//     按自己的节奏整份写回,它跑着的时候我们改磁盘,它下一次保存就原样盖回来。
-//     把缓存从 204 条磨到 10 条,机制正是"两个实例各写各的"。
-//  3. **只动封面四件套**(cover_url / cover_source / cover_album / accent_color),
-//     歌词、译文、人工修正标记一个字都不碰 —— 那些删了就找不回来。
-//
-// ⚠️ :cover_source=="device" 的条目,coverSwapAllowed 会无条件拒绝换掉
-// (见其注释)——这条 CLI 走的是同一个判定,所以也换不掉设备直送的封面。真遇到设备封面
-// 本身就是错的这种(理论上)情况,唯一的办法是直接手改 enrich-cache.json(先
-// launchctl bootout 停 collector,改完再 bootstrap 拉起来,这仓库其它几处手工缓存修复
-// 都是这个流程)。
 func runRecheckCoverCLI(args []string) {
 	fs := flag.NewFlagSet("recheck-cover", flag.ExitOnError)
 	apply := fs.Bool("apply", false, "真正写回缓存;不加就是预演,只打印计划")
@@ -47,11 +26,9 @@ func runRecheckCoverCLI(args []string) {
 		log.Fatalf("recheck-cover: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
 	cfgDir := configDir()
-	// 只读地拿一下功能开关(歌词源勾选会影响这一轮的候选挑选),跟 dedupe-entries 同款。
+
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
-	// ⚠️ 刻意**不**调 loadArtistIdentityCache / loadArtistAliasCache:那两份缓存的
-	// path 留空就是"只用内存不持久化"(见 musicbrainz.go),否则这个进程会拿一份空 map
-	// 把常驻实例攒下来的整份歌手身份缓存盖掉。
+
 	if *apply && !ensureExclusiveForDedupe(cfgDir) {
 		fmt.Fprintln(os.Stderr, "拒绝执行:collector 正在运行(或锁文件不可用)。")
 		fmt.Fprintln(os.Stderr, "请先停掉常驻实例再跑:launchctl bootout gui/$UID/com.lyrimuse.collector")
@@ -61,7 +38,6 @@ func runRecheckCoverCLI(args []string) {
 	os.Exit(runRecheckCover(keys, *apply))
 }
 
-// recheckCoverPlan 是一条记录重新解析封面的结果,dry-run 与 -apply 共用。
 type recheckCoverPlan struct {
 	key                         string
 	found                       bool
@@ -74,8 +50,7 @@ type recheckCoverPlan struct {
 
 func planRecheckCover(key string) recheckCoverPlan {
 	p := recheckCoverPlan{key: key}
-	// splitEnrichKey(lyricsexport.go)只按前两个 "|" 切,专辑名里带竖线不会打乱切分;
-	// 切不出三段时它返回三个空串。
+
 	artist, title, album := splitEnrichKey(key)
 	if title == "" {
 		p.reason = `key 不是 "歌手|歌名|专辑" 三段`
@@ -84,7 +59,7 @@ func planRecheckCover(key string) recheckCoverPlan {
 	enrichMu.Lock()
 	e, exists := enrichCache[key]
 	if !exists {
-		// 跟 trackEnrichment 一样,退一步找"只差大小写/空格/繁简"的同一首歌。
+
 		if alt, found := canonicalEnrichKey(key); found {
 			p.key, e, exists = alt, enrichCache[alt], true
 			artist, title, album = splitEnrichKey(alt)
@@ -102,12 +77,10 @@ func planRecheckCover(key string) recheckCoverPlan {
 	if duration <= 0 {
 		duration = e.DurationSecs
 	}
-	// 一次性 CLI 命令,没有可以取消它的交互界面,context.Background 就够。deviceCoverURL
-	// 传空串:这条 CLI 没有实时播放上下文,拿不到"设备现在正在播这首歌"这个前提。
+
 	fresh := resolveTrackEnrichment(context.Background(), artist, title, album, duration, "")
 	p.newURL, p.newSource, p.newAlbum, p.newAccent = fresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor
-	// 换封面判定用的专辑名:播放器没报时是 Apple 目录回填的那个(resolveTrackEnrichment 里刚同步查过,这里读缓存;
-	// 这个一次性进程的回填缓存 path 为空 = 只用内存,不会盖掉常驻实例那份)。
+
 	p.swap = coverSwapAllowed(e, fresh, coverAlbumForTrack(context.Background(), artist, title, album, duration))
 	switch {
 	case fresh.CoverURL == "":
@@ -145,7 +118,7 @@ func runRecheckCover(keys []string, apply bool) int {
 		enrichMu.Lock()
 		e, exists := enrichCache[p.key]
 		if !exists {
-			// 这期间被"歌词管理"删掉了 —— 不要把它复活回去,跟 backfillPeripheralFields 同款。
+
 			enrichMu.Unlock()
 			fmt.Println("   写回时这条已不在缓存里,跳过")
 			continue
@@ -182,15 +155,6 @@ func abbrev(s string, n int) string {
 	return string(r[:n-1]) + "…"
 }
 
-// `collector recheck-instrumental` —— 对指定条目重新解析一次,只把「纯音乐」结论写回。
-//
-// 为什么单独一条:纯音乐标记一旦缺了,补上它的自动路径是 needsLyricsFirstFill —— 那条
-// 的退避是 24 小时起步(见 lyricsFillBaseInterval),而这个标记的用户可见后果是列表里
-// 一整批曲目显示「无歌词」而不是「纯音乐」。发现之后等一天不是个交代。
-//
-// 只写 instrumental 一个字段:这轮如果某个源真给出了歌词,交给正常的补空路径去采纳
-// (那条有完整的打分/升级判据),这里不掺和 —— 一条一次性命令不该顺手改歌词。
-// 锁与 dry-run 的约束跟 recheck-cover 完全一致,理由见那边。
 func runRecheckInstrumentalCLI(args []string) {
 	fs := flag.NewFlagSet("recheck-instrumental", flag.ExitOnError)
 	apply := fs.Bool("apply", false, "真正写回缓存;不加就是预演,只打印计划")
@@ -207,7 +171,7 @@ func runRecheckInstrumentalCLI(args []string) {
 	}
 	cfgDir := configDir()
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
-	// 跟 recheck-cover 同款:刻意不读歌手身份/别名缓存,免得拿空 map 盖掉常驻实例攒的那份。
+
 	if *apply && !ensureExclusiveForDedupe(cfgDir) {
 		fmt.Fprintln(os.Stderr, "拒绝执行:collector 正在运行(或锁文件不可用)。")
 		fmt.Fprintln(os.Stderr, "请先停掉常驻实例再跑:launchctl bootout gui/$UID/com.lyrimuse.collector")

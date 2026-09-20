@@ -23,8 +23,6 @@ long_description    media-control reads and controls what is currently \
                     follow playback of players which expose no scripting \
                     interface can use it as a helper process.
 
-# The adapter that talks to MediaRemote lives in a git submodule, pinned to
-# the commit recorded in the v${version} tag.
 set mra_commit      3ac3d4bdf862c7b5399b4fba4df5689f5c38609a
 
 distfiles-append    mediaremote-adapter-${mra_commit}.tar.gz:mra
@@ -48,20 +46,13 @@ post-extract {
 }
 
 post-patch {
-    # The adapter framework hardcodes a universal build; honour the port's own
-    # architecture selection instead.
     reinplace {/set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")/d} \
         ${worksrcpath}/mediaremote-adapter/CMakeLists.txt
 
-    # Upstream installs the framework into ${prefix}/Frameworks, which is not
-    # part of the ports filesystem layout; move it to Library/Frameworks and
-    # keep the launcher's relative lookup in step with it.
     reinplace {s|set(FRAMEWORKS_DIR "Frameworks")|set(FRAMEWORKS_DIR "Library/Frameworks")|} \
         ${worksrcpath}/CMakeLists.txt
     reinplace {s|'\.\.', 'Frameworks', 'MediaRemoteAdapter.framework'|'..', 'Library', 'Frameworks', 'MediaRemoteAdapter.framework'|} \
         ${worksrcpath}/bin/media-control
 }
 
-# The Perl adapter script locates the framework and the test client by paths
-# relative to the installed bin/ directory, so the whole tree must stay put.
 depends_run-append  path:bin/perl:perl5

@@ -1,8 +1,3 @@
-/* 由 Localization/Localizable.xcstrings 生成 —— 不要手改这个文件。
-   改词条:编辑 catalog(可用 Xcode 的 String Catalog 编辑器或直接改 JSON),
-   然后跑 python3 Localization/generate-strings.py 重新生成,两个文件一起提交。
-   selftest 会校验 catalog 与生成物一致。 */
-
 "%1$@ · %2$@ 首" = "%1$@ · %2$@ 首";
 "%1$@ · 来自 %2$@" = "%1$@ · 来自 %2$@";
 "%1$@ 从「%2$@」导出的备份" = "%1$@ 从「%2$@」导出的备份";

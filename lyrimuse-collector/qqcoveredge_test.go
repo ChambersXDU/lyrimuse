@@ -2,9 +2,6 @@ package main
 
 import "testing"
 
-// QQ 音乐图床的尺寸档在路径里,`qqCoverAtEdge` 负责换那一段。这里钉住三件事:
-// ①专辑封面(T002)/歌手头像(T001)两种前缀都认;②不是 QQ 图床的一个字都不许改
-// (改错了是 404、整张封面消失);③形状对不上时原样返回,不做部分替换。
 func TestQQCoverAtEdge(t *testing.T) {
 	cases := []struct {
 		name string
@@ -86,7 +83,6 @@ func TestQQCoverAtEdge(t *testing.T) {
 	}
 }
 
-// 拼封面 URL 必须用图床能给的最大一档 —— 写死 300x300 就是"封面很模糊"那个 bug 的来源。
 func TestQQAlbumCoverURL(t *testing.T) {
 	got := qqAlbumCoverURL("0017AN4b0vdUG1")
 	want := "https://y.qq.com/music/photo_new/T002R800x800M0000017AN4b0vdUG1.jpg"

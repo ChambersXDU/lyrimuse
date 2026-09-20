@@ -7,21 +7,19 @@ import (
 	"time"
 )
 
-// 见 lyricsfillsweep.go 头注:后台补空扫描挑候选的规矩——三道硬闸(有词/人工/纯音乐)对自动、
-// 手动都生效,退避只管自动,手动可以按 key 指定子集,自动有每轮上限。
 func TestLyricsFillSweepCandidates(t *testing.T) {
 	now := time.Now().Unix()
 	day := int64(24 * 3600)
 	savedCache, savedInflight := enrichCache, enrichInflight
 	t.Cleanup(func() { enrichCache, enrichInflight = savedCache, savedInflight })
 	enrichCache = map[string]enrichEntry{
-		"a|old empty|":        {TS: now - 2*day},                        // 退避到期 → 自动也要
-		"b|fresh empty|":      {TS: now - 60},                           // 刚解析过 → 自动不要,手动要
-		"c|has lyrics|":       {TS: now - 2*day, Lyrics: "[00:01.00]x"}, // 有词 → 都不要
-		"d|manual|":           {TS: now - 2*day, ManualLyrics: true},    // 人工修正 → 都不要
-		"e|instrumental|":     {TS: now - 2*day, Instrumental: true},    // 确证纯音乐 → 都不要
-		"f|plain only|":       {TS: now - 2*day, PlainLyrics: "text"},   // 只有纯文本兜底 → 仍算没词,要
-		"g|inflight|":         {TS: now - 2*day},                        // 正在飞 → 这一轮跳过
+		"a|old empty|":        {TS: now - 2*day},
+		"b|fresh empty|":      {TS: now - 60},
+		"c|has lyrics|":       {TS: now - 2*day, Lyrics: "[00:01.00]x"},
+		"d|manual|":           {TS: now - 2*day, ManualLyrics: true},
+		"e|instrumental|":     {TS: now - 2*day, Instrumental: true},
+		"f|plain only|":       {TS: now - 2*day, PlainLyrics: "text"},
+		"g|inflight|":         {TS: now - 2*day},
 		"h|old empty second|": {TS: now - 3*day},
 	}
 	enrichInflight = map[string]bool{"g|inflight|": true}
@@ -86,12 +84,10 @@ func TestReadLyricsFillRequest(t *testing.T) {
 	defer func() { lyricsFillRequestPath = savedPath }()
 	lyricsFillRequestPath = reqPath
 
-	// When file does not exist, should return false cleanly
 	if _, ok := readLyricsFillRequest(); ok {
 		t.Fatal("readLyricsFillRequest succeeded when file does not exist")
 	}
 
-	// Write request file
 	if err := os.WriteFile(reqPath, []byte("all\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -101,9 +97,7 @@ func TestReadLyricsFillRequest(t *testing.T) {
 		t.Fatalf("expected req.all=true, got ok=%v, req=%+v", ok, req)
 	}
 
-	// File should have been removed (consumed)
 	if _, err := os.Stat(reqPath); !os.IsNotExist(err) {
 		t.Fatalf("expected request file to be removed, stat err: %v", err)
 	}
 }
-

@@ -2,18 +2,15 @@ package main
 
 import "testing"
 
-// Spotify 真曲目 ID:URI 解析、真链接派生、提示表消费、LB 标准字段。
-// 全是纯函数 / 内存表,不碰网络与磁盘。
-
 func TestSpotifyTrackIDFromURI(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"spotify:track:7HuBDWi18s4aJM8UFnNheH", "7HuBDWi18s4aJM8UFnNheH"},
-		{"  spotify:track:0H5iEzn4EWoevLeB60ZJfj\n", "0H5iEzn4EWoevLeB60ZJfj"}, // osascript 回声带换行
-		{"spotify:ad:abc", ""},                         // 广告
-		{"spotify:local:a:b:c:1", ""},                  // 本地文件
-		{"spotify:episode:7HuBDWi18s4aJM8UFnNheH", ""}, // 播客节目
-		{"spotify:track:short", ""},                    // 形状不对
-		{"spotify:track:7HuBDWi18s4aJM8UFnNhe-", ""},   // 非 base62
+		{"  spotify:track:0H5iEzn4EWoevLeB60ZJfj\n", "0H5iEzn4EWoevLeB60ZJfj"},
+		{"spotify:ad:abc", ""},
+		{"spotify:local:a:b:c:1", ""},
+		{"spotify:episode:7HuBDWi18s4aJM8UFnNheH", ""},
+		{"spotify:track:short", ""},
+		{"spotify:track:7HuBDWi18s4aJM8UFnNhe-", ""},
 		{"missing value", ""},
 		{"", ""},
 	}
@@ -45,7 +42,7 @@ func TestSpotifyLinkPrefersTrackID(t *testing.T) {
 	if (enrichEntry{}).spotifyLink() != "" {
 		t.Fatal("两者都没有时是空串")
 	}
-	// fields 是 relay / LB 读的那份:spotify_url 走 spotifyLink,spotify_track_id 原样带出。
+
 	f := e.fields()
 	if f["spotify_url"] != "https://open.spotify.com/track/7HuBDWi18s4aJM8UFnNheH" || f["spotify_track_id"] != "7HuBDWi18s4aJM8UFnNheH" {
 		t.Fatalf("fields() 里的 spotify_url / spotify_track_id 不对: %v", f)
@@ -58,8 +55,8 @@ func TestSpotifyTrackIDHintRoundTrip(t *testing.T) {
 	spotifyTrackIDHints = map[string]string{}
 
 	noteSpotifyTrackID("Taylor Swift", "King Of My Heart", "reputation", "7HuBDWi18s4aJM8UFnNheH")
-	noteSpotifyTrackID("Taylor Swift", "", "reputation", "7HuBDWi18s4aJM8UFnNheH") // 没歌名不记
-	noteSpotifyTrackID("Taylor Swift", "Delicate", "reputation", "")               // 没 ID 不记
+	noteSpotifyTrackID("Taylor Swift", "", "reputation", "7HuBDWi18s4aJM8UFnNheH")
+	noteSpotifyTrackID("Taylor Swift", "Delicate", "reputation", "")
 
 	key := enrichKey("Taylor Swift", "King Of My Heart", "reputation")
 	e := enrichEntry{SpotifyURL: "https://open.spotify.com/search/Taylor%20Swift%20King%20Of%20My%20Heart"}
@@ -80,7 +77,7 @@ func TestSpotifyTrackIDHintRoundTrip(t *testing.T) {
 	if len(spotifyTrackIDHints) != 1 {
 		t.Fatalf("没歌名 / 没 ID 的调用不该进表, got %d 条", len(spotifyTrackIDHints))
 	}
-	// 键按 enrichKey 归一:歌名结尾的译名括号会被剥掉,poller 与 trackEnrichment 两边算出来的必须是同一个键。
+
 	noteSpotifyTrackID("方大同", "簡單最浪漫（Simple Love Song）", "未來", "0H5iEzn4EWoevLeB60ZJfj")
 	e2 := enrichEntry{}
 	enrichMu.Lock()

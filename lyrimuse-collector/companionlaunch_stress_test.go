@@ -8,9 +8,6 @@ import (
 	"time"
 )
 
-// TestBatchRunningProcessesConcurrentStress tests batchRunningProcesses under
-// heavy concurrent load with diverse candidate name patterns (known players,
-// non-existent processes, unicode names, and regex metacharacters).
 func TestBatchRunningProcessesConcurrentStress(t *testing.T) {
 	const (
 		concurrency = 12
@@ -43,14 +40,14 @@ func TestBatchRunningProcessesConcurrentStress(t *testing.T) {
 					errCh <- fmt.Errorf("goroutine %d iter %d: batchRunningProcesses failed: %w", goroutineID, it, err)
 					return
 				}
-				// Verify map structure
+
 				for name, isRun := range running {
 					if !isRun {
 						errCh <- fmt.Errorf("unexpected false entry in running map for %s", name)
 						return
 					}
 				}
-				// Verify non-existent processes are never marked running
+
 				if running["NonExistentProc_1"] || running["NonExistentProc_2"] {
 					errCh <- fmt.Errorf("bogus process marked as running")
 					return
@@ -67,10 +64,8 @@ func TestBatchRunningProcessesConcurrentStress(t *testing.T) {
 	}
 }
 
-// TestBatchRunningProcessesContextCancellation verifies batchRunningProcesses
-// honors pre-cancelled and fast-timeout contexts without hanging or leaking.
 func TestBatchRunningProcessesContextCancellation(t *testing.T) {
-	// Pre-cancelled context
+
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -79,10 +74,9 @@ func TestBatchRunningProcessesContextCancellation(t *testing.T) {
 		t.Errorf("expected error with pre-cancelled context, got nil")
 	}
 
-	// Micro-timeout context
 	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer timeoutCancel()
-	time.Sleep(2 * time.Millisecond) // Ensure timeout expires
+	time.Sleep(2 * time.Millisecond)
 
 	_, err = batchRunningProcesses(timeoutCtx, []string{"Music", "Spotify"})
 	if err == nil {
@@ -90,8 +84,6 @@ func TestBatchRunningProcessesContextCancellation(t *testing.T) {
 	}
 }
 
-// TestCheckCompanionLaunchBypassStateTransitions verifies the transition logic
-// when companion launch feature is toggled between enabled and disabled.
 func TestCheckCompanionLaunchBypassStateTransitions(t *testing.T) {
 	savedEnabled := features.LaunchLyrimuseOnMusicOpen
 	savedLastRunning := lastRunningByName
@@ -107,7 +99,6 @@ func TestCheckCompanionLaunchBypassStateTransitions(t *testing.T) {
 	features.Players = map[string]bool{playerAuto: true}
 	ctx := context.Background()
 
-	// 1. When disabled, checkCompanionLaunch clears state and sets wasCompanionEnabled to false
 	features.LaunchLyrimuseOnMusicOpen = false
 	lastRunningByName = map[string]bool{"Music": true, "Spotify": true}
 	wasCompanionEnabled = true
@@ -120,7 +111,6 @@ func TestCheckCompanionLaunchBypassStateTransitions(t *testing.T) {
 		t.Errorf("expected wasCompanionEnabled to be false when disabled")
 	}
 
-	// 2. Toggle to enabled: first check must initialize baseline state without launching
 	features.LaunchLyrimuseOnMusicOpen = true
 	wasCompanionEnabled = false
 	lastRunningByName = map[string]bool{}
@@ -130,13 +120,11 @@ func TestCheckCompanionLaunchBypassStateTransitions(t *testing.T) {
 		t.Errorf("expected wasCompanionEnabled to become true on first check after enable")
 	}
 
-	// 3. Repeated check with no new processes running must not trigger launch
 	checkCompanionLaunch(ctx)
 	if !wasCompanionEnabled {
 		t.Errorf("wasCompanionEnabled should remain true")
 	}
 
-	// 4. Toggle back to disabled
 	features.LaunchLyrimuseOnMusicOpen = false
 	checkCompanionLaunch(ctx)
 	if wasCompanionEnabled {
@@ -147,9 +135,6 @@ func TestCheckCompanionLaunchBypassStateTransitions(t *testing.T) {
 	}
 }
 
-// TestLyricHTTPClientConcurrentCaching verifies that concurrent requests for
-// lyric HTTP clients with various timeouts correctly reuse client singletons
-// without race conditions or pointer discrepancies.
 func TestLyricHTTPClientConcurrentCaching(t *testing.T) {
 	const goroutines = 40
 	const iterations = 50
@@ -192,9 +177,6 @@ func TestLyricHTTPClientConcurrentCaching(t *testing.T) {
 	}
 }
 
-// TestFilesystemPollingStatShortCircuit verifies that checkEnrichCancelRequest
-// and readLyricsFillRequest short-circuit cleanly without error when request
-// files do not exist.
 func TestFilesystemPollingStatShortCircuit(t *testing.T) {
 	savedCancelPath := enrichCancelRequestPath
 	savedFillPath := lyricsFillRequestPath
@@ -206,7 +188,6 @@ func TestFilesystemPollingStatShortCircuit(t *testing.T) {
 	enrichCancelRequestPath = "/nonexistent/path/for/enrich_cancel_test.txt"
 	lyricsFillRequestPath = "/nonexistent/path/for/lyrics_fill_test.txt"
 
-	// Should not panic, fail, or open file
 	for i := 0; i < 20; i++ {
 		checkEnrichCancelRequest()
 		req, ok := readLyricsFillRequest()
@@ -215,4 +196,3 @@ func TestFilesystemPollingStatShortCircuit(t *testing.T) {
 		}
 	}
 }
-

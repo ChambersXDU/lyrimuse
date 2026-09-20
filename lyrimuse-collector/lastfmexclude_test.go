@@ -23,7 +23,7 @@ func TestLastfmExcluded(t *testing.T) {
 		features = saved
 		setLastfmExcludePath(savedPath)
 	}()
-	// 这一组测的是启动时解析好的那份(没登记文件路径的退路),显式钉住,别被别的测试留下的路径影响。
+
 	setLastfmExcludePath("")
 
 	features.LastfmExcludedBundles = map[string]bool{}
@@ -39,7 +39,7 @@ func TestLastfmExcluded(t *testing.T) {
 		{qqMusicBundleID, true},
 		{spotifyBundleID, false},
 		{appleMusicBundleID, false},
-		// Safari 报的是媒体代理进程,设置里存的是宿主 —— 必须经 mediaProxyOwners 归一后命中。
+
 		{"com.apple.WebKit.GPU", true},
 		{"com.apple.Safari", true},
 		{"company.thebrowser.Browser", false},
@@ -52,14 +52,13 @@ func TestLastfmExcluded(t *testing.T) {
 	}
 }
 
-// features.json 改了之后不重启也要生效:按 mtime 热重读这一个键。
 func TestLastfmExcludedHotReloadsFromFile(t *testing.T) {
 	savedPath, savedFeatures := lastfmExcludePath, features
 	defer func() {
 		setLastfmExcludePath(savedPath)
 		features = savedFeatures
 	}()
-	// 启动时解析出来的那份故意留空:命中的必须是文件里的值,不是它。
+
 	features.LastfmExcludedBundles = nil
 
 	dir := t.TempDir()
@@ -75,7 +74,6 @@ func TestLastfmExcludedHotReloadsFromFile(t *testing.T) {
 	}
 	base := time.Now().Add(-time.Hour)
 
-	// 文件还不存在 = 从没保存过设置,一律不排除。
 	setLastfmExcludePath(path)
 	if lastfmExcluded(qqMusicBundleID) {
 		t.Fatal("missing features.json must exclude nothing")
@@ -92,7 +90,6 @@ func TestLastfmExcludedHotReloadsFromFile(t *testing.T) {
 		t.Fatal("Spotify is not in the list")
 	}
 
-	// 用户重新勾上 QQ:同一个进程里下一次问就该变。
 	write(`{"lastfm_excluded_bundles":["com.apple.Safari"]}`, base.Add(time.Minute))
 	if lastfmExcluded(qqMusicBundleID) {
 		t.Fatal("QQ should be back in after the rewrite (hot reload failed)")
@@ -101,19 +98,16 @@ func TestLastfmExcludedHotReloadsFromFile(t *testing.T) {
 		t.Fatal("Safari should still be excluded")
 	}
 
-	// 全部勾上 = 键消失。
 	write(`{"players":["apple_music"]}`, base.Add(2*time.Minute))
 	if lastfmExcluded("com.apple.Safari") {
 		t.Fatal("dropping the key must clear every exclusion")
 	}
 
-	// 坏文件 fail-open:拦不住总好过"全部重新勾上"永远不生效(理由同 readLyricsPins)。
 	write(`{ not json`, base.Add(3*time.Minute))
 	if lastfmExcluded(qqMusicBundleID) || lastfmExcluded("com.apple.Safari") {
 		t.Fatal("an unparseable features.json must fail open")
 	}
 
-	// 路径没登记(一次性 CLI 子命令)时退回启动时解析好的那份。
 	setLastfmExcludePath("")
 	features.LastfmExcludedBundles = resolveLastfmExcludedBundles([]string{spotifyBundleID})
 	if !lastfmExcluded(spotifyBundleID) {

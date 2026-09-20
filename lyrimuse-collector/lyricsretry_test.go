@@ -5,13 +5,6 @@ import (
 	"time"
 )
 
-// needsLyricsRetry 的回归测试。
-//
-// 背景:五源搜索有 20 秒总上限,到点没回来的源这一轮不参与候选,而
-// 网易云既是最慢的、也最可能带逐字歌词。同一首「悟空 2003 Demo」连查两次:一次 3 秒返回、
-// 候选里根本没有网易云,lrclib 以 83 分胜出;另一次跑满 20 秒,网易云回来了、525 分带逐字。
-// 缓存又是"解析一次永久保留",于是那一瞬间的运气被永久固化。这个函数就是那道补救闸门,
-// 它的判定条件比较绕(五个 and 关系),所以逐条固定。
 func TestNeedsLyricsRetry(t *testing.T) {
 	saved := getFeaturesLyricsSources()
 	defer func() { setFeaturesLyricsSources(saved) }()
@@ -73,7 +66,6 @@ func TestNeedsLyricsRetry(t *testing.T) {
 
 }
 
-// 未启用的源缺席不算数——只有**已启用**的源缺席才说明这次决定是在信息不全的情况下做的。
 func TestNeedsLyricsRetryIgnoresDisabledSources(t *testing.T) {
 	saved := getFeaturesLyricsSources()
 	defer func() { setFeaturesLyricsSources(saved) }()
@@ -90,8 +82,8 @@ func TestLyricSourcesWithCandidates(t *testing.T) {
 	scored := []scoredLyricCandidateResult{
 		{Source: "lrclib", Score: 83},
 		{Source: "netease", Score: 525},
-		{Source: "lrclib", Score: 12},                         // 同一个源多条候选,只记一次
-		{Source: "musixmatch", Score: -1, Instrumental: true}, // 负分是"纯音乐"搭车标记,不算候选
+		{Source: "lrclib", Score: 12},
+		{Source: "musixmatch", Score: -1, Instrumental: true},
 	}
 	got := lyricSourcesWithCandidates(scored)
 	want := []string{"lrclib", "netease"}

@@ -8,10 +8,6 @@ import (
 	"testing"
 )
 
-// 歌词文件族改原子写(writeLyricsFileAtomic)。
-// 靶的是一条性质:磁盘上的文件要么是旧的完整内容、要么是新的完整内容,写入过程里没有
-// 第三种状态;临时文件不能泄漏、不能被导入/扫描误认。
-
 func TestWriteLyricsFileAtomicReplacesWholeFileAndLeavesNoTemp(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "A - B - C.lrc")
@@ -39,7 +35,6 @@ func TestWriteLyricsFileAtomicReplacesWholeFileAndLeavesNoTemp(t *testing.T) {
 	}
 }
 
-// 目录不存在时写入失败,但不能在别处留下任何东西;失败要报出来而不是吞掉。
 func TestWriteLyricsFileAtomicFailsCleanly(t *testing.T) {
 	dir := t.TempDir()
 	if err := writeLyricsFileAtomic(filepath.Join(dir, "missing", "x.lrc"), []byte("x")); err == nil {
@@ -51,8 +46,6 @@ func TestWriteLyricsFileAtomicFailsCleanly(t *testing.T) {
 	}
 }
 
-// 临时文件名不以四个歌词后缀收尾——导入分组、Swift 侧扫描与备份归档都按后缀过滤,会自动
-// 忽略它;反过来用户自己命名成 "xx.tmp.lrc" 的正常文件绝不能被当垃圾。
 func TestIsLyricsTempFile(t *testing.T) {
 	cases := map[string]bool{
 		"A - B - C.lrc.tmp.123456": true,
@@ -60,7 +53,7 @@ func TestIsLyricsTempFile(t *testing.T) {
 		"A - B - C.yrc.tmp.abc":    true,
 		"A - B - C.lrc":            false,
 		"A - B - C.tr.lrc":         false,
-		"weird.tmp.lrc":            false, // 以 .lrc 收尾,是正常歌词文件
+		"weird.tmp.lrc":            false,
 		"weird.tmp.yrc":            false,
 		".DS_Store":                false,
 	}
@@ -76,7 +69,6 @@ func TestIsLyricsTempFile(t *testing.T) {
 	}
 }
 
-// 启动导入会清掉崩溃残留的临时文件,且只清临时文件——四个后缀的正常文件、别的文件都不碰。
 func TestImportLyricsFromFilesSweepsTempFiles(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name, body string) {
@@ -122,8 +114,6 @@ func TestImportLyricsFromFilesSweepsTempFiles(t *testing.T) {
 	}
 }
 
-// 八个调用点没有锁,两轮导出可能同时写同一个文件——各写各的临时文件再改名,最后落盘的
-// 必须是一份完整、头部能解析、正文等于缓存的文件,不能出现 WriteFile 那种互相截断交错。
 func TestExportLyricsFilesConcurrentWritesStayWhole(t *testing.T) {
 	dir := t.TempDir()
 	savedDir, savedCache := lyricsDir, enrichCache

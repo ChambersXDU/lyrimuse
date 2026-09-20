@@ -2,11 +2,6 @@ package main
 
 import "testing"
 
-// v15语种版本(粤语/国语)的批级推断与双向判决。案例全部来自 对陈奕迅
-// 《K歌之王》一次手动搜索的复盘和随后的全库决策存档回放,见 match.go 的 v15 注释与 09 章。
-// 单独开文件的理由同 songlanguage_test.go:match_test.go 常有并行会话在改。
-
-// K歌之王 案的四条候选(数字取自真实 search-lyrics 输出):本地《打得火热》粤语原版 222.351s。
 func kgezhiwangBatch() []lyricCandidate {
 	return []lyricCandidate{
 		{source: "netease", title: "K歌之王", album: "打得火热", sourceReportedDurationSecs: 222.351},
@@ -26,14 +21,12 @@ func TestInferLocalLanguageVersion(t *testing.T) {
 	}{
 		{"①本地曲名带 Apple 单字缩写", "K歌之王 (國)", "2013 陈奕迅 Music Life 精选", 218.667, nil, languageVersionTagMandarin},
 		{"①本地曲名带全词标签(繁体)", "K歌之王 (粵語)", "", 222.351, nil, languageVersionTagCantonese},
-		// Shall We Talk 是粤语歌却收在《陈奕迅 国语精选》里(金标集 yue-shall-we-talk 匹配到的反例)——
-		// 专辑名不能当语种线索。
+
 		{"专辑名含「国语」不算声明", "Shall We Talk", "陈奕迅 国语精选", 227.277, []lyricCandidate{
 			{source: "kugou", title: "Shall We Talk", album: "Shall We Dance? Shall We Talk!", sourceReportedDurationSecs: 227, language: songLanguageCantonese},
 		}, ""},
 		{"②专辑精确同名+时长吻合的声明候选", "K歌之王", "打得火热", 222.351, kgezhiwangBatch(), languageVersionTagCantonese},
-		// 张继聪《To Be Or Not To Be》:同一张专辑同时收了粤语原版与「(国语)」bonus,本地是粤语版
-		// (网易云自报 188s),酷狗那条「(国语)」自报 186s——只看专辑会推成国语。
+
 		{"②同专辑收了两个语种版本,声明候选时长对不上 → 不推", "To Be Or Not To Be", "To Be Or Not To Be", 188.232, []lyricCandidate{
 			{source: "netease", title: "To Be Or Not To Be", album: "To Be Or Not To Be", sourceReportedDurationSecs: 188},
 			{source: "kugou", title: "To Be Or Not To Be (国语)", album: "To Be Or Not To Be", sourceReportedDurationSecs: 186, language: songLanguageMandarin},
@@ -62,7 +55,7 @@ func TestInferLocalLanguageVersion(t *testing.T) {
 func TestApplyLanguageVersionVerdicts_KGeZhiWang(t *testing.T) {
 	cands := kgezhiwangBatch()
 	applyLanguageVersionVerdicts("K歌之王", "打得火热", 222.351, cands)
-	want := map[string][2]bool{ // mismatch, agrees
+	want := map[string][2]bool{
 		"netease": {false, false},
 		"qq":      {false, true},
 		"kugou":   {true, false},
@@ -75,8 +68,6 @@ func TestApplyLanguageVersionVerdicts_KGeZhiWang(t *testing.T) {
 		}
 	}
 
-	// 打分层:QQ 不吃 versionTags、标题精确档;酷狗吃 versionTags(语种不符,与专辑名无关——把专辑
-	// 换成拉丁 "Third Encounter Live" 也一样);网易云/咪咕走 v14 原路。
 	byName := map[string]lyricCandidate{}
 	for _, c := range cands {
 		byName[c.source] = c
@@ -98,8 +89,8 @@ func TestApplyLanguageVersionVerdicts_KGeZhiWang(t *testing.T) {
 	if hasTerm(neteaseTerms, scoreTermVersionTags) {
 		t.Errorf("netease 无任何声明,不该吃 versionTags: %v", neteaseTerms)
 	}
-	// 语种不符与限定词不符只落一次 -600,不叠加。
-	kugou = byName["kugou"] // 专辑 2003演唱会:现场标记与语种不符同时成立
+
+	kugou = byName["kugou"]
 	_, both := scoreLyricCandidateDetailed("陈奕迅", "K歌之王", "打得火热", 222.351, withLyrics(kugou), false, 1)
 	n := 0
 	for _, tm := range both {
@@ -112,8 +103,6 @@ func TestApplyLanguageVersionVerdicts_KGeZhiWang(t *testing.T) {
 	}
 }
 
-// 直接构造 lyricCandidate(不过 applyLanguageVersionVerdicts)时两个判决字段都是 false,行为等于 v14:
-// 「(粤语)」照样吃 -600、标题档 60——To Be Or Not To Be 那种推不出本地语种的场景靠这条兜着。
 func TestLanguageVersionUnknownFallsBackToV14(t *testing.T) {
 	c := withLyrics(lyricCandidate{source: "kugou", title: "To Be Or Not To Be (国语)", album: "To Be Or Not To Be", sourceReportedDurationSecs: 186, language: songLanguageMandarin, hasWordTiming: true})
 	_, terms := scoreLyricCandidateDetailed("张继聪", "To Be Or Not To Be", "To Be Or Not To Be", 188.232, c, false, 0)
@@ -126,7 +115,7 @@ func TestLanguageVersionUnknownFallsBackToV14(t *testing.T) {
 }
 
 func TestLanguageVersionTagCanonicalKeys(t *testing.T) {
-	// 同一声明的不同拼法不再是两个不同的限定词(张继聪《Mau U So(国)》对酷狗「Mau U So (国语)」案)。
+
 	cases := []struct {
 		local, cand string
 		want        bool
@@ -150,10 +139,6 @@ func TestLanguageVersionTagCanonicalKeys(t *testing.T) {
 	}
 }
 
-// TestCrossLanguageVersionTags 钉住 的三个跨语言键(处理「为什么这首歌匹配错
-// 版本了,匹配成英文版本了」——优里《ドライフラワー》)。原来这套只认粤语/国语,「(English ver.)」
-// 压根不进限定词集合,于是本地与候选两边都是空集、不算版本不符,那 600 分一分没扣,英文版靠
-// 逐字+译文以 1036 分顶掉了日文原曲(919)。两版时长还差不到 0.1 秒,时长判据救不了。
 func TestCrossLanguageVersionTags(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -164,8 +149,7 @@ func TestCrossLanguageVersionTags(t *testing.T) {
 		{"本地也是英文版就不算不符", "Dried Flower (English ver.)", "Dried flower (English ver.)", false},
 		{"日文版同理", "Song", "Song (Japanese ver.)", true},
 		{"同一声明的不同拼法要折成一个键", "Song (日文版)", "Song (Japanese ver.)", false},
-		// ⚠️ 这两条是"中文版归到国语同一个键"的正反面:分成两个键的话第一条会变成 true,
-		// 凭空造出一批新的错配 —— 比漏判更糟。
+
 		{"中文版与国语是同一个声明", "Song (中文版)", "Song (国语)", false},
 		{"中文版与粤语仍然是两个版本", "Song (中文版)", "Song (粤语)", true},
 		{"两个不同语种版本", "Song (English ver.)", "Song (Japanese ver.)", true},
@@ -176,20 +160,17 @@ func TestCrossLanguageVersionTags(t *testing.T) {
 		}
 	}
 
-	// 声明读取这一路也要认得出新键(批级语种判决走的是它)。
 	if got := declaredLanguageVersion("Dried flower (English ver.)"); got != languageVersionTagEnglish {
 		t.Errorf("declaredLanguageVersion 应读出英语键, got %q", got)
 	}
 	if got := declaredLanguageVersion("Song (韩语版)"); got != languageVersionTagKorean {
 		t.Errorf("declaredLanguageVersion 应读出韩语键, got %q", got)
 	}
-	// 本地标题没有任何语种声明时保持空 —— 这正是本案本地侧的形状。
+
 	if got := declaredLanguageVersion("Dried Flower"); got != "" {
 		t.Errorf("没写语种版本时应返回空串, got %q", got)
 	}
 
-	// withoutLanguageVersionTags 必须把**全部**语种键摘干净:漏一个,批级判决说"同语种"时
-	// 那个键会留在集合里继续参与相等比对,等于判决白下。
 	tags := map[string]bool{
 		languageVersionTagEnglish: true, languageVersionTagJapanese: true,
 		languageVersionTagKorean: true, languageVersionTagCantonese: true,
@@ -207,25 +188,23 @@ func TestCrossLanguageVersionTags(t *testing.T) {
 }
 
 func TestLastLRCTimestampSkipsTrailingCredit(t *testing.T) {
-	// 网易云《K歌之王》末尾:[03:19.53]末句 + [03:39.53]监制署名行。
+
 	lrc := "[00:13.23]我唱得不够动人\n[03:14.97]而你那呵欠绝得不能绝\n[03:19.53]绝到溶掉我\n[03:39.53]监制：陈辉阳\n"
 	got, ok := lastLRCTimestampSecs(lrc)
 	if !ok || got != 199.53 {
 		t.Errorf("lastLRCTimestampSecs = %.2f/%v, want 199.53(跳过尾部署名行)", got, ok)
 	}
-	// 演唱者标签行不是署名,末句「女：…」照常算末句。
+
 	duet := "[00:10.00]男：第一句\n[00:20.00]女：第二句\n[00:30.00]男：第三句\n[00:40.00]女：最后一句\n"
 	if got, ok := lastLRCTimestampSecs(duet); !ok || got != 40 {
 		t.Errorf("对唱末句 = %.2f/%v, want 40", got, ok)
 	}
-	// 只有署名行没有正文时照旧返回 false 之外的行为不变:全是署名 → 找不到末句。
+
 	if _, ok := lastLRCTimestampSecs("[00:00.00]作词 : 林夕\n[00:01.00]作曲 : 陈辉阳\n"); ok {
 		t.Errorf("整份只有署名行,不该提出末句时间戳")
 	}
 }
 
-// withLyrics 给候选配一份能过 isTimedLRC / isCreditOnlyLRC 的粤语正文(末句对齐 222s 曲长),
-// 让打分走到限定词/标题那几项。
 func withLyrics(c lyricCandidate) lyricCandidate {
 	c.lyrics = "[00:13.23]我唱得不够动人\n[00:16.69]你别皱眉\n[00:19.75]我愿意和你约定至死\n[00:25.41]我只想嬉戏唱游\n[03:14.97]而你那呵欠绝得不能绝\n[03:19.53]绝到溶掉我\n"
 	return c

@@ -15,12 +15,12 @@ import (
 
 func TestParseLRCLines(t *testing.T) {
 	in := strings.Join([]string{
-		"[by:someone]", // 元信息标签,没有时间戳 → 丢掉
+		"[by:someone]",
 		"[00:00.00] 作词 : Lenny Kravitz",
 		"[00:20.94]我的生命",
 		"[01:02]无小数的时间戳也要认",
 		"[01:05:30]冒号做小数分隔符的变体",
-		"[00:30.00]   ", // 正文为空 → 丢掉
+		"[00:30.00]   ",
 		"没有时间戳的一行",
 	}, "\n")
 	got := parseLRCLines(in)
@@ -40,7 +40,6 @@ func TestParseLRCLines(t *testing.T) {
 	}
 }
 
-// 分块不能把一行切开 —— 切开就没法跟行对上,整块都得作废。
 func TestChunkForTranslationNeverSplitsALine(t *testing.T) {
 	var texts []string
 	for i := 0; i < 40; i++ {
@@ -68,7 +67,7 @@ func TestChunkForTranslationNeverSplitsALine(t *testing.T) {
 func TestChunkForTranslationOversizedSingleLine(t *testing.T) {
 	long := strings.Repeat("y", translateMaxChunkChars+50)
 	chunks := chunkForTranslation([]string{"短行", long, "另一短行"})
-	// 超长行必须自己单独成块,不能被塞进别的块里把整块撑爆。
+
 	for _, c := range chunks {
 		if len(c) > 1 && len(strings.Join(c, "\n")) > translateMaxChunkChars {
 			t.Errorf("超长行没有单独成块: %v", c)
@@ -76,19 +75,15 @@ func TestChunkForTranslationOversizedSingleLine(t *testing.T) {
 	}
 }
 
-// 逐行判定取代了原来的整首判定(looksLikeTargetLanguage,删,理由见
-// translate.go 那段【已删除】注释)。这组用例保留原来那些场景,并补上它判错的那一类:
-// **整行外语**。
 func TestLineNeedsTranslation(t *testing.T) {
 	cases := []struct {
 		name, text, target string
 		want               bool
 	}{
 		{"中文行 + 目标中文:不用翻", "我们的时光 一起走过的日子", "zh-CN", false},
-		// 行内混排:这一行主体是汉字,翻它只会把已经看得懂的一行再抄一遍
+
 		{"行内混排、主体中文:不用翻", "我们的时光 baby 一起走过", "zh-CN", false},
-		// ⚠️ 这条是这次修的那个 bug 的核心:整行英文必须翻。原来的整首判定看的是
-		// "汉字占全曲多数",于是华语歌里这样的副歌整首被跳过。
+
 		{"整行英文:要翻", "It represent my heart!", "zh-CN", true},
 		{"纯英文行:要翻", "The painful youth I've had", "zh-CN", true},
 		{"日文行:要翻(假名不是汉字)", "君のことが好きだから", "zh-CN", true},
@@ -104,9 +99,8 @@ func TestLineNeedsTranslation(t *testing.T) {
 	}
 }
 
-// 整首层面的门:只要**有一行**需要翻就得放行 —— 这是华语歌夹英文副歌那一类的护栏。
 func TestAnyLineNeedsTranslationMixedSong(t *testing.T) {
-	// 照《方大同 - 月亮代表我的心》的真实构成写:大部分中文 + 几行纯英文副歌。
+
 	mixed := "[00:16.73]你问我爱你有多深\n" +
 		"[00:21.30]我爱你有几分\n" +
 		"[00:24.71]我的情也真我的爱也真\n" +
@@ -117,32 +111,23 @@ func TestAnyLineNeedsTranslationMixedSong(t *testing.T) {
 		t.Error("华语歌夹整行英文副歌:应当放行去翻那几行英文" +
 			"(2026-08-23 之前被 looksLikeTargetLanguage 整首跳过)")
 	}
-	// 反面:整首都是中文,别白起 goroutine 烧配额
+
 	allZh := "[00:01.00]你问我爱你有多深\n[00:05.00]月亮代表我的心\n"
 	if anyLineNeedsTranslation(allZh, "zh-CN") {
 		t.Error("整首中文不该触发翻译")
 	}
-	// 行内混排、且**汉字仍占多数**时不该触发
+
 	inline := "[00:01.00]我们的时光 baby 一起走过\n[00:05.00]我的情也真 oh 我的爱也真\n"
 	if anyLineNeedsTranslation(inline, "zh-CN") {
 		t.Error("行内混排(每行汉字仍占多数)不该触发翻译")
 	}
-	// ⚠️ 已知边界(不是 bug,是 dominantScript 的口径):混排行里**拉丁字母比汉字还多**时
-	// 会被判成需要翻,比如「说好不哭 oh yeah」(4 汉字 vs 6 字母)。翻出来是把已经看得懂的
-	// 中文再抄一遍,略显冗余但不影响原文;要治得给 dominantScript 换更细的判据(比如按
-	// 词而不是按字符计权),那是另一件事。这里把行为钉住,免得以后当成回归改错方向。
+
 	latinHeavy := "[00:01.00]说好不哭 oh yeah\n"
 	if !anyLineNeedsTranslation(latinHeavy, "zh-CN") {
 		t.Error("拉丁字母多于汉字的混排行:当前口径是判成需要翻(见上面注释)")
 	}
 }
 
-// 署名行不该被送去翻译:它们拉丁字母常比汉字多(「编曲 : Edward Chan/方大同」),
-// dominantScript 会判成 latin。展示端本来就会过滤掉这些行,翻它们等于白烧配额,
-// 还会拉高 assembleTranslationLRC 的 attempted 分母、把整份译文推向"作废"阈值。
-//
-// 同时守住反面:说话人标签后面跟的是**真歌词**,不能一起剔掉 —— 那会让对唱歌的
-// 英文行永远没译文。靠 isCreditLineWithSpeakers 的豁免名单分开。
 func TestTranslationSkipsCreditLinesButKeepsSpeakerLines(t *testing.T) {
 	lyrics := "[00:00.00] 作词 : 孙仪\n" +
 		"[00:02.00] 编曲 : Edward Chan/方大同\n" +
@@ -156,15 +141,15 @@ func TestTranslationSkipsCreditLinesButKeepsSpeakerLines(t *testing.T) {
 	}
 	type want struct {
 		text string
-		send bool // 是否该送去翻(target=zh-CN)
+		send bool
 	}
 	cases := []want{
-		{"作词 : 孙仪", false},                 // 署名行,而且汉字为主
-		{"编曲 : Edward Chan/方大同", false},    // 署名行,拉丁为主 —— 这条是本次修的
-		{"你问我爱你有多深", false},                // 中文歌词,不用翻
-		{"It represent my heart!", true},   // 英文歌词,要翻
-		{"男：It represent my heart!", true}, // 说话人标签 + 英文歌词,要翻
-		{"女：你问我爱你有多深", false},              // 说话人标签 + 中文歌词,不用翻
+		{"作词 : 孙仪", false},
+		{"编曲 : Edward Chan/方大同", false},
+		{"你问我爱你有多深", false},
+		{"It represent my heart!", true},
+		{"男：It represent my heart!", true},
+		{"女：你问我爱你有多深", false},
 	}
 	for _, c := range cases {
 		isCredit := isCreditLineWithSpeakers(c.text, speakers)
@@ -197,10 +182,9 @@ func fakeMyMemory(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	return srv
 }
 
-// 行数对不上时整块作废、回退原文 —— 这是这套逻辑里最要紧的一条:错位的译文比没有译文更糟。
 func TestTranslateChunkLineCountMismatchFallsBackToSource(t *testing.T) {
 	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
-		// 故意只回两行,而请求里是三行
+
 		fmt.Fprint(w, `{"responseData":{"translatedText":"一\n二"},"responseStatus":200}`)
 	})
 	hc := srv.Client()
@@ -209,18 +193,12 @@ func TestTranslateChunkLineCountMismatchFallsBackToSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 三行全部回退成原文 → 每行译文都等于原文 → 全被跳过 → 没有译文,而不是错位的译文
+
 	if res.lrc != "" {
 		t.Errorf("行数对不上时应该没有译文,实际得到:\n%s", res.lrc)
 	}
 }
 
-// 复现(Michael Jackson《Beat It》):副歌反复的歌逐行独立发翻译请求,
-// 同一句话在原文里出现好几次,以前会分别各发一次、结果各自独立(可能一次翻了、另一次原样
-// 吐回来被当"没翻动"丢掉),同一句台词的译文因此在歌词里断断续续、时有时无。
-// 现在按原文去重再发,断言两件事:①重复的那句话只应该出现在**一次**请求里(不是发几次就
-// 收几次相同的 q,而是一次都不多发);②翻译结果要广播回原文里**全部**出现过的位置,不能
-// 只有第一次出现的那一行有译文、后面几次全是空。
 func TestTranslateDedupesRepeatedLinesAndBroadcastsResult(t *testing.T) {
 	var requestedLines []string
 	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
@@ -248,7 +226,7 @@ func TestTranslateDedupesRepeatedLinesAndBroadcastsResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 4 行里 "Just beat it" 出现 3 次,去重之后请求里应该只有 2 句不同的话(各一次)。
+
 	if len(requestedLines) != 2 {
 		t.Fatalf("请求行数 = %d,应该去重成 2(3 次 Just beat it 只应该发一次): %v",
 			len(requestedLines), requestedLines)
@@ -259,7 +237,6 @@ func TestTranslateDedupesRepeatedLinesAndBroadcastsResult(t *testing.T) {
 	}
 }
 
-// 源语言等于目标语言时 MyMemory 把错误信息当译文返回,必须识别出来、不能写进 lyrics_tr。
 func TestTranslateRejectsSameLanguageSentinel(t *testing.T) {
 	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"responseData":{"translatedText":"PLEASE SELECT TWO DISTINCT LANGUAGES"},"responseStatus":200}`)
@@ -271,8 +248,6 @@ func TestTranslateRejectsSameLanguageSentinel(t *testing.T) {
 	}
 }
 
-// 配额用尽的两种真实形态都要认出来:文档说的 quotaFinished,和测试真正返回的
-// HTTP 429 + 警告文本。认错了会白烧重试次数,那首歌以后再也不会被翻。
 func TestTranslateQuotaViaHTTP429(t *testing.T) {
 	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -302,7 +277,6 @@ func TestTranslateQuotaFinished(t *testing.T) {
 	}
 }
 
-// 正常路径:译文沿用主歌词的时间戳,逐行对齐。
 func TestTranslateKeepsSourceTimestamps(t *testing.T) {
 	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
 		lines := strings.Split(r.URL.Query().Get("q"), "\n")
@@ -371,8 +345,6 @@ func jsonEscape(s string) (string, error) {
 	return string(b), err
 }
 
-// 每次请求都要带一个**不一样**的 de= —— MyMemory 的免费额度按邮箱分别计,固定一个就等于
-// 没换。顺带钉住域名:example.com 是保留域,换成真实域名会有随机撞上真人邮箱的风险。
 func TestRandomTranslateEmailIsDistinctAndReserved(t *testing.T) {
 	seen := map[string]bool{}
 	for i := 0; i < 200; i++ {
@@ -390,7 +362,6 @@ func TestRandomTranslateEmailIsDistinctAndReserved(t *testing.T) {
 	}
 }
 
-// 光有函数不够,得确认它真的被挂到请求上、而且逐块都换。
 func TestTranslateChunkSendsFreshEmailEachRequest(t *testing.T) {
 	var got []string
 	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
@@ -403,10 +374,7 @@ func TestTranslateChunkSendsFreshEmailEachRequest(t *testing.T) {
 		body, _ := jsonEscape(strings.Join(out, "\n"))
 		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
 	})
-	// 拼一首长到必须切成多块的歌,才能验证"每块一个新邮箱"。
-	// ⚠️ 每行的文本必须互不相同:了按原文去重再送翻(见
-	// machineTranslateLRCWithBase 头注释),60 行完全同一句话会被去重成 1 句、
-	// 落不进多块,这条测试就验证不了"逐块换邮箱"了。
+
 	var b strings.Builder
 	for i := 0; i < 60; i++ {
 		fmt.Fprintf(&b, "[00:%02d.00]line%d %s\n", i, i, strings.Repeat("word ", 8))
@@ -430,9 +398,6 @@ func TestTranslateChunkSendsFreshEmailEachRequest(t *testing.T) {
 	}
 }
 
-// 这次改动的核心:一份**语言对不上**的已有译文不能再挡住机翻。
-// 场景来源:网易云的社区译文固定是中文,用户把译文语言设成日语后,原来的"有译文就跳过"
-// 让机翻永远没机会跑,日语用户只能一直看中文。
 func TestTranslationUsableRespectsLanguage(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -442,7 +407,6 @@ func TestTranslationUsableRespectsLanguage(t *testing.T) {
 	}{
 		{"没有译文", enrichEntry{}, "zh-CN", false},
 
-		// 记了语言的:直接按语言比,不看内容。
 		{"网易云中文译文 + 目标中文:用得上",
 			enrichEntry{LyricsTr: "[00:01.00]你好", LyricsTrLang: "zh"}, "zh-CN", true},
 		{"网易云中文译文 + 目标日语:用不上,该重翻",
@@ -454,7 +418,6 @@ func TestTranslationUsableRespectsLanguage(t *testing.T) {
 		{"简繁也算不同语言",
 			enrichEntry{LyricsTr: "[00:01.00]你好", LyricsTrLang: "zh-Hans"}, "zh-TW", false},
 
-		// 没记语言的老条目:退回文本判别,只在能确定的方向上下判断。
 		{"老条目中文译文 + 目标中文:用得上",
 			enrichEntry{LyricsTr: "[00:01.00]我们的时光"}, "zh-CN", true},
 		{"老条目中文译文 + 目标日语:看得出是中文,用不上",
@@ -471,7 +434,6 @@ func TestTranslationUsableRespectsLanguage(t *testing.T) {
 	}
 }
 
-// 闸门层面走一遍同样的场景,确认 translationUsable 真的接进了 needsTranslationBackfill。
 func TestNeedsTranslationBackfillIgnoresWrongLanguageTranslation(t *testing.T) {
 	saved := features
 	defer func() { features = saved }()
@@ -494,7 +456,6 @@ func TestNeedsTranslationBackfillIgnoresWrongLanguageTranslation(t *testing.T) {
 	}
 }
 
-// 换了目标语言之后,上一门语言累计的失败次数不该继续挡着。
 func TestNeedsTranslationBackfillResetsAttemptsOnLanguageChange(t *testing.T) {
 	saved := features
 	defer func() { features = saved }()
@@ -512,23 +473,17 @@ func TestNeedsTranslationBackfillResetsAttemptsOnLanguageChange(t *testing.T) {
 		t.Error("同一个目标语言下次数用尽就该停手")
 	}
 
-	e.TranslationLang = "zh-CN" // 之前为中文失败了那么多次
+	e.TranslationLang = "zh-CN"
 	if !needsTranslationBackfill(e) {
 		t.Error("换到日语后应该重新开始尝试,而不是背着中文那轮的失败次数")
 	}
 
-	e.TranslationLang = "" // 老条目没记语言:当成同一门语言,维持原有行为
+	e.TranslationLang = ""
 	if needsTranslationBackfill(e) {
 		t.Error("老条目不该因为没记语言就绕过次数上限")
 	}
 }
 
-// 回归测试:译文必须**落到磁盘**,不能只标 enrichDirty。
-//
-// 处理"译文语言切成英文了还是没有翻译"。日志里译文一首首都翻出来了,可缓存
-// 文件停在两小时前 —— backfillTranslation 只把 enrichDirty 置 true、从不调 saveEnrichCache,
-// 而 App 侧读的正是磁盘上这份文件(EnrichCacheReader 每次直读),于是翻译只活在 collector
-// 内存里,界面上永远看不到,重启一次还全没了。
 func TestBackfillTranslationPersistsToDisk(t *testing.T) {
 	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
 		lines := strings.Split(r.URL.Query().Get("q"), "\n")
@@ -551,7 +506,7 @@ func TestBackfillTranslationPersistsToDisk(t *testing.T) {
 	features.LyricsTranslationLanguage = "zh"
 	translateBaseURL = srv.URL
 	translateClient = srv.Client()
-	lyricsDir = "" // 不测文件导出,exportLyricsFiles 会因此直接返回
+	lyricsDir = ""
 	enrichPath = filepath.Join(t.TempDir(), "enrich-cache.json")
 
 	const key = "Someone|Some Song|Some Album"
@@ -582,10 +537,6 @@ func TestBackfillTranslationPersistsToDisk(t *testing.T) {
 	}
 }
 
-// 「译文语言选了英文却永远看到中文」——用户实报,根因在 App 侧
-// EnrichCacheStore.saveEdit 采纳候选时只写 lyrics_tr、不同步 lyrics_tr_lang,让一份
-// 网易云中文社区译文顶着上一轮机翻留下的 "en" 标签蒙混过关。写入侧已修,这里钉的是
-// 读取侧的不变式:标签跟正文自相矛盾时以正文为准,好让已经写坏的老条目也能自愈。
 func TestTranslationUsableDistrustsLangLabelContradictedByText(t *testing.T) {
 	const chineseTr = "[00:10.00]虽然觉得\n[00:12.00]不会有恋慕的眼神\n[00:15.00]如此幸运的邂逅\n"
 	const englishTr = "[00:10.00]Even though I thought\n[00:12.00]no one would look at me\n[00:15.00]such luck\n"
@@ -615,13 +566,6 @@ func TestTranslationUsableDistrustsLangLabelContradictedByText(t *testing.T) {
 	}
 }
 
-// 「日英混排的歌一句译文都没有」——用户实报,First Love(主歌日文、副歌整段
-// 英文)选了英文译文却完全没有译文。两个后端对**整批**做语种识别都判成英文:
-//
-//	on-device: {"ok":false,"source":"en","reason":"same-language"}
-//	MyMemory:  "PLEASE SELECT TWO DISTINCT LANGUAGES"
-//
-// 于是每次都失败、烧掉重试额度,三次之后永久不再翻。修法是送去翻之前逐行按文字系统分流。
 func TestDominantScriptAndLineNeeds(t *testing.T) {
 	cases := []struct {
 		text   string
@@ -646,13 +590,12 @@ func TestDominantScriptAndLineNeeds(t *testing.T) {
 				c.label, c.text, c.target, got, c.need)
 		}
 	}
-	// 汉字比假名多的日文行也必须判成日文 —— 只要出现假名就是日文,不能按数量取胜。
+
 	if dominantScript("明日の今頃には") != scriptKana {
 		t.Error("含假名的日文行该判成假名档,不该被汉字数量盖过去")
 	}
 }
 
-// 端到端:混排歌词只把非目标语言的行发出去,英文副歌不进请求体。
 func TestMixedLanguageLyricsOnlySendsForeignLines(t *testing.T) {
 	var sent []string
 	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
@@ -666,7 +609,7 @@ func TestMixedLanguageLyricsOnlySendsForeignLines(t *testing.T) {
 		fmt.Fprintf(w, `{"responseData":{"translatedText":%q},"responseStatus":200}`,
 			strings.Join(out, "\n"))
 	})
-	// 主歌日文 + 副歌英文,正是 First Love 的形状
+
 	lrc := "[00:01.00]最後のキスは\n[00:02.00]タバコのflavorがした\n" +
 		"[00:03.00]You are always gonna be my love\n[00:04.00]I'll remember to love\n" +
 		"[00:05.00]明日の今頃には"
@@ -688,7 +631,7 @@ func TestMixedLanguageLyricsOnlySendsForeignLines(t *testing.T) {
 			t.Errorf("日文行必须被发去翻译,却没出现在请求里: %q", jp)
 		}
 	}
-	// 英文行不该在译文里占一行(它们没被翻,assemble 会跳过)
+
 	if strings.Contains(res.lrc, "00:03") || strings.Contains(res.lrc, "00:04") {
 		t.Errorf("英文行不该出现在译文 LRC 里:\n%s", res.lrc)
 	}

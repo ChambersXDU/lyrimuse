@@ -12,26 +12,6 @@ import (
 	"time"
 )
 
-// `collector retranslate-repeated [-apply]` —— 扫描整份 enrich 缓存,把"歌词有重复行、
-// 当前译文疑似被那批重复坑过"的条目重新机翻一遍。
-//
-// 为什么需要它:的那个 bug(machineTranslateLRCWithBase 现在按原文去重再
-// 送翻,见 translate.go 头注释)只改了"以后新翻译的行为"——已经缓存的译文不会自己刷新。
-// `needsTranslationBackfill` 只要 `lyrics_tr` 非空、语言对得上就直接跳过(见
-// `translationUsable`),不会因为内容"看起来不太全"就主动重翻。处理 Michael
-// Jackson《Beat It》就是这么一条:53 行歌词只翻出 3 行,而且会一直停在那里,直到有人
-// 手动清一次——这条命令就是那个"手动清"的批量版本。
-//
-// 三条约束:
-//  1. 只挑**真的会受益**的条目——歌词里"需要翻译的那批行"必须真的有重复文本,否则去重
-//     前后送去翻译的内容完全一样,重新翻一遍纯粹白烧一次网络请求/端上翻译调用,不做无
-//     谓的事。判据复用 translate.go 里已经在用的 parseLRCLines / isCreditLineWithSpeakers
-//     / lineNeedsTranslation,跟真正翻译时用的是同一套过滤逻辑,不会判断不一致。
-//  2. 跟 recheck-instrumental 一样尊重人工:`ManualLyrics` 一律跳过——用户手改过的,
-//     一切自动路径不碰;当前译文语言跟目标对不上的也跳过,那不是这条命令的职责
-//     (`needsTranslationBackfill` 自己的路径会处理)。
-//  3. dry-run 默认、-apply 才真写,且要求跟常驻 collector 互斥——理由跟 dedupe-entries /
-//     recheck-cover 完全一致:常驻实例整份写回会把这边刚改的东西原样盖掉。
 func runRetranslateRepeatedCLI(args []string) {
 	fs := flag.NewFlagSet("retranslate-repeated", flag.ExitOnError)
 	apply := fs.Bool("apply", false, "真正写回缓存;不加就是预演,只打印计划")
@@ -55,8 +35,6 @@ func runRetranslateRepeatedCLI(args []string) {
 	os.Exit(runRetranslateRepeated(*apply))
 }
 
-// hasRepeatedTranslatableLine 判断"需要翻译的那批行"里有没有原文完全相同的两行——只有
-// 这种情况才会撞上 的那个 bug(逐行独立发请求,同一句话的结果不保证一致)。
 func hasRepeatedTranslatableLine(lyrics, target string) bool {
 	lines := parseLRCLines(lyrics)
 	speakers := lyricSpeakerLabels(lyrics)
@@ -98,7 +76,7 @@ func runRetranslateRepeated(apply bool) int {
 		keys = append(keys, k)
 	}
 	enrichMu.Unlock()
-	sort.Strings(keys) // 输出顺序稳定,方便人工核对
+	sort.Strings(keys)
 
 	fmt.Printf("扫描完成:%d 条命中(歌词有重复行、当前译文可能被旧的逐行翻译 bug 坑过)\n\n", len(keys))
 
@@ -118,8 +96,7 @@ scan:
 		fmt.Printf("── %s\n", key)
 		switch {
 		case res.quotaReached:
-			// 配额是全局的,继续跑剩下的条目只会一次次撞同一堵墙——直接停手,
-			// 剩下的等下次配额重置(或端上翻译可用时)再跑。
+
 			fmt.Println("   跳过:MyMemory 当天配额用尽,停止扫描剩余条目")
 			failed += len(keys) - i
 			break scan

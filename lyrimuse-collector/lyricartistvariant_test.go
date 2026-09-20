@@ -2,42 +2,36 @@ package main
 
 import "testing"
 
-// lyricSourceArtistMatches:歌词源采纳闸的段集交集档。核心案例来自「wherever u r」
-// :本地标签 "UMI & 金泰亨",酷狗署名 "UMI、V"、QQ 署名 "UMI/V",原
-// artistMatches 全拒——服务端明明召回成功,正主死在客户端闸门上。
 func TestLyricSourceArtistMatches(t *testing.T) {
 	cases := []struct {
 		candidate, query string
 		want             bool
 	}{
-		// 本案三源的真实署名形态:两侧都是多credit,共享 "umi" 段。
+
 		{"UMI、V", "UMI & 金泰亨", true},
 		{"UMI/V", "UMI & 金泰亨", true},
 		{"UMI, V", "UMI & 金泰亨", true},
-		// 纯英文双人串、分隔符不同——原 artistMatches 同样拒,交集档放行。
+
 		{"UMI、V", "UMI & V", true},
-		// 原有语义必须原样保留:单人查询命中候选的一段。
+
 		{"UMI/V", "UMI", true},
 		{"UMI", "UMI & 金泰亨", true},
-		// 完全相等/大小写。
+
 		{"umi & 金泰亨", "UMI & 金泰亨", true},
-		// 防仿冒守卫:尾随分隔符只切出 1 段,进不了交集档(artistCreditParts 的 len<2 约定)。
+
 		{"周杰伦、", "周杰伦 & 王力宏", false},
 		{"周杰伦、", "周杰伦", false},
-		// 加符号仿冒:段级字节相等,不做 normLoose/子串,老洞不重开。
+
 		{"周杰伦-", "周杰伦 & 王力宏", false},
-		// 验证的真实 bug:LyricFind(经 YouTube Music 检索)给的艺人字段是
-		// 繁体"周杰倫",本地查询是简体"周杰伦"——不折算就整条候选被拒收(见「彩虹」案例,
-		// match.go artistCreditParts/artistMatches 注释)。
+
 		{"周杰倫", "周杰伦", true},
-		// 繁简 + 仿冒同时出现,仿冒防线仍然要挡住。
+
 		{"周杰倫-", "周杰伦", false},
-		// 验证的真实 bug:候选艺人带括号外文别名"丁世光(Dean Ting)",
-		// 本地标签只有中文名,靠 artistMatches 新加的去括号兜底才能过(见 match.go 注释)。
+
 		{"丁世光(Dean Ting)", "丁世光", true},
-		// 两侧多credit但没有任何一段相等。
+
 		{"anna & bob", "an & bobby", false},
-		// 空串。
+
 		{"", "UMI & 金泰亨", false},
 		{"UMI、V", "", false},
 	}
@@ -48,7 +42,6 @@ func TestLyricSourceArtistMatches(t *testing.T) {
 	}
 }
 
-// lyricPrimaryQueryArtist:首歌手检索变体的生成(纯函数部分,不含别名/MB 网络查询)。
 func TestLyricPrimaryQueryArtist(t *testing.T) {
 	cases := []struct {
 		artist, want string
@@ -56,32 +49,28 @@ func TestLyricPrimaryQueryArtist(t *testing.T) {
 		{"UMI & 金泰亨", "UMI"},
 		{"陶喆、卢广仲", "陶喆"},
 		{"Prince & The Revolution", "Prince"},
-		// 词级 feat 分隔(rune 级分隔符集不认识的形态)。
+
 		{"UMI feat. V", "UMI"},
 		{"UMI ft V", "UMI"},
 		{"IU (feat. SUGA)", "IU"},
 		{"IU（feat. SUGA）", "IU"},
 		{"Beyoncé featuring Jay-Z", "Beyoncé"},
-		// 单人:没有变体可言。
+
 		{"Taylor Swift", ""},
 		{"周杰伦", ""},
 		{"", ""},
-		// 尾随分隔符的仿冒形态:只切出 1 段,规整后与原串无差别 → 无变体。
+
 		{"周杰伦、", ""},
-		// "with"/"x" 刻意不当作分隔词:真实艺名的常见组成部分。
+
 		{"Sleeping With Sirens", ""},
 		{"Charli xcx", ""},
-		// 艺名自含 "ft" 字样但非独立词:不受影响。
+
 		{"Softest Hard", ""},
-		// 整串被 feat 词砍空(F.T. Island 这类):宁可不试也不发错词。
+
 		{"FT Island", ""},
-		// 人名自含分隔符(K/DA 案的形态)。不再产出 "K":那是 Last.fm 上
-		// 一个**真实存在的无关歌手**,拿它当检索词本来就搜不到 K/DA 的歌,正撞上上面
-		// "宁可不试也不发一个错的检索词"那条。见 firstCreditedArtist 的斜杠守卫。
+
 		{"K/DA", ""},
-		// 反过来,真的是合唱串时现在能产出正确的首歌手 —— 用户测试过:
-		// 用完整串只搜到两条候选,手工截短成 "K/DA" 才搜到三条(多一条带逐字轴、
-		// 分数最高的 Musixmatch)。那次只能手工截,现在这一步自己就给出 K/DA。
+
 		{"K/DA/Madison Beer/(G)I-DLE/Jaira Burns", "K/DA"},
 	}
 	for _, c := range cases {
@@ -94,10 +83,10 @@ func TestLyricPrimaryQueryArtist(t *testing.T) {
 func TestUsableLyricSourceCount(t *testing.T) {
 	scored := []scoredLyricCandidateResult{
 		{Source: "netease", Score: 462},
-		{Source: "netease", Score: 52},                    // 同源第二条不重复计数
-		{Source: "qq", Score: -1},                         // 判废不算
-		{Source: "kugou", Score: 0},                       // 0 分也算可用(Score>=0)
-		{Source: "lrclib", Score: -1, Instrumental: true}, // 纯音乐标记不算
+		{Source: "netease", Score: 52},
+		{Source: "qq", Score: -1},
+		{Source: "kugou", Score: 0},
+		{Source: "lrclib", Score: -1, Instrumental: true},
 	}
 	if got := usableLyricSourceCount(scored); got != 2 {
 		t.Errorf("usableLyricSourceCount = %d, want 2", got)
@@ -107,7 +96,6 @@ func TestUsableLyricSourceCount(t *testing.T) {
 	}
 }
 
-// mergeLyricCandidateRounds:按源去重(原串轮优先/判废才顶替)+ 合并后统一重打分。
 func TestMergeLyricCandidateRounds(t *testing.T) {
 	timed := "[00:01.00] line one\n[00:05.00] line two\n[00:09.00] line three"
 	timedAlt := "[00:01.20] line one\n[00:05.10] line two\n[00:09.30] line three"
@@ -135,19 +123,19 @@ func TestMergeLyricCandidateRounds(t *testing.T) {
 		}
 		bySource[r.Source] = r
 	}
-	// 原串轮可用的源不被变体轮顶替(哪怕变体轮同源分更高)。
+
 	if got := bySource["netease"].Title; got != "base-netease" {
 		t.Errorf("netease candidate = %q, want base round's (base-netease)", got)
 	}
-	// 原串轮判废、变体轮可用 → 顶替。
+
 	if got := bySource["qq"].Title; got != "extra-qq" {
 		t.Errorf("qq candidate = %q, want extra round's (extra-qq)", got)
 	}
-	// 变体轮新增的源并入。
+
 	if _, ok := bySource["kugou"]; !ok {
 		t.Errorf("kugou candidate from variant round missing")
 	}
-	// 合并后统一重打分:可用候选的分数是重算的(带时间戳的候选 >=0),不是原轮旧值。
+
 	for _, s := range []string{"netease", "qq", "kugou"} {
 		if bySource[s].Score < 0 {
 			t.Errorf("%s rescored to %d, want >= 0", s, bySource[s].Score)
@@ -156,18 +144,17 @@ func TestMergeLyricCandidateRounds(t *testing.T) {
 			t.Errorf("%s missing rescored ScoreTerms", s)
 		}
 	}
-	// 合并后没有真实 lrclib 候选 → Instrumental 标记保留。
+
 	if !instrumentalKept {
 		t.Errorf("lrclib instrumental marker dropped, want kept")
 	}
-	// 排序:分数降序。
+
 	for i := 1; i < len(merged); i++ {
 		if merged[i-1].Score < merged[i].Score {
 			t.Errorf("merged not sorted: %d before %d", merged[i-1].Score, merged[i].Score)
 		}
 	}
 
-	// 真实 lrclib 候选在场时,Instrumental 标记不再保留。
 	extraWithLrclib := append(extra, scoredLyricCandidateResult{Source: "lrclib", Lyrics: timed, Score: 200, Title: "extra-lrclib"})
 	merged2 := mergeLyricCandidateRounds("someone & 别人", "song", "album", 0, base, extraWithLrclib)
 	for _, r := range merged2 {
@@ -177,9 +164,6 @@ func TestMergeLyricCandidateRounds(t *testing.T) {
 	}
 }
 
-// needsRomanizationRetry:见其头注的側田/Justin Lo《Erica》真实案例——musixmatch+lrclib
-// 已经凑够可用源数,但两者都不会给语种/罗马音信号,只有 QQ/酷狗(粤语)、网易云(日语罗马字)
-// 才给,而它们要靠换艺人名重搜才有机会被问到正确的名字。
 func TestNeedsRomanizationRetry(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -196,7 +180,7 @@ func TestNeedsRomanizationRetry(t *testing.T) {
 			false,
 		},
 		{
-			// 側田《Erica》真实案例:歌词主体是汉字,两个源都没给语种/罗马音信号。
+
 			"汉字歌词_没有语种信号_需要重试",
 			[]scoredLyricCandidateResult{
 				{Source: "musixmatch", Lyrics: "知你其實想找一個水泡救生嗎"},

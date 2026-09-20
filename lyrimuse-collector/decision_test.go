@@ -6,9 +6,6 @@ import (
 	"testing"
 )
 
-// 决策记录的三条铁律之一"只存元数据,绝不存歌词正文"在结构上就成立(候选结构体没有
-// 歌词字段),这里用序列化结果再钉一道:哪天有人往 lyricsDecisionCandidate 里加正文
-// 字段,这个测试当场红。
 func TestBuildLyricsDecisionOmitsLyricsText(t *testing.T) {
 	scored := []scoredLyricCandidateResult{
 		{Source: "netease", Lyrics: "SECRET_LYRICS_BODY", Score: 525,
@@ -32,8 +29,6 @@ func TestBuildLyricsDecisionOmitsLyricsText(t *testing.T) {
 	}
 }
 
-// "回了烂候选"和"超时没露面"必须分得开:被判负分的源要出现在 SourcesResponded 和
-// 候选表里(带着它的 reject 原因),这正是这份记录要回答的第一问。
 func TestBuildLyricsDecisionKeepsRejectedCandidates(t *testing.T) {
 	scored := []scoredLyricCandidateResult{
 		{Source: "qq", Score: 482, Title: "某歌"},
@@ -56,8 +51,6 @@ func TestBuildLyricsDecisionKeepsRejectedCandidates(t *testing.T) {
 	}
 }
 
-// 没选出任何可用候选:Winner 留空、候选表照样全量保留 —— "为什么这首歌没歌词"
-// 跟"为什么选了这份歌词"同样需要证据。
 func TestBuildLyricsDecisionNoWinner(t *testing.T) {
 	scored := []scoredLyricCandidateResult{
 		{Source: "lrclib", Score: -1, Instrumental: true},

@@ -7,10 +7,6 @@ import (
 	"time"
 )
 
-// :陶喆和盧廣仲《那個女孩》这首本地匹配不到的歌,"换个身份再搜"+
-// "按标题反查"两轮兜底加起来在 13 秒内连发了 16 次网易云请求,把自己先撞成限流(见
-// neteaseMinIntervalBetweenCalls 头注)。这组测试锁定 neteaseThrottle 本身的行为,跟
-// musicbrainzThrottle 同一个模式、同一批判据。
 func TestNeteaseThrottle(t *testing.T) {
 	savedCall := neteaseLastCall
 	savedCooldown := neteaseCooldownUntil
@@ -64,22 +60,9 @@ func TestNeteaseThrottle(t *testing.T) {
 		}
 	})
 
-	// 新增:探测到网易云 body 拒绝之后的退避行为(neteaseReportBlocked)。
-	// 见 neteaseBlockCooldownBase 头注 —— 为什么退避必须按端点桶,不能是全局的。
-	// ⚠️ 这一条 当天改过语义。**原来断言的是「被标记退避的端点应该等到退避期满」**
-	// (返回 nil、耗时 >= 退避期),现在断言的是「立刻返回 errNeteaseBucketCooling、一点都不等」。
-	//
-	// 改的理由是测试,不是口味:「搜索候选歌词」搜 DAOKO×米津玄師《打上花火》,逐条打时间戳量到
-	// **整次搜索 150 秒以上,其中约 120 秒睡在这层退避里**,而且睡出来是一条 30/60/90/120/150 秒
-	// 的等差数列。调用方(retryTitleFromArtistSearchDetailed / neteaseAlbumIDByName)都是
-	// "主端点不行就换备用端点"的两段式写法,而备用端点是**另一个桶、当时完全健康、150ms 就回**——
-	// 睡满 30 秒只是为了醒来再被 405 拒一次,然后才轮到那条本来就通的路。
-	//
-	// 立刻返回错误对「被限流就别继续敲门」这个原始意图**更强**:退避期内一个请求都不发
-	// (旧写法睡完还要发一个去试)。
 	t.Run("退避期内的端点桶立刻拒绝,不睡", func(t *testing.T) {
 		resetCooldowns()
-		neteaseLastCall = time.Now().Add(-time.Hour) // 最小间隔那层不参与,只看退避
+		neteaseLastCall = time.Now().Add(-time.Hour)
 		const blocked = "https://music.163.com/api/search/get/web?type=1&s=a"
 		neteaseReportBlocked(blocked, time.Second)
 
@@ -98,7 +81,7 @@ func TestNeteaseThrottle(t *testing.T) {
 		neteaseLastCall = time.Now().Add(-time.Hour)
 		const blocked = "https://music.163.com/api/search/get/web?type=1&s=a"
 		neteaseReportBlocked(blocked, 20*time.Millisecond)
-		time.Sleep(40 * time.Millisecond) // 等退避期自然过掉
+		time.Sleep(40 * time.Millisecond)
 
 		if err := neteaseThrottle(context.Background(), blocked); err != nil {
 			t.Fatalf("退避期已过,应当放行,got %v", err)
@@ -109,7 +92,7 @@ func TestNeteaseThrottle(t *testing.T) {
 		resetCooldowns()
 		neteaseLastCall = time.Now().Add(-time.Hour)
 		const primary = "https://music.163.com/api/search/get/web?type=1&s=a"
-		const fallback = "https://music.163.com/api/search/get?type=1&s=a" // 不同路径,独立分桶
+		const fallback = "https://music.163.com/api/search/get?type=1&s=a"
 		neteaseReportBlocked(primary, time.Second)
 
 		start := time.Now()
@@ -126,8 +109,6 @@ func TestNeteaseThrottle(t *testing.T) {
 		neteaseLastCall = time.Now().Add(-time.Hour)
 		neteaseReportBlocked("https://music.163.com/api/search/get/web?type=1&s=a", time.Second)
 
-		// 同路径、不同 query(type=10,专辑搜索用的那种)——应该被同一个桶挡住。
-		// 「挡住」的表现 是**立刻拒绝**而不是等满,见上面那条的说明。
 		err := neteaseThrottle(context.Background(), "https://music.163.com/api/search/get/web?type=10&s=b")
 		if !errors.Is(err, errNeteaseBucketCooling) {
 			t.Fatalf("同路径不同 query 应该共享退避,got %v", err)
@@ -138,7 +119,7 @@ func TestNeteaseThrottle(t *testing.T) {
 		resetCooldowns()
 		const u = "https://music.163.com/api/search/get/web"
 		neteaseReportBlocked(u, 200*time.Millisecond)
-		neteaseReportBlocked(u, 20*time.Millisecond) // 更短的一次不该覆盖更长的
+		neteaseReportBlocked(u, 20*time.Millisecond)
 		until := neteaseCooldownUntil[neteaseEndpointBucket(u)]
 		if time.Until(until) < 150*time.Millisecond {
 			t.Errorf("更短的退避不该覆盖已有的更长退避,剩余 %v", time.Until(until))
@@ -166,11 +147,6 @@ func TestNeteaseEndpointBucket(t *testing.T) {
 	}
 }
 
-// 新增:指数退避 + 成功清零 + "成功过就不报限流"那道判据。
-//
-// 起因是 25 小时真实日志里的分布(见 neteaseBlockCooldownBase 头注):171 次拒绝有 89 次
-// 跟上一次间隔 ≤35 秒,最长连撞 21 次 —— 固定 30 秒的退避等于自己把服务端的惩罚窗口一直
-// 续着。这组断言钉住"越撞越久、成功就复原"这两件事。
 func TestNeteaseBlockBackoff(t *testing.T) {
 	savedCooldown := neteaseCooldownUntil
 	savedStreak := neteaseBlockStreak
@@ -194,7 +170,7 @@ func TestNeteaseBlockBackoff(t *testing.T) {
 			{1, neteaseBlockCooldownBase},
 			{2, 2 * neteaseBlockCooldownBase},
 			{3, 4 * neteaseBlockCooldownBase},
-			{4, neteaseBlockCooldownMax}, // 8×2min = 16min 已超上限
+			{4, neteaseBlockCooldownMax},
 			{9, neteaseBlockCooldownMax},
 		}
 		for _, c := range cases {
@@ -204,9 +180,6 @@ func TestNeteaseBlockBackoff(t *testing.T) {
 		}
 	})
 
-	// ⚠️ 这一条守的是一个会让退避**整个失效**的坑:time.Duration 是 int64,base 左移几十位
-	// 会溢出成**负数**,而负的退避在 neteaseReportBlocked 那边等于"已经过期"——连撞越多反而
-	// 越不退避,正好反了。所以移位前必须先把 streak 卡住。
 	t.Run("streak 大到会移位溢出时仍然是正数且不超上限", func(t *testing.T) {
 		for _, streak := range []int{32, 63, 64, 1 << 20} {
 			got := neteaseCooldownForStreak(streak)
@@ -217,7 +190,7 @@ func TestNeteaseBlockBackoff(t *testing.T) {
 				t.Errorf("neteaseCooldownForStreak(%d) = %v, want 封顶 %v", streak, got, neteaseBlockCooldownMax)
 			}
 		}
-		// streak < 1(理论不该发生)按第一次处理,别算出负数
+
 		if got := neteaseCooldownForStreak(0); got != neteaseBlockCooldownBase {
 			t.Errorf("neteaseCooldownForStreak(0) = %v, want %v", got, neteaseBlockCooldownBase)
 		}
@@ -242,8 +215,8 @@ func TestNeteaseBlockBackoff(t *testing.T) {
 	t.Run("不同桶各自记连撞,不互相污染", func(t *testing.T) {
 		reset()
 		_, _ = neteaseReportRejected("https://music.163.com/api/search/get/web?type=1&s=a")
-		_, _ = neteaseReportRejected("https://music.163.com/api/search/get/web?type=10&s=b")  // 同桶
-		_, streak := neteaseReportRejected("https://music.163.com/api/search/get?type=1&s=a") // 另一个桶
+		_, _ = neteaseReportRejected("https://music.163.com/api/search/get/web?type=10&s=b")
+		_, streak := neteaseReportRejected("https://music.163.com/api/search/get?type=1&s=a")
 		if streak != 1 {
 			t.Errorf("另一个桶的首次拒绝 streak = %d, want 1", streak)
 		}
@@ -267,9 +240,6 @@ func TestNeteaseBlockBackoff(t *testing.T) {
 		}
 	})
 
-	// 这一条守的是"限流别张冠李戴":吃过 405 ≠ 这个源没给出候选。测试对照见
-	// netease.go 的 neteaseSawSuccessNow 头注(同一分钟两次搜索,都吃了 405,其中一次
-	// 照样给出 4 条候选)。
 	t.Run("成功过一次之后 SawSuccess 为真", func(t *testing.T) {
 		reset()
 		if neteaseSawSuccessNow() {
@@ -286,11 +256,6 @@ func TestNeteaseBlockBackoff(t *testing.T) {
 	})
 }
 
-// :主备端点对调之后,钉住"首选是那个从没被拒过的桶"。
-// 依据(同一份 25 小时日志):/api/search/get/web 打了 10029 次被拒 171 次,
-// /api/search/get 打了 8537 次**零拒绝** —— 量级相当而结果差一个数量级。
-// ⚠️ 这条断言存在的意义是防"顺手改回去":两个常量必须是不同的桶(否则兜底形同虚设),
-// 而且首选必须是 /api/search/get。
 func TestNeteaseSearchEndpointOrder(t *testing.T) {
 	if neteaseSearchEndpointPrimary != "https://music.163.com/api/search/get" {
 		t.Errorf("首选端点 = %q,应当是 /api/search/get(实测零拒绝的那个桶)", neteaseSearchEndpointPrimary)

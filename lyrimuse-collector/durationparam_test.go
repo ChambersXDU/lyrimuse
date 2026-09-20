@@ -2,14 +2,11 @@ package main
 
 import "testing"
 
-// :活路径(scrobble / updateNowPlaying)此前**不发** duration,而 backfill.go
-// 一直在发 —— 同一首歌当场提交反而比事后回填少一个字段。这一组钉的是补上之后的口径:
-// 只发正数、整数秒、拿不到就整个键不发(发 0 比不发更糟,那是在断言"这首歌长度为零")。
 func TestDurationParam(t *testing.T) {
 	cases := []struct {
 		name string
 		secs float64
-		want string // "" = 不该出现这个键
+		want string
 	}{
 		{"正常曲长取整数秒", 322.018, "322"},
 		{"向下取整,不四舍五入(跟 backfill 的 int64() 转换逐字一致)", 208.9, "208"},
@@ -33,8 +30,6 @@ func TestDurationParam(t *testing.T) {
 	}
 }
 
-// 批量键名带下标(duration[0]),同一个 helper 要能用 —— 免得回填那边以后想复用时
-// 发现只支持固定键名，又抄一份出去。
 func TestDurationParamHonorsKeyName(t *testing.T) {
 	p := map[string]string{}
 	durationParam(p, "duration[3]", 180)

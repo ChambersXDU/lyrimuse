@@ -12,22 +12,6 @@ import (
 	"time"
 )
 
-// `collector healthcheck`:一次性子命令,回答"歌词为什么不出来"。
-//
-// 排查这件事以前只有两条路:翻 ~/Library/Logs/lyrimuse.log,或者猜。而链路上能坏的地方
-// 分散在好几层——配置解析、功能开关、缓存文件、歌词导出目录的写权限、各歌词源各自的
-// 可达性、网络本身。这个子命令把它们一次性问一遍。
-//
-// 网络这部分故意**不**去逐个 ping 各家的域名,而是拿真实的搜索路径跑两首探测曲,看哪些源
-// 给得出候选。"这个源现在能不能给我歌词"才是用户关心的问题,而端点通不通只是它的一个
-// 必要条件 —— 接口改版、签名失效、地区封锁这些都能让"域名通着但一条歌词也拿不到"。
-//
-// 探测曲用两首(一首华语一首英文)再取并集:LRCLIB/Musixmatch 的库以英文为主,
-// NetEase/QQ/酷狗以中文为主,任何单独一首都会让另一半源"查不到"而被误报成故障。
-//
-// ⚠️ 选探测曲不能只挑"够红", kuwo 时踩过——酷我搜索结果对越红、越被
-// 翻唱/改编到泛滥的歌命中率反而越低(具体见下面 probes 变量旁的注释),挑一首传唱度高
-// 但没有被淹没在翻唱堆里的歌才靠得住。
 type healthStatus string
 
 const (
@@ -70,11 +54,10 @@ func runHealthcheckCLI(args []string) {
 		})
 	}
 
-	// ---- 本地:不联网、结论确定的部分先跑完 ----
 	cfg, err := loadConfig(cfgPath)
 	switch {
 	case err != nil:
-		// loadConfig 只在"文件在但读不出来"时才返回错误(内容有问题会降级,见它的注释)。
+
 		add("配置文件", healthFail, "%v", err)
 		cfg = &config{}
 	case len(cfg.loadIssues) > 0:
@@ -92,7 +75,6 @@ func runHealthcheckCLI(args []string) {
 		add("歌词来源开关", healthOK, "已启用 %s", strings.Join(enabled, "/"))
 	}
 
-	// 缓存文件:能不能解析比大小重要 —— 解析不了等于每首歌都要重查。
 	cachePath := filepath.Join(configDir, clientName+"-enrich-cache.json")
 	if data, err := os.ReadFile(cachePath); err != nil {
 		if os.IsNotExist(err) {
@@ -109,8 +91,6 @@ func runHealthcheckCLI(args []string) {
 		}
 	}
 
-	// 歌词导出目录:写不进去的话"歌词文件夹作为权威源"整条链路是坏的,而它不会有任何
-	// 显式报错 —— 只是每次导出都静默失败。
 	dir := features.LyricsDir
 	if dir == "" {
 		dir = filepath.Join(configDir, "lyrics")
@@ -135,7 +115,6 @@ func runHealthcheckCLI(args []string) {
 		}
 	}
 
-	// 提交后端是可选的 —— 没配不影响歌词，只是不往外提交，所以是 warn 不是 fail。
 	if cfg.Token == "" {
 		add("ListenBrainz", healthWarn, "未配置 token,不会提交收听(不影响歌词显示)")
 	} else {
@@ -150,23 +129,12 @@ func runHealthcheckCLI(args []string) {
 		add("Last.fm", healthWarn, "未配置(不影响歌词显示)")
 	}
 
-	// ---- 网络:拿真实搜索路径探两首 ----
 	if !*skipNetwork {
 		type probeTrack struct{ artist, title, album string }
-		// ⚠️ 中文探测曲 从《晴天》(周杰伦)换成《少年》(梦然):酷我(kuwo)接入后
-		// 一个跟"能不能连通"无关的结构性问题——酷我搜索对**越红越被翻唱/改编到
-		// 泛滥**的歌命中率反而越低(前排全是 DJ 改编/伴奏/演唱会现场,原唱裸版本挤不进去),
-		// 《晴天》《稻香》《童话》《Yesterday》《Shape of You》这类超级热门曲目测试全部
-		// 落空,导致 healthcheck 对 kuwo 常年报"两首探测曲都没有候选,这个源目前可能不可用"
-		// ——而 kuwo 的网络连通性其实完全正常,只是这两首探测曲恰好踩中它的已知短板,不是
-		// 真故障。《少年》(梦然)是同样传唱度极高的网络时代金曲,但测试在酷我搜索结果里
-		// 排第一的就是原唱本人的完整单曲(带 MV 副标题),能通过跟其它源同一套身份闸;同时
-		// 保留了对中文库其它源(netease/qq/kugou/musixmatch/amll)一贯的高命中率,不会让
-		// 探测曲的目的从"测连通性"退化成"测某个源的曲库覆盖率"。英文探测曲(Yesterday)
-		// 未受影响、原样保留——kuwo 对英文曲库本来就没有覆盖,不指望这首帮它过关。
+
 		probes := []probeTrack{
-			{"梦然", "少年", ""},                      // 中文库
-			{"The Beatles", "Yesterday", "Help!"}, // 英文库
+			{"梦然", "少年", ""},
+			{"The Beatles", "Yesterday", "Help!"},
 		}
 		answered := map[string]int{}
 		start := time.Now()
@@ -184,9 +152,7 @@ func runHealthcheckCLI(args []string) {
 		} else {
 			add("网络", healthOK, "探测 %d 首用时 %s", len(probes), elapsed)
 		}
-		// 单个源坏掉不等于"歌词出不来"——还有另外四个。所以单源只报 warn,只有**所有**
-		// 启用的源都哑了才是 fail。分级要对得上这个命令要回答的问题("歌词为什么不出来"),
-		// 否则一个长期失效的源会让 healthcheck 常年顶着 fail,那个信号就不值钱了。
+
 		dead := 0
 		for _, src := range enabled {
 			n := answered[src]
@@ -194,7 +160,7 @@ func runHealthcheckCLI(args []string) {
 			case n == len(probes):
 				add("源 "+src, healthOK, "%d/%d 首探测曲给出了候选", n, len(probes))
 			case n > 0:
-				// 一半命中是正常的：中文源查不到英文歌，反之亦然。
+
 				add("源 "+src, healthOK, "%d/%d 首(另一首不在它的曲库里属正常)", n, len(probes))
 			default:
 				dead++
@@ -242,7 +208,6 @@ func runHealthcheckCLI(args []string) {
 	}
 }
 
-// enabledLyricSourceNames 返回当前设置里启用的歌词源,顺序固定,便于比对输出。
 func enabledLyricSourceNames() []string {
 	var out []string
 	for _, name := range lyricSourceNames {
@@ -254,18 +219,16 @@ func enabledLyricSourceNames() []string {
 	return out
 }
 
-// displayWidth 按**终端显示列数**算宽度,不是 rune 数 —— 中日韩表意文字和全角标点在等宽
-// 终端里占两列,拿 rune 数补空格会让中英混排的那几行歪掉。
 func displayWidth(s string) int {
 	w := 0
 	for _, r := range s {
 		switch {
-		case r >= 0x1100 && r <= 0x115F, // 韩文字母
-			r >= 0x2E80 && r <= 0xA4CF, // 部首扩展 ~ 注音、CJK 统一表意
-			r >= 0xAC00 && r <= 0xD7A3, // 韩文音节
-			r >= 0xF900 && r <= 0xFAFF, // CJK 兼容表意
-			r >= 0xFE30 && r <= 0xFE6F, // CJK 兼容形式
-			r >= 0xFF00 && r <= 0xFF60, // 全角 ASCII
+		case r >= 0x1100 && r <= 0x115F,
+			r >= 0x2E80 && r <= 0xA4CF,
+			r >= 0xAC00 && r <= 0xD7A3,
+			r >= 0xF900 && r <= 0xFAFF,
+			r >= 0xFE30 && r <= 0xFE6F,
+			r >= 0xFF00 && r <= 0xFF60,
 			r >= 0xFFE0 && r <= 0xFFE6:
 			w += 2
 		default:

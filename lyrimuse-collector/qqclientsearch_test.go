@@ -5,11 +5,6 @@ import (
 	"testing"
 )
 
-// realQQClientSearchBody 是 从 client_search_cp 实际抓下来的响应(new_json=1,
-// n=3,查询词 "Have Gun, Will Travel Gravity Blues"),只裁掉了本文件用不到的字段。
-// 用真实响应而不是手搓 JSON:这个测试的头号目标就是守住 struct tag——mid/title/
-// interval/singer[].name/album.name 任何一个写错,下游身份闸会整片静默失效,而那种失效
-// 从外面看跟"QQ 没收录这首歌"一模一样(正是 smartbox 时代那个坑的形态)。
 const realQQClientSearchBody = `{
  "code": 0,
  "data": {"song": {"list": [
@@ -48,11 +43,6 @@ func TestQQClientSearchItemsDecodesRealResponse(t *testing.T) {
 	}
 }
 
-// TestQQClientSearchItemsJoinsCollabWithSlash 守住"多个 singer 用 / 拼"这个选择。
-// client_search_cp 的 singer 是数组,而下游三道身份闸(artistMatches /
-// lyricSourceArtistMatches / looseContains)吃的是一个字符串,靠 isArtistCreditSep 切段。
-// "/" 是它认识的分隔符,也正是 smartbox 对合唱本来就返回的形态("UMI/V")——换成空格拼
-// 会把两段塌成一段,身份闸当场失配,所以这里连"拼完还过不过得了闸"一起断言,不只是比字符串。
 func TestQQClientSearchItemsJoinsCollabWithSlash(t *testing.T) {
 	var resp qqClientSearchResp
 	body := `{"data":{"song":{"list":[
@@ -68,9 +58,7 @@ func TestQQClientSearchItemsJoinsCollabWithSlash(t *testing.T) {
 	if got[0].Singer != "UMI/V" {
 		t.Fatalf("合唱署名 = %q, want %q", got[0].Singer, "UMI/V")
 	}
-	// 乐队名本身带逗号的那一类(本次排查的 Have Gun, Will Travel):QQ 把它拆成两个 singer
-	// 条目返回,拼回 "Have Gun/Will Travel" 之后必须仍能跟本地标签 "Have Gun, Will Travel"
-	// 对上——这是本次改动能不能真正救回这类歌的前提。
+
 	if !qqArtistOK(true, "Have Gun/Will Travel", "Have Gun, Will Travel") {
 		t.Error("strict 身份闸拒了 Have Gun/Will Travel vs Have Gun, Will Travel")
 	}
@@ -99,9 +87,6 @@ func TestQQClientSearchItemsSkipsUnusableRows(t *testing.T) {
 	}
 }
 
-// TestQQSearchItemsFromSmartboxLeavesAlbumAndIntervalZero:smartbox 兜底路线拿不到
-// 专辑名/时长,必须留零值——零值是给下游的信号("这条路线没给,该查还得自己查",见
-// resolveQQMusicMatch 里 candAlbum 那段)。填上假值会让 albumScore 拿错的专辑打分。
 func TestQQSearchItemsFromSmartboxLeavesAlbumAndIntervalZero(t *testing.T) {
 	got := qqSearchItemsFromSmartbox([]qqSmartboxItem{
 		{Mid: "m1", Name: "稻香", Singer: "周杰伦"},
@@ -115,9 +100,6 @@ func TestQQSearchItemsFromSmartboxLeavesAlbumAndIntervalZero(t *testing.T) {
 	}
 }
 
-// TestQQCollectCandidatesCarriesAlbumAndInterval 是这次改动的核心透传断言:搜索结果
-// 自带的专辑名/时长要一路带到候选上。它们分别喂给 albumScore / versionTagsMismatch 和
-// sourceDurationMismatchPenalty——半路掉了不会报错,只会让打分少两个信号,静默劣化。
 func TestQQCollectCandidatesCarriesAlbumAndInterval(t *testing.T) {
 	items := decodeRealQQSearch(t)
 	got := qqCollectCandidates(items, "Have Gun, Will Travel", "Gravity Blues", true)
@@ -139,8 +121,6 @@ func TestQQCollectCandidatesCarriesAlbumAndInterval(t *testing.T) {
 	}
 }
 
-// TestQQCollectCandidatesArtistGateFilters:身份闸真的在起作用,不是照单全收。同一份
-// 搜索结果换个歌手名,应当挑出另一条;歌手完全不相干时 strict 档应当一条都不留。
 func TestQQCollectCandidatesArtistGateFilters(t *testing.T) {
 	items := decodeRealQQSearch(t)
 
@@ -157,8 +137,6 @@ func TestQQCollectCandidatesArtistGateFilters(t *testing.T) {
 	}
 }
 
-// TestQQCollectCandidatesTitleGateFilters:标题闸也要真的在起作用——搜索接口的召回比
-// smartbox 宽得多(一次回 10 条相关曲目),标题闸是挡住"同歌手另一首歌"的那道门。
 func TestQQCollectCandidatesTitleGateFilters(t *testing.T) {
 	items := decodeRealQQSearch(t)
 	if got := qqCollectCandidates(items, "Have Gun, Will Travel", "Mission to Nowhere", true); len(got) != 0 {
@@ -166,7 +144,6 @@ func TestQQCollectCandidatesTitleGateFilters(t *testing.T) {
 	}
 }
 
-// TestQQCollectCandidatesSkipsEmptyMid:mid 为空的条目拿不到歌词/链接,不该进候选。
 func TestQQCollectCandidatesSkipsEmptyMid(t *testing.T) {
 	items := []qqSearchItem{
 		{Mid: "", Name: "Gravity Blues", Singer: "Have Gun/Will Travel", Album: "Voyager Golden EP", Interval: 235},
@@ -178,8 +155,6 @@ func TestQQCollectCandidatesSkipsEmptyMid(t *testing.T) {
 	}
 }
 
-// TestQQCandAlbumNamePrefersInline:搜索结果自带专辑名时**不该**再打一次详情请求。
-// fetch 里直接 t.Fatal——回落被误触发时测试当场失败,不是靠比对返回值间接推断。
 func TestQQCandAlbumNamePrefersInline(t *testing.T) {
 	got := qqCandAlbumName("Voyager Golden EP", func() string {
 		t.Fatal("自带了专辑名,不该再回落去查详情")
@@ -190,8 +165,6 @@ func TestQQCandAlbumNamePrefersInline(t *testing.T) {
 	}
 }
 
-// TestQQCandAlbumNameFallsBackWhenEmpty:smartbox 兜底路线自带为空,必须回落去查,
-// 不能把空专辑名喂给 albumScore(那会让所有候选的专辑分都是 0,专辑感知整体失效)。
 func TestQQCandAlbumNameFallsBackWhenEmpty(t *testing.T) {
 	calls := 0
 	got := qqCandAlbumName("", func() string {
@@ -203,8 +176,6 @@ func TestQQCandAlbumNameFallsBackWhenEmpty(t *testing.T) {
 	}
 }
 
-// TestQQMatchFromCandCarriesAlbumAndInterval 守住三个出口共用的那一处装配:候选身上
-// 的专辑名/时长必须原样进 qqMusicMatch。漏字段不会报错,只会静默少一个打分信号。
 func TestQQMatchFromCandCarriesAlbumAndInterval(t *testing.T) {
 	c := qqCand{mid: "000ODthF4LlIAx", title: "Gravity Blues", artist: "Have Gun/Will Travel",
 		album: "Voyager Golden EP", interval: 235, exact: true}
@@ -229,8 +200,6 @@ func TestQQMatchFromCandCarriesAlbumAndInterval(t *testing.T) {
 	}
 }
 
-// TestQQPickCandidatePrefersExact:标题精确同名的要赢过排在它前面的非精确条目——
-// 搜索接口一次回 10 条,首条只是"相关度最高",不代表是规范版。
 func TestQQPickCandidatePrefersExact(t *testing.T) {
 	cands := []qqCand{
 		{mid: "live", title: "Gravity Blues (Live)", exact: false},
@@ -253,11 +222,8 @@ func TestQQPickCandidateFallsBackToFirst(t *testing.T) {
 	}
 }
 
-// TestQQSearchNeedsSmartboxSupplement 守住"什么时候值得多打一次 smartbox"这条判据。
-// 背景见 qqSearchSongs 的 ② 段:两个索引互补,smartbox 的价值是补最规范的那条原版。
 func TestQQSearchNeedsSmartboxSupplement(t *testing.T) {
-	// PRINCE《Little Red Corvette》的真实形状:正式搜索 n 开到 30 也只有四个带限定词的
-	// 版本,原版专辑《1999》那条一次都不出现——必须补 smartbox。
+
 	prince := []qqSearchItem{
 		{Mid: "a", Name: "Little Red Corvette (Explicit)", Album: "The Hits / The B-Sides (Explicit)"},
 		{Mid: "b", Name: "Little Red Corvette (Single Version)", Album: "4Ever"},
@@ -267,27 +233,25 @@ func TestQQSearchNeedsSmartboxSupplement(t *testing.T) {
 	if !qqSearchNeedsSmartboxSupplement(prince, "Little Red Corvette") {
 		t.Error("一条精确同名都没有,该补 smartbox")
 	}
-	// 有精确同名候选 → 省掉这次请求。
+
 	if qqSearchNeedsSmartboxSupplement(append(prince,
 		qqSearchItem{Mid: "e", Name: "Little Red Corvette", Album: "1999"}), "Little Red Corvette") {
 		t.Error("已有精确同名候选,不该再补 smartbox")
 	}
-	// 正式接口空手而回(被反爬打死的降级路径)→ 必须补。
+
 	if !qqSearchNeedsSmartboxSupplement(nil, "Little Red Corvette") {
 		t.Error("正式接口一条都没回时必须补 smartbox,这是降级路径")
 	}
-	// 本地曲名为空 → 无从判断,保守地补。
+
 	if !qqSearchNeedsSmartboxSupplement(prince, "") {
 		t.Error("本地曲名为空时该保守地补")
 	}
-	// 精确同名的判定走 normLoose,大小写/空格差异不该逼出一次多余请求。
+
 	if qqSearchNeedsSmartboxSupplement(
 		[]qqSearchItem{{Mid: "x", Name: "little red  corvette"}}, "Little Red Corvette") {
 		t.Error("normLoose 下已经同名,不该判为需要补")
 	}
-	// 带 (Live) 的本地曲名:候选里有一条同样带 (Live) 的精确同名 → 不补。
-	// 这一档对应周杰伦《七里香 (Live)》——两个演唱会版本曲名都叫"七里香 (Live)",
-	// 该由 albumScore 去分胜负,不该再多打一次 smartbox 把录音室版混进来。
+
 	if qqSearchNeedsSmartboxSupplement(
 		[]qqSearchItem{{Mid: "y", Name: "七里香 (Live)", Album: "周杰伦 2004 无与伦比 演唱会 Live CD"}},
 		"七里香 (Live)") {
@@ -295,19 +259,18 @@ func TestQQSearchNeedsSmartboxSupplement(t *testing.T) {
 	}
 }
 
-// TestQQCreditSetEqual:同一组人才算相等。它只做 tiebreak,不是准入闸——所以宁可严格。
 func TestQQCreditSetEqual(t *testing.T) {
 	cases := []struct {
 		singer, artist string
 		want           bool
 	}{
 		{"陶喆", "陶喆", true},
-		{"陶喆/卢广仲", "陶喆", false},                                 // 合唱 vs 独唱:本次回归的形状
-		{"陶喆", "陶喆/卢广仲", false},                                 // 反向同理
-		{"陶喆/卢广仲", "卢广仲/陶喆", true},                              // 顺序无关
-		{"Have Gun/Will Travel", "Have Gun, Will Travel", true}, // 分隔符差异不算不同
+		{"陶喆/卢广仲", "陶喆", false},
+		{"陶喆", "陶喆/卢广仲", false},
+		{"陶喆/卢广仲", "卢广仲/陶喆", true},
+		{"Have Gun/Will Travel", "Have Gun, Will Travel", true},
 		{"UMI/V", "UMI/V", true},
-		{"UMI/V", "UMI & 金泰亨", false}, // 跨平台译名不同 → 不给这档加分,也不该误判为相等
+		{"UMI/V", "UMI & 金泰亨", false},
 		{"", "陶喆", false},
 		{"陶喆", "", false},
 	}
@@ -318,11 +281,8 @@ func TestQQCreditSetEqual(t *testing.T) {
 	}
 }
 
-// TestQQPickCandidatePrefersExactCreditOnTie:标题、专辑都打平时,署名恰好同一组人的
-// 那条要赢。对应陶喆《逗阵兄弟 (独唱版)》——独唱与合唱同名同专辑,只能靠署名区分,
-// 靠"谁排在前面"是不可靠的(见 qqCreditSetEqual 头注)。
 func TestQQPickCandidatePrefersExactCreditOnTie(t *testing.T) {
-	// 合唱版排在前面,独唱版排在后面:仍应选中独唱版。
+
 	cands := []qqCand{
 		{mid: "duet", title: "逗阵兄弟", artist: "陶喆/卢广仲", album: "再见你好吗", interval: 306},
 		{mid: "solo", title: "逗阵兄弟", artist: "陶喆", album: "再见你好吗", interval: 335},
@@ -331,15 +291,13 @@ func TestQQPickCandidatePrefersExactCreditOnTie(t *testing.T) {
 	if !ok || got.mid != "solo" {
 		t.Fatalf("got %+v, want mid=solo(署名恰好同一组人)", got)
 	}
-	// 本地就是合唱时,反过来选合唱那条。
+
 	got, ok = qqPickCandidate(cands, "陶喆/卢广仲", 0)
 	if !ok || got.mid != "duet" {
 		t.Fatalf("got %+v, want mid=duet", got)
 	}
 }
 
-// TestQQPickCandidateExactTitleBeatsCredit:署名这一档只是 tiebreak,不能翻过
-// "标题精确同名"那一档——否则纯音乐/伴奏/串烧这些同署名的变体会靠署名分上位。
 func TestQQPickCandidateExactTitleBeatsCredit(t *testing.T) {
 	cands := []qqCand{
 		{mid: "instrumental", title: "逗阵兄弟 (消音伴奏)", artist: "陶喆", exact: false},
@@ -351,11 +309,6 @@ func TestQQPickCandidateExactTitleBeatsCredit(t *testing.T) {
 	}
 }
 
-// ,处理 PRINCE《319》"搜不到"(酷狗那边的同款用例见 kugousearchpick_test.go)。QQ 搜索结果
-// 第 1 条就是正主「319 (X-cerpt) / The VERSACE Experience (PRELUDE 2 GOLD) [Explicit]」88s,但专辑分支的挑选
-// 按"标题精确同名 > 专辑分"排,《The Gold Experience》185 秒的完整版「319」精确同名先赢。现在自报曲长
-// 对不上(>12%)的整组排到对得上的后面。字符串与时长全部取自真实搜索结果(client_search_cp 自带专辑名,
-// 不需要查详情,lookupAlbum 传恒空)。
 func TestQQPickCandidateDurationFitBeatsExactTitle(t *testing.T) {
 	items := []qqSearchItem{
 		{Mid: "001d7enp3Ydoop", Name: "319 (X-cerpt)", Singer: "Prince", Album: "The VERSACE Experience (PRELUDE 2 GOLD) [Explicit]", Interval: 88},
@@ -375,11 +328,11 @@ func TestQQPickCandidateDurationFitBeatsExactTitle(t *testing.T) {
 	if c, ok := qqPickCandidate(cands, "PRINCE", 88.226); !ok || c.mid != "001d7enp3Ydoop" {
 		t.Fatalf("不看专辑的挑选同理,拿到 %+v", c)
 	}
-	// 对称:本地是 185 秒的专辑版时完整版赢。
+
 	if best, ok, _ := qqPickCandidateWithAlbum(cands, "PRINCE", "The Gold Experience", 185.12, noLookup); !ok || best.mid != "004JRej817Ddcq" {
 		t.Fatalf("本地 185 秒时完整版该赢,拿到 %+v", best)
 	}
-	// 时长未知时时长键关闭,回到"精确同名优先"的旧行为。
+
 	if best, ok, _ := qqPickCandidateWithAlbum(cands, "PRINCE", "The VERSACE Experience Prelude 2 Gold", 0, noLookup); !ok || best.mid != "004JRej817Ddcq" {
 		t.Fatalf("时长未知时应回到精确同名优先,拿到 %+v", best)
 	}

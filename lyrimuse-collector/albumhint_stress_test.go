@@ -8,9 +8,6 @@ import (
 	"time"
 )
 
-// TestAppleAlbumHintSyncConcurrentSameKeyStress tests 60 concurrent callers requesting
-// the same key while an in-flight query is pending. When storeAppleAlbumHintResult
-// finishes, all callers must receive the exact expected album cleanly and without race.
 func TestAppleAlbumHintSyncConcurrentSameKeyStress(t *testing.T) {
 	savedCache, savedMisses, savedInflight, savedWaiters, savedLogged :=
 		appleAlbumHintCache, appleAlbumHintMisses, appleAlbumHintInflight, appleAlbumHintWaiters, appleAlbumHintLogged
@@ -41,10 +38,8 @@ func TestAppleAlbumHintSyncConcurrentSameKeyStress(t *testing.T) {
 		}()
 	}
 
-	// Allow goroutines to enter appleAlbumHintSync and park on waitCh
 	time.Sleep(50 * time.Millisecond)
 
-	// Simulate background completion
 	expectedAlbum := "StressAlbumResult"
 	testCands := []albumHintCandidate{
 		{Artist: "StressArtist", Album: expectedAlbum},
@@ -59,7 +54,6 @@ func TestAppleAlbumHintSyncConcurrentSameKeyStress(t *testing.T) {
 		}
 	}
 
-	// Verify state cleanup
 	appleAlbumHintMu.Lock()
 	defer appleAlbumHintMu.Unlock()
 	if appleAlbumHintInflight[key] {
@@ -70,9 +64,6 @@ func TestAppleAlbumHintSyncConcurrentSameKeyStress(t *testing.T) {
 	}
 }
 
-// TestAppleAlbumHintSyncConcurrentDifferentKeysStress tests 10 distinct keys with 5
-// concurrent callers each (50 total goroutines). Each key is resolved independently
-// with staggered completion to verify isolation and lack of cross-talk.
 func TestAppleAlbumHintSyncConcurrentDifferentKeysStress(t *testing.T) {
 	savedCache, savedMisses, savedInflight, savedWaiters, savedLogged :=
 		appleAlbumHintCache, appleAlbumHintMisses, appleAlbumHintInflight, appleAlbumHintWaiters, appleAlbumHintLogged
@@ -124,7 +115,6 @@ func TestAppleAlbumHintSyncConcurrentDifferentKeysStress(t *testing.T) {
 
 	time.Sleep(30 * time.Millisecond)
 
-	// Resolve each key in a staggered manner
 	for k := 0; k < numKeys; k++ {
 		expectedAlbum := fmt.Sprintf("Album_%d", k)
 		artist := fmt.Sprintf("Artist_%d", k)
@@ -147,9 +137,6 @@ func TestAppleAlbumHintSyncConcurrentDifferentKeysStress(t *testing.T) {
 	}
 }
 
-// TestAppleAlbumHintSyncContextCancellationAndTimeoutStress verifies that waiters with
-// expired or canceled contexts unblock cleanly without hanging other waiters on the
-// same channel.
 func TestAppleAlbumHintSyncContextCancellationAndTimeoutStress(t *testing.T) {
 	savedCache, savedMisses, savedInflight, savedWaiters, savedLogged :=
 		appleAlbumHintCache, appleAlbumHintMisses, appleAlbumHintInflight, appleAlbumHintWaiters, appleAlbumHintLogged
@@ -174,7 +161,6 @@ func TestAppleAlbumHintSyncContextCancellationAndTimeoutStress(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	// Launch callers with early-canceling contexts
 	for i := 0; i < canceledCount; i++ {
 		wg.Add(1)
 		idx := i
@@ -186,7 +172,6 @@ func TestAppleAlbumHintSyncContextCancellationAndTimeoutStress(t *testing.T) {
 		}()
 	}
 
-	// Launch callers with standard non-canceling contexts
 	for i := 0; i < persistentCount; i++ {
 		wg.Add(1)
 		idx := i
@@ -197,10 +182,8 @@ func TestAppleAlbumHintSyncContextCancellationAndTimeoutStress(t *testing.T) {
 		}()
 	}
 
-	// Allow canceled callers to time out at 20ms
 	time.Sleep(60 * time.Millisecond)
 
-	// Now complete the background task for the persistent callers
 	expectedAlbum := "ValidAlbumForPersistent"
 	cands := []albumHintCandidate{
 		{Artist: "CancelArtist", Album: expectedAlbum},
@@ -209,14 +192,12 @@ func TestAppleAlbumHintSyncContextCancellationAndTimeoutStress(t *testing.T) {
 
 	wg.Wait()
 
-	// Verify canceled callers returned ""
 	for i, res := range canceledResults {
 		if res != "" {
 			t.Errorf("canceled waiter %d expected empty string, got %q", i, res)
 		}
 	}
 
-	// Verify persistent callers received the album
 	for i, res := range persistentResults {
 		if res != expectedAlbum {
 			t.Errorf("persistent waiter %d expected %q, got %q", i, expectedAlbum, res)
@@ -224,8 +205,6 @@ func TestAppleAlbumHintSyncContextCancellationAndTimeoutStress(t *testing.T) {
 	}
 }
 
-// TestAppleAlbumHintSyncEmptyCandidatesConcluded verifies that when a background
-// query finishes with zero candidates, all parked callers return "" and do not hang.
 func TestAppleAlbumHintSyncEmptyCandidatesConcluded(t *testing.T) {
 	savedCache, savedMisses, savedInflight, savedWaiters, savedLogged :=
 		appleAlbumHintCache, appleAlbumHintMisses, appleAlbumHintInflight, appleAlbumHintWaiters, appleAlbumHintLogged
@@ -258,7 +237,6 @@ func TestAppleAlbumHintSyncEmptyCandidatesConcluded(t *testing.T) {
 
 	time.Sleep(30 * time.Millisecond)
 
-	// Store empty candidates with concluded = true
 	storeAppleAlbumHintResult(key, nil, true)
 
 	wg.Wait()
@@ -276,9 +254,6 @@ func TestAppleAlbumHintSyncEmptyCandidatesConcluded(t *testing.T) {
 	}
 }
 
-// TestAppleAlbumHintAsyncAndSyncInteroperation tests the concurrent interoperation
-// between appleAlbumHint (async fire-and-forget in poller) and appleAlbumHintSync
-// (blocking wait in backend resolveTrackEnrichment).
 func TestAppleAlbumHintAsyncAndSyncInteroperation(t *testing.T) {
 	savedCache, savedMisses, savedInflight, savedWaiters, savedLogged :=
 		appleAlbumHintCache, appleAlbumHintMisses, appleAlbumHintInflight, appleAlbumHintWaiters, appleAlbumHintLogged
@@ -294,15 +269,12 @@ func TestAppleAlbumHintAsyncAndSyncInteroperation(t *testing.T) {
 	appleAlbumHintWaiters = map[string]chan struct{}{}
 	appleAlbumHintLogged = map[string]string{}
 
-	// 1. First caller is the async poller calling appleAlbumHint
-	// We simulate this by setting inflight and waitCh as appleAlbumHint does
 	appleAlbumHintMu.Lock()
 	appleAlbumHintInflight[key] = true
 	waitCh := make(chan struct{})
 	appleAlbumHintWaiters[key] = waitCh
 	appleAlbumHintMu.Unlock()
 
-	// 2. Concurrently, 10 backend workers call appleAlbumHintSync
 	const numSync = 10
 	results := make([]string, numSync)
 	var wg sync.WaitGroup
@@ -319,7 +291,6 @@ func TestAppleAlbumHintAsyncAndSyncInteroperation(t *testing.T) {
 
 	time.Sleep(30 * time.Millisecond)
 
-	// 3. Poller background goroutine finishes fetch and stores result
 	expectedAlbum := "InterAlbum"
 	cands := []albumHintCandidate{
 		{Artist: "InterArtist", Album: expectedAlbum},
@@ -335,9 +306,6 @@ func TestAppleAlbumHintAsyncAndSyncInteroperation(t *testing.T) {
 	}
 }
 
-// TestAppleAlbumHintSyncMaxMissesImmediateBypass verifies that when a track has
-// already reached appleAlbumHintMaxMisses, appleAlbumHintSync returns immediately
-// without registering waiters or initiating queries.
 func TestAppleAlbumHintSyncMaxMissesImmediateBypass(t *testing.T) {
 	savedCache, savedMisses, savedInflight, savedWaiters, savedLogged :=
 		appleAlbumHintCache, appleAlbumHintMisses, appleAlbumHintInflight, appleAlbumHintWaiters, appleAlbumHintLogged
@@ -369,8 +337,6 @@ func TestAppleAlbumHintSyncMaxMissesImmediateBypass(t *testing.T) {
 	}
 }
 
-// TestAppleAlbumHintSyncPreCancelledContext verifies that calling appleAlbumHintSync
-// with an already-canceled context while in-flight returns immediately without deadlock.
 func TestAppleAlbumHintSyncPreCancelledContext(t *testing.T) {
 	savedCache, savedMisses, savedInflight, savedWaiters, savedLogged :=
 		appleAlbumHintCache, appleAlbumHintMisses, appleAlbumHintInflight, appleAlbumHintWaiters, appleAlbumHintLogged
@@ -401,7 +367,5 @@ func TestAppleAlbumHintSyncPreCancelledContext(t *testing.T) {
 		t.Errorf("expected immediate return on pre-canceled context, took %v", elapsed)
 	}
 
-	// Clean up waitCh so background isn't leaked
 	close(waitCh)
 }
-

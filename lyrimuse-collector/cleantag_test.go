@@ -2,12 +2,6 @@ package main
 
 import "testing"
 
-// 守的是「歌词管理里出现看不出差别的重复歌」那个真实故障。用例取自用户机器上
-// 真实存在的两条缓存 key 和两个导出文件名。
-//
-// 不可见字符一律写成转义,绝不写字面量。两个理由:字面 BOM 会让 Go 直接拒绝编译整个文件
-// ("illegal byte order mark",测试踩过);字面 NBSP 在 review 时跟普通空格长得一模一样 ——
-// 这个测试要守的恰恰就是"看不出差别"这件事,源码本身不该重蹈覆辙。
 func TestCleanMediaTag_StripsInvisibleWhitespace(t *testing.T) {
 	cases := []struct{ name, in, want string }{
 		{"尾部 NBSP", "偷笑\u00a0", "偷笑"},
@@ -31,7 +25,6 @@ func TestCleanMediaTag_StripsInvisibleWhitespace(t *testing.T) {
 	}
 }
 
-// 洗过之后,那对真实的重复 key 必须塌缩成同一个 —— 这才是修复真正要达成的效果。
 func TestCleanMediaTag_CollapsesTheRealDuplicateKeys(t *testing.T) {
 	key := func(artist, title, album string) string {
 		return cleanMediaTag(artist) + "|" + cleanMediaTag(title) + "|" + cleanMediaTag(album)

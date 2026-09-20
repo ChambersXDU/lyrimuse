@@ -2,7 +2,6 @@ package main
 
 import "testing"
 
-// 造一条"成功解析过"的条目:胜出候选的源侧署名是 sourceArtist。
 func learnedEntry(winner, sourceArtist string, losers ...string) enrichEntry {
 	cands := []lyricsDecisionCandidate{{Source: winner, Artist: sourceArtist}}
 	for i, l := range losers {
@@ -14,12 +13,11 @@ func learnedEntry(winner, sourceArtist string, losers ...string) enrichEntry {
 	}
 }
 
-// 主场景:王子(=Prince)。同一歌手另外两首歌成功过,源那边都署 "Prince"。
 func TestLearnedSourceArtistAliasLearnsFromSiblingTracks(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
 		"王子|The Guilty Ones|":                learnedEntry("kugou", "Prince"),
 		"王子|Why You Wanna Treat Me So Bad?|": learnedEntry("kugou", "Prince"),
-		// 别的歌手不该被扫进来。
+
 		"周杰伦|七里香|": learnedEntry("netease", "Jay Chou"),
 	})
 	if got := learnedSourceArtistAlias("王子"); got != "Prince" {
@@ -27,7 +25,6 @@ func TestLearnedSourceArtistAliasLearnsFromSiblingTracks(t *testing.T) {
 	}
 }
 
-// 同一个本地歌手名指向两个不同的人(「王子」既是 Prince 又是邱胜翊)→ 一律不猜。
 func TestLearnedSourceArtistAliasRefusesWhenAmbiguous(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
 		"王子|The Guilty Ones|": learnedEntry("kugou", "Prince"),
@@ -38,7 +35,6 @@ func TestLearnedSourceArtistAliasRefusesWhenAmbiguous(t *testing.T) {
 	}
 }
 
-// 同一 normLoose 的两种写法要定序返回,否则 Go map 的随机迭代会让每次启动学到不同的一个。
 func TestLearnedSourceArtistAliasIsDeterministic(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
 		"王子|a|": learnedEntry("kugou", "Prince"),
@@ -56,11 +52,9 @@ func TestLearnedSourceArtistAliasIsDeterministic(t *testing.T) {
 	}
 }
 
-// 只有"没成功过"的条目时什么都学不到:ts-only 空条目(确证查无那条路径写的)、
-// 以及评估过但没采纳(Winner 为空)的记录都不算证据。
 func TestLearnedSourceArtistAliasIgnoresUnresolvedEntries(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
-		"王子|1999 (Edit)|": {TS: 1788890000}, // 确证查无落下的空条目
+		"王子|1999 (Edit)|": {TS: 1788890000},
 		"王子|别的歌|":         {LyricsDecisionApplied: &lyricsDecision{Winner: ""}},
 	})
 	if got := learnedSourceArtistAlias("王子"); got != "" {
@@ -68,7 +62,6 @@ func TestLearnedSourceArtistAliasIgnoresUnresolvedEntries(t *testing.T) {
 	}
 }
 
-// 落选候选的署名不算数(网易云仿冒号那类会把错名带进来)。
 func TestLearnedSourceArtistAliasIgnoresLosingCandidates(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
 		"王子|The Guilty Ones|": learnedEntry("kugou", "Prince", "冒牌王子", "Another Prince"),
@@ -78,7 +71,6 @@ func TestLearnedSourceArtistAliasIgnoresLosingCandidates(t *testing.T) {
 	}
 }
 
-// 署名跟本地标签本来就一样时不构成别名。
 func TestLearnedSourceArtistAliasSkipsSelf(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
 		"周杰伦|七里香|": learnedEntry("netease", "周杰伦"),
@@ -88,7 +80,6 @@ func TestLearnedSourceArtistAliasSkipsSelf(t *testing.T) {
 	}
 }
 
-// 歌手段是精确前缀匹配:「王子」不该命中「小王子」,「王子李」也不该被算进来。
 func TestLearnedSourceArtistAliasMatchesArtistSegmentExactly(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
 		"小王子|某首歌|": learnedEntry("kugou", "Le Petit Prince"),
@@ -99,7 +90,6 @@ func TestLearnedSourceArtistAliasMatchesArtistSegmentExactly(t *testing.T) {
 	}
 }
 
-// 空歌手名不扫全表。
 func TestLearnedSourceArtistAliasEmptyArtist(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
 		"|某首歌|": learnedEntry("kugou", "Whoever"),
@@ -108,8 +98,6 @@ func TestLearnedSourceArtistAliasEmptyArtist(t *testing.T) {
 		t.Fatalf("空歌手名应当直接返回空,得到 %q", got)
 	}
 }
-
-// ---- 确证查无的判据(resolveEnrichAsync 那道全空守卫) ----
 
 func TestLyricsRoundConfirmsNoResult(t *testing.T) {
 	cases := []struct {
@@ -132,7 +120,6 @@ func TestLyricsRoundConfirmsNoResult(t *testing.T) {
 	}
 }
 
-// 跟 roundLooksNetworkDown 的关系要成立:凡是它判"网络不通"的,这边一定不认为是确证查无。
 func TestLyricsRoundConfirmsNoResultNeverOverlapsNetworkDown(t *testing.T) {
 	for attempts := int32(0); attempts <= 30; attempts++ {
 		for failures := int32(0); failures <= attempts; failures++ {

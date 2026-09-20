@@ -11,17 +11,6 @@ import (
 	"time"
 )
 
-// 这一组守的是 的那条真实数据丢失:Last.fm 镜像失败时,收听在三个地方
-// 同时不留痕(lfmMirrored 已标记 → 幂等守卫永久挡死;mirrorAsync 只打日志不重试;
-// p.lfm != nil 时 appendListen 被跳过),一次网络抖动就永久少一条 scrobble。
-// 用户真实日志:2618 次成功收听里有 13 条这样丢掉的。
-//
-// 修法不是"撤销标记重发"(会从 goroutine 并发写 poller 的裸 map,fatal error),而是
-// 把失败落进 listens.jsonl 交给已有的回填。所以下面每个用例对应的都是"这一类失败该
-// 不该、以及怎么留痕",判错任何一类的代价都是不对称的:
-//   - 该留没留 → 永久少一条(修之前的状态)
-//   - 不该留却留了 → 回填时往 Last.fm 写重复,而 scrobble 落进去基本删不掉
-
 func TestProvablyNeverSent(t *testing.T) {
 	cases := []struct {
 		name string
@@ -29,8 +18,7 @@ func TestProvablyNeverSent(t *testing.T) {
 		want bool
 	}{
 		{
-			// 测试日志里最多的一类:08-15 一次 40 分钟 DNS 故障丢了 10 条。
-			// 连 TCP 都没建起来,服务端不可能见过它 → 补提交零重复风险。
+
 			name: "DNS 解析失败 = 确定没发出去",
 			err:  fmt.Errorf("post: %w", &net.DNSError{Err: "no such host", Name: "ws.audioscrobbler.com"}),
 			want: true,
@@ -41,15 +29,13 @@ func TestProvablyNeverSent(t *testing.T) {
 			want: true,
 		},
 		{
-			// ⚠️ 最要紧的一条:连接已建立,请求可能已经到了服务端并落库,只是回执丢了。
-			// 判成 true 就会在回填时造出永久删不掉的重复。
+
 			name: "read 阶段失败 = 不确定,必须判 false",
 			err:  fmt.Errorf("post: %w", &net.OpError{Op: "read", Err: errors.New("no route to host")}),
 			want: false,
 		},
 		{
-			// context deadline 的错误链里没有 *net.OpError(只有 http 自己的 timeoutError),
-			// 所以天然落到 false 这边 —— 正是想要的,但要钉住,免得以后有人"顺手"加匹配。
+
 			name: "context deadline = 不确定,必须判 false",
 			err:  fmt.Errorf("post: %w", context.DeadlineExceeded),
 			want: false,
@@ -72,7 +58,6 @@ func TestProvablyNeverSent(t *testing.T) {
 	}
 }
 
-// recordFailedMirror 的分流:三类失败三种留痕方式,合并成一种就必然错一边。
 func TestRecordFailedMirrorRouting(t *testing.T) {
 	countByType := func(t *testing.T) (l, q int) {
 		t.Helper()
@@ -106,8 +91,7 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 		if len(pending) != 1 {
 			t.Fatalf("确定没发出去的这条必须能被回填挑走, got %d pending", len(pending))
 		}
-		// 存的必须是**播放器报的原始艺人名**,不是 collapse 折叠后的值 —— 回填会拿它
-		// 重新跑一遍同样的归一化,喂折叠后的值进去等于折叠两次(见 listenLogLine.AR)。
+
 		if pending[0].AR != "周杰倫" {
 			t.Fatalf("AR 必须是原始标签, got %q", pending[0].AR)
 		}
@@ -128,7 +112,7 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 		if l != 1 || q != 1 {
 			t.Fatalf("want 1 listen + 1 quarantine, got l=%d q=%d", l, q)
 		}
-		// q 的意义就是"排除且绝不自动重试" —— 重复比漏补贵得多。
+
 		if pending, _ := pendingBackfillListens(time.Now()); len(pending) != 0 {
 			t.Fatalf("隔离的条目绝不能被自动回填, got %d pending", len(pending))
 		}
@@ -140,8 +124,6 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 		defer func() { listenLogPath = saved }()
 		listenLogPath = filepath.Join(dir, "l.jsonl")
 
-		// 测试成因:艺人名是"群星"(Various Artists),Last.fm 当非艺人拒收。
-		// 换多少次也还是这首歌,重发必然同样被拒。
 		recordFailedMirror(
 			&lastfmIgnoredError{Method: "track.scrobble", Reason: "1 Artist was ignored"},
 			"群星", "这样吧", "烧的时尚", time.Now().Unix(), 200)
@@ -151,9 +133,6 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 		}
 	})
 
-	// ⚠️ 这一组守的是 当天抓出来的回归:首版把**全部** lastfmAPIError 都当成
-	// "拒收"直接 return,于是一次限流/凭据失效就让这首歌在 Last.fm 和 listens.jsonl 两边
-	// 同时没有 —— 正是这个函数本身要修的那个洞,换个门又开了一遍。
 	t.Run("应用层错误按 mayHaveStored 分档,绝不一律丢弃", func(t *testing.T) {
 		cases := []struct {
 			name    string
@@ -187,13 +166,6 @@ func TestRecordFailedMirrorRouting(t *testing.T) {
 	})
 }
 
-// mayHaveStored 是 recordFailedMirror(活路径)和 runBackfill(回填整批隔离)**共用**的
-// 判据,两处都拿它决定"这一条要不要被永久排除"。判错的代价不对称:
-//   - 该隔离没隔离 → 重发,用户历史里多一条永久删不掉的重复
-//   - 不该隔离却隔离了 → 一条(回填时是**整批最多 50 条**)从没提交过的收听被彻底
-//     踢出清单,再点多少次回填也补不回来
-//
-// 所以这张表就是这两处行为的规格,改它等于同时改两处。
 func TestLastfmAPIErrorMayHaveStored(t *testing.T) {
 	cases := []struct {
 		code int
@@ -217,8 +189,6 @@ func TestLastfmAPIErrorMayHaveStored(t *testing.T) {
 	}
 }
 
-// ignoredReason 把服务端给的真实原因取出来。修之前活路径整个丢掉它,只报一句笼统的
-// accepted=0 —— 排查那 5 条真实失败时只能靠翻日志上下文猜是哪首歌、为什么被拒。
 func TestIgnoredReason(t *testing.T) {
 	cases := []struct {
 		name string
@@ -236,7 +206,7 @@ func TestIgnoredReason(t *testing.T) {
 			want: "code 6",
 		},
 		{
-			// code 0 = 没被忽略。出现在这里说明回执自相矛盾,不该被当成原因报出去。
+
 			name: "code 0 不当原因",
 			raw:  `{"timestamp":"1","ignoredMessage":{"code":"0","#text":""}}`,
 			want: "",

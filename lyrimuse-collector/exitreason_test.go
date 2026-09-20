@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-// 退出原因日志的形态是被 grep 依赖的契约:前缀固定、原因码英文 snake_case。
 func TestLogExitFormat(t *testing.T) {
 	var buf bytes.Buffer
 	prevOut, prevFlags := log.Writer(), log.Flags()

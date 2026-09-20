@@ -1,23 +1,3 @@
-// lyricsgolden_search_test.go — **检索层**的回归金标:一个源对一首歌返回的那一批搜索结果里,该选谁。
-//
-// 第一层(lyricsgolden_test.go)守的是"拿到各源的最终候选之后怎么打分挑冠军";这一层守的是再往前
-// 一步——各源自己的**身份闸 + 挑选**:同名歌里混着翻唱/演奏/卡拉OK/另一场演唱会/另一位歌手的同名歌,
-// 源模块要在自己的搜索结果里挑出"就是本地这首"的那一条,挑不出就宁可空手(第 09 章那几条真实错配
-// ——打上花火→春雷、The One 演唱会→录音室版、孤独探戈落在错场次——都是死在这一步)。
-//
-// 四个源有自己的挑选逻辑,四个纯函数各接一份样本:
-//   - netease:neteasePickSong
-//   - qq:qqCollectCandidates(strict / loose 两档)→ qqPickCandidateWithAlbum(有本地专辑名)/ qqPickCandidate
-//   - kugou:pickKugouSearchCandidate(含 lyricRecordingTriangleMatches 第三档)
-//   - lrclib:pickLRCLIBSearchResultDetailed(先带时间戳、再纯文本兜底)
-//
-// 样本 = 真实搜索结果的**元数据**(id / 歌名 / 歌手 / 专辑 / 自报时长 / 语种)+ 本地查询词 + 期望的挑选
-// 结果。歌名/歌手/专辑不是歌词正文,不置乱;只有 lrclib 的搜索结果自带正文,那部分照第一层的规矩置乱。
-// 样本在 testdata/lyricsgolden/search/<id>.json,由 TestLyricsSearchGoldenCapture 联网采集(默认跳过)。
-//
-// 挑选结果"对不对"同样不信缓存:goldenJudgeSearchPick 要求选中的那条歌名过闸、歌手对得上、自报时长
-// 偏差 ≤3%、版本限定词一致、live 声明对称;选了空的样本要求这批结果里**确实没有**满足这些条件的
-// 候选(否则就是"有像样的候选却放弃了"——那是有争议的边界,不进金标)。
 package main
 
 import (
@@ -43,62 +23,56 @@ type searchGoldenFixture struct {
 	Note       string      `json:"note,omitempty"`
 	Track      goldenTrack `json:"track"`
 	CapturedAt string      `json:"captured_at"`
-	// Query:这个源的挑选函数实际拿到的查询词与时长(qq 的挑选不看时长,记 0)。
+
 	Query goldenQuery `json:"query"`
-	// LocalDurationSecs:本地曲长。挑选函数没拿到时长的源(qq)用它来核对选中那条的自报时长。
+
 	LocalDurationSecs float64 `json:"local_duration_secs"`
-	// Items:该源这一次搜索返回的全部条目,按返回顺序。
+
 	Items []searchGoldenItem `json:"items"`
-	// AlbumLookup(qq 特有):候选没自带专辑名时,生产会按 qqAlbumLookupBudget 的预算去查详情——采集时
-	// 用同一个纯函数、同一份预算逻辑真的查一遍并记下 mid → 专辑名,回放时照表还原,不联网。
+
 	AlbumLookup map[string]string  `json:"album_lookup,omitempty"`
 	Expect      searchGoldenExpect `json:"expect"`
 	Judge       searchGoldenJudge  `json:"judge"`
 }
 
-// searchGoldenItem 是四个源搜索结果的公共形态;各源特有字段按需填。
 type searchGoldenItem struct {
-	// ID:netease 歌曲 id / qq mid / kugou hash / lrclib 用 "#序号"(接口不返回 id)。
+
 	ID     string `json:"id"`
 	Title  string `json:"title"`
 	Artist string `json:"artist,omitempty"`
-	// Artists:netease 的歌手是数组(合唱曲每人一条),原样保留;其它源用 Artist 一个字段。
+
 	Artists      []string `json:"artists,omitempty"`
 	Album        string   `json:"album,omitempty"`
 	AlbumID      string   `json:"album_id,omitempty"`
 	DurationSecs float64  `json:"duration_secs,omitempty"`
-	// Language:kugou trans_param.language 的原始字符串("国语"/"粤语")。
+
 	Language string `json:"language,omitempty"`
-	// lrclib 特有:instrumental 标记与(置乱后的)正文。
+
 	Instrumental bool   `json:"instrumental,omitempty"`
 	SyncedLyrics string `json:"synced_lyrics,omitempty"`
 	PlainLyrics  string `json:"plain_lyrics,omitempty"`
 }
 
 type searchGoldenExpect struct {
-	// PickedID:最终选中的条目 id;"" = 这批结果里一条都不认。
+
 	PickedID string `json:"picked_id"`
-	// qq 特有:strict / loose 两档身份闸各放行了哪些 mid(按顺序),以及不看专辑时 qqPickCandidate 会选谁。
+
 	AcceptedStrict []string `json:"accepted_strict,omitempty"`
 	AcceptedLoose  []string `json:"accepted_loose,omitempty"`
 	PickedNoAlbum  string   `json:"picked_no_album,omitempty"`
-	// lrclib 特有:选中的那条是不是纯文本兜底。
+
 	PlainOnly bool `json:"plain_only,omitempty"`
 }
 
-// searchGoldenJudge:选中那条的独立判据(见 goldenJudgeSearchPick)。
 type searchGoldenJudge struct {
 	TitleAccepted          bool    `json:"title_accepted"`
 	ArtistMatches          bool    `json:"artist_matches"`
-	SourceDurationDeltaPct float64 `json:"source_duration_delta_pct"` // -1 = 该条没自报时长
+	SourceDurationDeltaPct float64 `json:"source_duration_delta_pct"`
 	VersionTagsOK          bool    `json:"version_tags_ok"`
 	LiveMismatch           bool    `json:"live_mismatch"`
-	// PlausibleAlternatives:选空时,这批结果里满足"歌名过闸 + 歌手对得上 + 时长 ≤3%"的条目数——
-	// 必须是 0,不然"选空"就不是没有争议的结论。
+
 	PlausibleAlternatives int `json:"plausible_alternatives"`
 }
-
-// ---------- 加载 ----------
 
 func loadSearchGoldenFixtures(t *testing.T) []*searchGoldenFixture {
 	t.Helper()
@@ -124,8 +98,6 @@ func loadSearchGoldenFixtures(t *testing.T) []*searchGoldenFixture {
 	}
 	return out
 }
-
-// ---------- 各源 ↔ 公共形态 ----------
 
 func searchItemsFromNetease(songs []neSearchSong) []searchGoldenItem {
 	out := make([]searchGoldenItem, 0, len(songs))
@@ -212,9 +184,6 @@ func lrclibItemsFromSearch(items []searchGoldenItem) []lrclibSearchItem {
 	return out
 }
 
-// ---------- 回放 ----------
-
-// runSearchGolden 用生产的挑选函数算出 expect。
 func runSearchGolden(fx *searchGoldenFixture) searchGoldenExpect {
 	q := fx.Query
 	var e searchGoldenExpect
@@ -243,11 +212,7 @@ func runSearchGolden(fx *searchGoldenFixture) searchGoldenExpect {
 		if c, ok := qqPickCandidate(cands, q.Artist, q.DurationSecs); ok {
 			e.PickedNoAlbum = c.mid
 		}
-		// 跟 resolveQQMusicMatch 同一条路:有本地专辑名先走专辑档(候选没自带专辑名时生产会去查一次,
-		// 样本里查不了 → 恒空,等于"这条没有专辑信息"),专辑档没选出够格的再退到不看专辑的挑选。
-		// 专辑档"有 best 但 bestScore==0"那一支在生产里会先去专辑维度检索(网络),这里没有,退到 best 本身。
-		// 生产在"有 best 但专辑分为 0"时会先走专辑维度检索(网络),失败才退回 best;这里没有那一步,
-		// 直接退回 best——差别只在那条网络路径,挑选结果是否站得住由 goldenJudgeSearchPick 另行把关。
+
 		if q.Album != "" {
 			best, haveBest, _ := qqPickCandidateWithAlbum(cands, q.Artist, q.Album, q.DurationSecs, func(mid string) string { return fx.AlbumLookup[mid] })
 			if haveBest {
@@ -294,8 +259,6 @@ func searchGoldenItemArtist(it searchGoldenItem) string {
 	return it.Artist
 }
 
-// searchGoldenItemPlausible:这条搜索结果像不像"就是本地这首"——歌名过闸 + 歌手对得上(合 credit
-// 交集档)+ 自报时长 ≤3%(没自报的按时长这一项放行)。给"选空"的样本核对用。
 func searchGoldenItemPlausible(q goldenQuery, localDur float64, it searchGoldenItem) bool {
 	if !lyricTitleAccepted(it.Title, q.Title) {
 		return false
@@ -347,8 +310,7 @@ func goldenComputeSearchJudge(fx *searchGoldenFixture, e searchGoldenExpect) sea
 			}
 		}
 	} else {
-		// 跟 qq 的 loose 档同一口径:「关浩德Walter」对「关浩德」算对得上——歌名精确 + 自报时长 ≤3%
-		// 两道硬闸还在,歌手这一项只要沾边就行。
+
 		j.ArtistMatches = lyricSourceArtistMatches(it.Artist, q.Artist) || looseContains(it.Artist, q.Artist)
 	}
 	if it.DurationSecs > 0 && localDur > 0 {
@@ -362,7 +324,6 @@ func goldenComputeSearchJudge(fx *searchGoldenFixture, e searchGoldenExpect) sea
 	return j
 }
 
-// goldenJudgeSearchPick:选中的那条必须每一项都站得住;选空则必须真的没有像样的候选。
 func goldenJudgeSearchPick(e searchGoldenExpect, j searchGoldenJudge) error {
 	if e.PickedID == "" {
 		if j.PlausibleAlternatives > 0 {
@@ -391,8 +352,6 @@ func goldenJudgeSearchPick(e searchGoldenExpect, j searchGoldenJudge) error {
 	}
 	return nil
 }
-
-// ---------- 测试 ----------
 
 func TestLyricsSearchGolden(t *testing.T) {
 	fixtures := loadSearchGoldenFixtures(t)
@@ -450,7 +409,6 @@ func searchGoldenDescribe(fx *searchGoldenFixture, id string) string {
 	return id
 }
 
-// TestLyricsSearchGoldenPicksAreJustified:每个样本的挑选结果都要用样本自己的数据过一遍独立判据。
 func TestLyricsSearchGoldenPicksAreJustified(t *testing.T) {
 	for _, fx := range loadSearchGoldenFixtures(t) {
 		j := goldenComputeSearchJudge(fx, fx.Expect)
@@ -463,8 +421,6 @@ func TestLyricsSearchGoldenPicksAreJustified(t *testing.T) {
 	}
 }
 
-// TestLyricsSearchGoldenSourceCoverage:四个源各至少 3 个样本,全部样本里至少 2 个"选空"的负样本——
-// 身份闸的价值一半在"拒绝"。
 func TestLyricsSearchGoldenSourceCoverage(t *testing.T) {
 	fixtures := loadSearchGoldenFixtures(t)
 	if len(fixtures) == 0 {
@@ -497,16 +453,6 @@ func writeSearchGoldenFixture(fx *searchGoldenFixture) error {
 	return os.WriteFile(filepath.Join(lyricsSearchGoldenDir, fx.ID+".json"), append(raw, '\n'), 0o644)
 }
 
-// ---------- 采集 ----------
-
-// TestLyricsSearchGoldenCapture 联网跑一次完整检索,把四个源各自**第一次拿到非空搜索结果**的那一批
-// (网易云/酷狗会按标题变体查多次,取第一次选出结果的那批,都选不出就取第一批非空的)写成样本:
-//
-//	LYRICS_SEARCH_GOLDEN_CAPTURE=1 LYRICS_GOLDEN_KEY='歌手|歌名|专辑' LYRICS_GOLDEN_ID=<前缀> \
-//	[LYRICS_GOLDEN_NOTE='…'] GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsSearchGoldenCapture$' -v .
-//
-// 文件名 <前缀>-<源>.json。每个源写入前都要过 goldenJudgeSearchPick;lrclib 的正文置乱后要过
-// "置乱前后挑选结果相同"的闸。缓存只读(同第一层采集器)。
 func TestLyricsSearchGoldenCapture(t *testing.T) {
 	if os.Getenv("LYRICS_SEARCH_GOLDEN_CAPTURE") == "" {
 		t.Skip("LYRICS_SEARCH_GOLDEN_CAPTURE 未设置,跳过联网采集")
@@ -594,8 +540,7 @@ func TestLyricsSearchGoldenCapture(t *testing.T) {
 			t.Logf("%s: 没有非空搜索结果,跳过", src)
 			continue
 		}
-		// 网易云/酷狗按标题变体查多次:优先取"选出了结果"的那些批次里**条目最多**的一批(干扰项越多
-		// 样本越有价值),都选不出就取条目最多的一批。
+
 		chosen, chosenPicked := cs[0], false
 		for _, c := range cs {
 			picked := runSearchGolden(&searchGoldenFixture{Source: src, Query: c.q, Items: c.items, LocalDurationSecs: dur}).PickedID != ""
@@ -611,7 +556,7 @@ func TestLyricsSearchGoldenCapture(t *testing.T) {
 			Query:      chosen.q, Items: chosen.items, LocalDurationSecs: dur,
 		}
 		if src == "qq" && chosen.q.Album != "" {
-			// 按生产同一份预算逻辑真的查一遍专辑名并记下来(qqSongAlbum 自带缓存,这一轮检索里多半已经热了)。
+
 			items := qqItemsFromSearch(fx.Items)
 			cands := qqCollectCandidates(items, chosen.q.Artist, chosen.q.Title, true)
 			if len(cands) == 0 {
@@ -628,7 +573,7 @@ func TestLyricsSearchGoldenCapture(t *testing.T) {
 			}
 		}
 		if src == "lrclib" {
-			// 正文置乱 + 保形校验(同第一层)。
+
 			before := runSearchGolden(fx)
 			var texts []goldenText
 			for _, it := range fx.Items {

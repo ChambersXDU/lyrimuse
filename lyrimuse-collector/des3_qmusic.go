@@ -1,12 +1,4 @@
-// Command collector watches the macOS system now-playing state via
-// AppleScript and submits playing_now / listen events to ListenBrainz.
 package main
-
-// 3DES 解密,专供 QQ 音乐 GetPlayLyricInfo 的 QRC 逐字歌词用——Go 标准库 crypto/des 是
-// 标准 FIPS-46 DES,对不上 QQ 音乐这份密文(验证过程见 qq.go 里的 decryptQRC);逐字移植
-// 社区已逆向、已用真实歌曲验证解密成功的这份实现(参考
-// https://github.com/WXRIW/QQMusicDecoder 的 C# 版本,和 chenmozhijin/LDDC 的 Python
-// 移植版),保留全部魔数与位运算顺序,任何"看起来等价"的改写都可能导致不兼容,不要动。
 
 var qmSbox = [8][64]int{
 	{14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7,
@@ -108,8 +100,6 @@ func qmInversePermutation(s0, s1 uint32) [8]byte {
 	return data
 }
 
-// qmRoundKey is one of the 16 DES round keys: 6 bytes (48 bits), each byte's
-// low 6 bits significant — matches the Python schedule[i][j] shape exactly.
 type qmRoundKey [6]int
 
 func qmF(state uint32, key qmRoundKey) uint32 {
@@ -152,9 +142,6 @@ func qmF(state uint32, key qmRoundKey) uint32 {
 		qmBitnumIntl(s, 3, 30) | qmBitnumIntl(s, 24, 31)
 }
 
-// qmCrypt runs one single-DES 16-round Feistel pass (encrypt or decrypt is
-// determined entirely by the round-key ORDER baked into the schedule, same as
-// the Python/C# reference — this function itself doesn't know which).
 func qmCrypt(in []byte, key [16]qmRoundKey) [8]byte {
 	s0, s1 := qmInitialPermutation(in)
 	for idx := 0; idx < 15; idx++ {
@@ -208,10 +195,6 @@ func qmKeySchedule(key []byte, mode int) [16]qmRoundKey {
 	return schedule
 }
 
-// qm3DESDecrypt implements the EDE3 3DES decrypt this codebase's KRC/QRC
-// counterpart implementations use (D(k3)→E(k2)→D(k1)), ECB-style (8-byte
-// blocks, no chaining) — matches decryptQRC's caller, which feeds it whole
-// multi-block ciphertexts and expects the equivalent plaintext back.
 func qm3DESDecrypt(key, data []byte) []byte {
 	if len(key) != 24 {
 		return nil

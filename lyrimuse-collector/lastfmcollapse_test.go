@@ -14,23 +14,16 @@ import (
 	"time"
 )
 
-// 「智能」档判定的回归测试。这套逻辑改动的是**写进 Last.fm 的内容**,而 Last.fm 的纠错/重定向
-// 库目前是冻结的(官方 FAQ:"New corrections CANNOT be added to the database")——错了全局
-// 补不回来。所以每一条"什么情况下不折叠"都要单独固定,而不是只测 happy path;每一条"结论
-// 不再变"也要固定 —— 删掉上一版的理由正是"同一首歌两次运行发出不同的名字"。
-
-// probeResp 是假 Last.fm 对某个 artist 参数的固定应答。
 type probeResp struct {
 	status int
 	body   string
 }
 
-// catalogServer 起一个按 artist 参数分发应答的假 Last.fm,并记下每个 artist 被查了几次。
 type catalogServer struct {
 	srv   *httptest.Server
 	mu    sync.Mutex
 	calls map[string]int
-	raw   []string // 每次请求的 RawQuery,给编码断言用
+	raw   []string
 }
 
 func newCatalogServer(t *testing.T, responses map[string]probeResp) (*lastfmArtistCollapser, *catalogServer) {
@@ -84,7 +77,7 @@ func trackJSON(mbid string, listeners, durationMS int) string {
 
 const (
 	notFoundJSON = `{"error":6,"message":"Track not found"}`
-	// 影子条目的典型形态:没 mbid、一个听众、时长 0。
+
 	shadowJSON = `{"track":{"name":"t","mbid":"","listeners":"1","duration":"0"}}`
 )
 
@@ -95,12 +88,12 @@ func TestCollapseDecisionMatrix(t *testing.T) {
 		jointResp   probeResp
 		primaryResp probeResp
 		want        string
-		wantVerdict collapseVerdict // "" = 不该写缓存
-		wantPrimary bool            // 是否该查第二步
+		wantVerdict collapseVerdict
+		wantPrimary bool
 	}{
 		{
 			name: "合唱串有 mbid:正规合体署名,一个字节都不动,也不查第二步",
-			// 《Scream》是 MJ 和 Janet 共同署名的单曲,Last.fm 编目里就有这个条目。
+
 			jointResp: probeResp{body: trackJSON("f1e2d3", 24707, 278000)},
 			want:      joint, wantVerdict: verdictKeep,
 		},
@@ -218,7 +211,6 @@ func TestCollapseDecisionMatrix(t *testing.T) {
 	}
 }
 
-// 不是合唱串的输入根本不该打网络 —— 包括切不开的 `/` 名字(K/DA 那次事故的另一道防线)。
 func TestCollapseSkipsNonJointCredits(t *testing.T) {
 	for _, artist := range []string{"Michael Jackson", "周杰伦、", "K/DA", "AC/DC", "", "   "} {
 		col, cs := newCatalogServer(t, map[string]probeResp{})
@@ -229,7 +221,7 @@ func TestCollapseSkipsNonJointCredits(t *testing.T) {
 			t.Errorf("%q 不该打网络,却打了 %d 次", artist, n)
 		}
 	}
-	// 歌名为空也不查:track.getInfo 没有歌名就是无效请求。
+
 	col, cs := newCatalogServer(t, map[string]probeResp{})
 	if got := col.resolve(context.Background(), "A & B", ""); got != "A & B" {
 		t.Errorf("空歌名应原样返回,got %q", got)
@@ -239,8 +231,6 @@ func TestCollapseSkipsNonJointCredits(t *testing.T) {
 	}
 }
 
-// 结论要缓存:同一首歌反复播放(now-playing + scrobble 各一次,再下次播放)只打一轮 API,
-// 而且**每次都是同一个名字** —— 这就是 now-playing 与 scrobble 一致性的来源。
 func TestCollapseCachesDecisionAndStaysConsistent(t *testing.T) {
 	col, cs := newCatalogServer(t, map[string]probeResp{
 		"汪苏泷 & 荷莉": {body: shadowJSON},
@@ -256,10 +246,8 @@ func TestCollapseCachesDecisionAndStaysConsistent(t *testing.T) {
 	}
 }
 
-// 已有结论**永不翻面**:哪怕 Last.fm 那边后来变了(合唱串被收录了 / 听众涨过阈值了),
-// 已经折过的继续折、已经保留的继续保留 —— 否则用户自己的历史会被劈成两半。
 func TestCollapseKeepAndCollapseArePermanent(t *testing.T) {
-	// 服务器现在说合唱串是正规条目;但缓存里两年前就判了 collapse。
+
 	col, cs := newCatalogServer(t, map[string]probeResp{
 		"A & B": {body: trackJSON("mb-now", 99999, 200000)},
 		"A":     {body: trackJSON("mb-a", 99999, 200000)},
@@ -278,11 +266,10 @@ func TestCollapseKeepAndCollapseArePermanent(t *testing.T) {
 	}
 }
 
-// defer(两边都没收录)不是结论:到期要重查,目标条目这时候被收录了就该折;没到期不查。
 func TestCollapseDeferRechecksAfterWindow(t *testing.T) {
 	col, cs := newCatalogServer(t, map[string]probeResp{
 		"A & B": {body: notFoundJSON},
-		"A":     {body: trackJSON("mb-a", 3, 0)}, // 现在已收录
+		"A":     {body: trackJSON("mb-a", 3, 0)},
 	})
 	fresh := time.Now().Add(-lastfmCollapseDeferRecheck + time.Hour).Unix()
 	col.cache["A & B\n某首歌"] = lastfmCollapseDecision{Verdict: verdictDefer, Artist: "A & B", TS: fresh}
@@ -306,7 +293,6 @@ func TestCollapseDeferRechecksAfterWindow(t *testing.T) {
 	}
 }
 
-// 查询失败**不能**被缓存 —— 否则一次偶发限流会把这条记录固定;下一次要重查、且两步都重来。
 func TestCollapseDoesNotCacheFailures(t *testing.T) {
 	var jointCalls int
 	var mu sync.Mutex
@@ -339,7 +325,6 @@ func TestCollapseDoesNotCacheFailures(t *testing.T) {
 	}
 }
 
-// 同一个合唱串在不同歌上可能一个是正规条目、一个是影子条目 —— 缓存键必须带歌名。
 func TestCollapseCacheKeyIncludesTrack(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -362,9 +347,6 @@ func TestCollapseCacheKeyIncludesTrack(t *testing.T) {
 	}
 }
 
-// 请求形态:method/autocorrect 固定;第二步查的是 firstCreditedArtist 切出来的第一位;
-// 含 `+`/`%` 的歌名要按 lastfmGetQuery 双重编码(真实事故:标准编码让含加号的
-// 歌名一律 error 6,而 error 6 在这里意味着"可能折叠")。
 func TestCollapseRequestShape(t *testing.T) {
 	col, cs := newCatalogServer(t, map[string]probeResp{
 		"陶喆、卢广仲": {body: notFoundJSON},
@@ -385,7 +367,7 @@ func TestCollapseRequestShape(t *testing.T) {
 				t.Errorf("请求 %d 缺 %q: %s", i, want, raw)
 			}
 		}
-		// `+` → %252B、`%` → %2525(双重编码);绝不能出现裸的 %2B。
+
 		if !strings.Contains(raw, "%252B") || !strings.Contains(raw, "%2525") {
 			t.Errorf("请求 %d 的歌名没有按 Last.fm GET 口径双重编码: %s", i, raw)
 		}
@@ -395,7 +377,6 @@ func TestCollapseRequestShape(t *testing.T) {
 	}
 }
 
-// nil 判定器(没配只读 api_key)必须整体退化成"按原样提交",不能 panic。
 func TestCollapseNilIsPassthrough(t *testing.T) {
 	var col *lastfmArtistCollapser
 	if got := col.resolve(context.Background(), "A & B", "某首歌"); got != "A & B" {
@@ -406,14 +387,11 @@ func TestCollapseNilIsPassthrough(t *testing.T) {
 	}
 }
 
-// 落盘往返:结论带 verdict/判据写进文件;重新构造能读回;2026-08 老格式(没有 verdict、
-// 只做了第一步)的条目要被丢掉重判,不能直接升格成永久结论。
 func TestCollapseCachePersistence(t *testing.T) {
 	saved := lastfmCollapsePath
 	t.Cleanup(func() { lastfmCollapsePath = saved })
 	lastfmCollapsePath = filepath.Join(t.TempDir(), "collapse.json")
 
-	// 先写一份混合内容:一条老格式 + 一条新格式。
 	seed := map[string]any{
 		"Old & Format\n某首歌": map[string]any{"artist": "Old", "ts": time.Now().Unix()},
 		"C & D\n某首歌":        lastfmCollapseDecision{Verdict: verdictKeep, Artist: "C & D", TS: time.Now().Unix()},
@@ -434,7 +412,6 @@ func TestCollapseCachePersistence(t *testing.T) {
 		t.Errorf("新格式条目应读回,got %+v ok=%v", d, ok)
 	}
 
-	// 写一条新结论,文件里应能看到 verdict 和判据。
 	col.store("A & B\n某首歌", lastfmCollapseDecision{
 		Verdict: verdictCollapse, Artist: "A",
 		Joint:   &lastfmCatalogProbe{Found: false},
@@ -455,13 +432,12 @@ func TestCollapseCachePersistence(t *testing.T) {
 	if _, ok := onDisk["C & D\n某首歌"]; !ok {
 		t.Error("原有条目应一起保留")
 	}
-	// 没有残留的临时文件。
+
 	if leftovers, _ := filepath.Glob(lastfmCollapsePath + ".tmp.*"); len(leftovers) != 0 {
 		t.Errorf("残留临时文件: %v", leftovers)
 	}
 }
 
-// 端到端:resolveScrobbleArtist 在智能档下确实走判定器;first 档不打网络;all 档也不打。
 func TestResolveScrobbleArtistSmartMode(t *testing.T) {
 	saved := features.LastfmScrobbleArtistMode
 	defer func() { features.LastfmScrobbleArtistMode = saved }()

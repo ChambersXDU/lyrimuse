@@ -9,7 +9,6 @@ import (
 	"time"
 )
 
-// Stream events only wake the existing authoritative poll; they never update playback state.
 func playbackEventWakesPoll(line []byte) bool {
 	var event struct {
 		Type    string                     `json:"type"`
@@ -51,7 +50,7 @@ func watchPlaybackEvents(ctx context.Context, binary string, wake chan<- struct{
 		started := time.Now()
 		streamCtx, cancel := context.WithCancel(ctx)
 		cmd := exec.CommandContext(streamCtx, binary, "stream", "--no-artwork")
-		// Bound pipe shutdown when a helper inherits the stream's stdout.
+
 		cmd.WaitDelay = time.Second
 		reader, err := cmd.StdoutPipe()
 		if err == nil {

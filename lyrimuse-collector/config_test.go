@@ -7,13 +7,10 @@ import (
 	"testing"
 )
 
-// 一个字段格式写错,不该连累其它字段,更不该让进程起不来。
-// 原来 loadConfig 是一次严格 Unmarshal + main.go 的 log.Fatalf,而 collector 挂的是
-// KeepAlive 的 LaunchAgent —— 一个 webhook 字段写错就是无限崩溃重启,悬浮歌词整个不亮。
 func TestLoadConfigSkipsOnlyTheBadField(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
-	// bundle_ids 本该是数组,这里写成字符串。
+
 	body := `{
 	  "listenbrainz_token": "tok",
 	  "listenbrainz_user": "someone",
@@ -34,7 +31,7 @@ func TestLoadConfigSkipsOnlyTheBadField(t *testing.T) {
 	if cfg.NotificationWebhookURL != "https://example.invalid/push" {
 		t.Errorf("坏字段之后的字段也要生效, got %q", cfg.NotificationWebhookURL)
 	}
-	// 坏字段退回默认值,而不是留下半解析的状态。
+
 	if len(cfg.BundleIDs) != 1 || cfg.BundleIDs[0] != "com.apple.Music" {
 		t.Errorf("bundle_ids 应该回落到默认值, got %v", cfg.BundleIDs)
 	}
@@ -46,7 +43,6 @@ func TestLoadConfigSkipsOnlyTheBadField(t *testing.T) {
 	}
 }
 
-// 整份文件语法就坏了(少个引号/括号)时,没有字段边界可言,但仍然要起得来。
 func TestLoadConfigSurvivesBrokenSyntax(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
@@ -60,20 +56,18 @@ func TestLoadConfigSurvivesBrokenSyntax(t *testing.T) {
 	if len(cfg.loadIssues) == 0 {
 		t.Error("必须留下一条问题说明,否则用户无从知道配置没生效")
 	}
-	// 默认值仍然要填好,collector 才跑得起来。
+
 	if cfg.APIRoot == "" || len(cfg.BundleIDs) == 0 || cfg.NotificationPlatform == "" {
 		t.Errorf("默认值没填: apiRoot=%q bundleIDs=%v platform=%q",
 			cfg.APIRoot, cfg.BundleIDs, cfg.NotificationPlatform)
 	}
 }
 
-// 配置里有 token / secret / session key,任何一个都不该出现在日志里 ——
-// loadIssues 是直接 log.Printf 出去的(main.go),而日志会被诊断导出打包带走。
 func TestLoadConfigIssuesNeverLeakSecrets(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 	const secret = "s3cr3t-do-not-log-me"
-	// 把敏感字段写成错误类型,强制它们进 issue 列表。
+
 	body := `{
 	  "listenbrainz_token": {"nested": "` + secret + `"},
 	  "lastfm_scrobble_secret": ["` + secret + `"],
@@ -96,7 +90,6 @@ func TestLoadConfigIssuesNeverLeakSecrets(t *testing.T) {
 	}
 }
 
-// 配置文件不存在是完全正常的(全默认跑),不是错误,也不该留下问题记录。
 func TestLoadConfigMissingFileIsNotAnIssue(t *testing.T) {
 	cfg, err := loadConfig(filepath.Join(t.TempDir(), "nope.json"))
 	if err != nil {

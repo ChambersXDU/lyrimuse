@@ -1,36 +1,13 @@
 #!/usr/bin/env python3
-"""把双语（英中对照）发布日志拆成单语言的、真正排版过的 HTML，喂给 Sparkle
-（appcast 的 <description xml:lang> 内嵌，或 <sparkle:releaseNotesLink> 资产）。
-
-输入格式就是本仓 RELEASE_NOTES_v*.md / tag 注释的既有约定：
-  - 开头若干个空行分隔的段落：英文段和中文段各自成段；
-  - 小节标题形如 "New / 新功能"（英文 / 中文，按**最后一个** " / " 切开——
-    "Last.fm & scrobbling / Last.fm 与打卡" 这种左半边自带斜杠的也能对付）；
-  - 每个 bullet 以 "- " 开头，先若干行英文、后若干行中文（中文行以两空格缩进续行）；
-  - 下载表格 / 链接行本身就是双语混排或纯链接，两个语言版本都原样保留。
-
-行归属靠 CJK 字符占比判断（>0.25 算中文行）。英文行里夹着的少量中文词
-（"The One演唱会"、演唱会/现场/音乐会 这类例子）占比远低于阈值，不会误判——
-这是对本仓行文习惯的经验阈值，不是通用断言；改了行文风格要回来核这个阈值。
-
-渲染（2026-09-03，用户看到 Sparkle 弹窗里 <pre> 排版报的）：Sparkle 的说明
-WebView 渲染 HTML 但**不渲染 markdown**，而 notes 源文件是 76 列硬换行的
-markdown——直接塞 <pre> 会得到"句子中间断行 + 裸 **粗体** [链接]()"的观感。
-所以这里把 markdown 转成真 HTML：标题/列表/加粗/链接/表格，段与 li 内的硬换行
-按 CJK 规则合并（两侧任一是 CJK 就直接拼接，否则补空格——中文句子拼接时不能
-凭空多出空格）。
+"""把双语（英中对照）发布日志拆成单语言的 HTML，喂给 Sparkle。
 
 用法：split_release_notes.py NOTES.md OUT_DIR
-产出：OUT_DIR/notes.{en,zh-Hans}.html（自包含页面：内嵌 CDATA 或挂资产均可用）。
-出错宁可整体失败也不出半截文件。2026-09-05 起 .github/scripts/check_release_tag.sh
-在 CI 构建前先跑一遍本脚本，非零退出＝拒发这个 tag；appcast 那步的单份 description
-兜底只剩安全阀。
+产出：OUT_DIR/notes.{en,zh-Hans}.html
 """
 import html
 import pathlib
 import re
 import sys
-
 
 def cjk_ratio(line: str) -> float:
     chars = [c for c in line if not c.isspace()]
@@ -39,37 +16,25 @@ def cjk_ratio(line: str) -> float:
     cjk = sum(1 for c in chars if "一" <= c <= "鿿" or "　" <= c <= "〿" or "＀" <= c <= "￯")
     return cjk / len(chars)
 
-
 def is_zh(line: str) -> bool:
     return cjk_ratio(line) > 0.25
 
-
 HEADER_RE = re.compile(r"^(#*\s*)?\S.* / .+$")
 
-
 def split_header(line: str):
-    """"New / 新功能" -> ("New", "新功能")；按最后一个 " / " 切。"""
     left, right = line.rsplit(" / ", 1)
     if not is_zh(right) or is_zh(left):
         return None
     left_txt = re.sub(r"^#+\s*", "", left)
     return left_txt, right
 
-
 EN_MARKER = "<!-- lang:en -->"
 ZH_MARKER = "<!-- lang:zh-Hans -->"
 
-# 哨兵阈值（拆出来的纯文本字符数）。分语言：v1.1.0–v1.5.0 五份正文拆出来中英字数比稳定在 0.38，
-# 中文侧也卡 200 等于要求英文 ≥520，一份四条 bullet 的标记式日志（英 416 / 中 175）会被误拒。
-# 一两行的 hotfix 日志（v1.0.0 那种 39 字节）仍过不了，这是有意的——发版日志本来就要求手写双语改动清单。
 MIN_EN_CHARS = 200
 MIN_ZH_CHARS = 80
 
-
 def split_notes_by_marker(text: str):
-    """AGENTS.md「发布」一节约定的显式标记格式：标题行 + <!-- lang:en --> 英文整块 +
-    <!-- lang:zh-Hans --> 中文整块。有标记时优先走这里——作者拆的永远比启发式准。
-    返回 (en_lines, zh_lines)，没有标记返回 None。"""
     if EN_MARKER not in text or ZH_MARKER not in text:
         return None
     header, rest = text.split(EN_MARKER, 1)
@@ -79,9 +44,7 @@ def split_notes_by_marker(text: str):
     zh = header_lines + [""] + zh_body.strip("\n").splitlines()
     return en, zh
 
-
 def split_notes(text: str):
-    """拆成两份"行列表"。小节标题带上 "### " 前缀作标记，供渲染层识别。"""
     en_lines: list[str] = []
     zh_lines: list[str] = []
     bullet_zh_pending: list[str] = []
@@ -147,12 +110,9 @@ def split_notes(text: str):
     flush_bullet_zh()
     return en_lines, zh_lines
 
-
 CJKISH = re.compile(r"[^\x00-\x7f]")
 
-
 def join_wrapped(parts: list[str]) -> str:
-    """合并硬换行：相邻两段的接缝任一侧是非 ASCII（CJK/全角标点）就直接拼，否则补空格。"""
     out = ""
     for p in parts:
         p = p.strip()
@@ -167,14 +127,11 @@ def join_wrapped(parts: list[str]) -> str:
             out += " " + p
     return out
 
-
 def inline_md(text: str) -> str:
-    """转义后处理行内 markdown：**粗体**、[文字](链接)。"""
     s = html.escape(text, quote=False)
     s = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", s)
     s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', s)
     return s
-
 
 def render_html(lines: list[str], lang: str) -> str:
     body: list[str] = []
@@ -210,7 +167,7 @@ def render_html(lines: list[str], lang: str) -> str:
         for r in table:
             cells = [c.strip() for c in r.strip().strip("|").split("|")]
             if all(re.fullmatch(r":?-{3,}:?", c) for c in cells):
-                continue  # |---|---| 分隔行
+                continue
             rows.append("<tr>" + "".join("<td>" + inline_md(c) + "</td>" for c in cells) + "</tr>")
         body.append("<table>" + "".join(rows) + "</table>")
         table = []
@@ -266,7 +223,6 @@ def render_html(lines: list[str], lang: str) -> str:
         "</style></head><body>\n" + "\n".join(body) + "\n</body></html>\n"
     )
 
-
 def main() -> int:
     if len(sys.argv) != 3:
         print(__doc__, file=sys.stderr)
@@ -278,8 +234,7 @@ def main() -> int:
     en_lines, zh_lines = by_marker if by_marker else split_notes(src)
     en_plain = "\n".join(en_lines)
     zh_plain = "\n".join(zh_lines)
-    # 哨兵：两边都必须有实质内容——一边太短就说明输入不是双语对照格式（或者拆分
-    # 逻辑坏了），此时拒绝输出。构建前的 check_release_tag.sh 据此拒发；appcast 那步据此退回单份。
+
     if len(en_plain) < MIN_EN_CHARS or len(zh_plain) < MIN_ZH_CHARS:
         print(f"!! 拆分结果太短 en={len(en_plain)} zh={len(zh_plain)}（要求 en≥{MIN_EN_CHARS}、zh≥{MIN_ZH_CHARS}），拒绝输出",
               file=sys.stderr)
@@ -288,7 +243,6 @@ def main() -> int:
     (out_dir / "notes.zh-Hans.html").write_text(render_html(zh_lines, "zh-Hans"), encoding="utf-8")
     print(f"en {len(en_plain)} chars, zh {len(zh_plain)} chars -> {out_dir}")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

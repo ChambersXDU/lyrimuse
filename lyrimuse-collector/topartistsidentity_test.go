@@ -2,17 +2,9 @@ package main
 
 import "testing"
 
-// 用户逐条核对 Top100 导出,验证 8 对"同一个人两个写法"漏合并(窦靖童/Leah Dou
-// 等)。这批用例覆盖为此新增的第三合并信号:MusicBrainz 身份解析(mbid+中文名),经
-// artistIdentityFn 注入假函数测,不碰网络。
 func TestMergeAliasedArtistsIdentity(t *testing.T) {
 	noID := func(string, string) mbArtistIdentity { return mbArtistIdentity{} }
 
-	// 隔离 resolveGenericArtistCanonicalName 会打的真实网络请求(MusicBrainz/QQ)——这组
-	// 用例注入了假的 mbid 解析器(noID/resolve),测的是"名字键"合并信号跟 mbid 信号
-	// 怎么配合,不是"这个艺人有没有中文名"。"Fan Yi Chen"(范逸臣)恰好是真实存在、
-	// 通用机制现在查得到的歌手——不隔离的话这条用例会因为"通用机制变强了"而失效,
-	// 但这条用例本来测的是"解析不出身份时不改名",用真实网络结果会文不对题。
 	withCachedAliases(t, map[string]string{
 		"Fan Yi Chen": "", "ØZI": "", "Michael Jackson": "",
 		"Michael Jackson & 克里夫兰管弦乐团": "", "Test Artist": "", "Prince": "",
@@ -55,7 +47,7 @@ func TestMergeAliasedArtistsIdentity(t *testing.T) {
 	})
 
 	t.Run("解析出的中文名跟已有中文条目按名字键桥接(含繁简)", func(t *testing.T) {
-		// 通用路径:A 解析出中文名、B 本来就用中文名(繁体写法),没有任何 mbid 也要并上。
+
 		resolve := func(name, _ string) mbArtistIdentity {
 			if name == "Test Artist" {
 				return mbArtistIdentity{Zh: "测试歌手"}
@@ -70,8 +62,7 @@ func TestMergeAliasedArtistsIdentity(t *testing.T) {
 	})
 
 	t.Run("含汉字的合唱串不抢夺显示名", func(t *testing.T) {
-		// 首版测试未命中:"Michael Jackson & 克里夫兰管弦乐团"(2 次播放)把
-		// "Michael Jackson"(1084 次)顶掉了。中文优先只认单人写法。
+
 		got := mergeAliasedArtistsResolved([]lastfmChartEntry{
 			{Name: "Michael Jackson", PlayCount: 1084},
 			{Name: "Michael Jackson & 克里夫兰管弦乐团", PlayCount: 2},
@@ -104,10 +95,7 @@ func TestMergeAliasedArtistsIdentity(t *testing.T) {
 	})
 
 	t.Run("合唱串不把整串的 mbid 传给第一位歌手", func(t *testing.T) {
-		// "Prince & The Revolution" 在 Last.fm 有自己的 mbid(乐队实体),它不属于
-		// Prince 本人;若把它当 Prince 的已知身份传给解析器,缓存会被污染。独唱行
-		// 传自己的 mbid 是正确行为,这里只断言乐队串那条绝不以("Prince", 乐队mbid)
-		// 的组合到达解析器。
+
 		polluted := false
 		resolve := func(name, known string) mbArtistIdentity {
 			if name == "Prince" && known == "band-mbid" {

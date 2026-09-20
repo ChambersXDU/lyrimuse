@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-// shouldDisable 的裁决规则:9/10/26 一击致命;4 要两击验证(间隔 ≥30s、≤30min);
-// 非致命码永不熔断;成功洗清嫌疑;过期嫌疑重新开桩。时间全部显式传入,不碰真实时钟。
 func TestShouldDisableErrorFourNeedsConfirmation(t *testing.T) {
 	e4 := &lastfmAPIError{Code: 4, Message: "Authentication Failed", Method: "track.updateNowPlaying"}
 	t0 := time.Unix(1_800_000_000, 0)
@@ -45,7 +43,7 @@ func TestShouldDisableErrorFourNeedsConfirmation(t *testing.T) {
 	t.Run("30s 内的重复失败算同一击", func(t *testing.T) {
 		s := &lastfmScrobbler{}
 		s.shouldDisable(e4, t0)
-		// 换歌那一刻 nowPlaying+scrobble 几乎同时各失败一发,是同一次故障。
+
 		if s.shouldDisable(e4, t0.Add(2*time.Second)) {
 			t.Fatal("burst 内的第二发不该坐实")
 		}
@@ -65,7 +63,7 @@ func TestShouldDisableErrorFourNeedsConfirmation(t *testing.T) {
 	t.Run("成功洗清嫌疑", func(t *testing.T) {
 		s := &lastfmScrobbler{}
 		s.shouldDisable(e4, t0)
-		s.suspect4.Store(0) // mirrorAsync 成功路径做的事
+		s.suspect4.Store(0)
 		if s.shouldDisable(e4, t0.Add(40*time.Second)) {
 			t.Fatal("嫌疑被成功洗清后,再发 error 4 是新的首发,不该熔断")
 		}

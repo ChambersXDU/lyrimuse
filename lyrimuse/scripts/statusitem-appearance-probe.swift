@@ -1,18 +1,5 @@
 #!/usr/bin/env swift
-//
-// 只读探针:一颗**刚建出来**的状态栏项,它的 appearance 什么时候才可信?
-//
-//   swift lyrimuse/scripts/statusitem-appearance-probe.swift
-//
-// 新建一个 1pt 宽的 NSStatusItem,往按钮里挂一个只会打印回调的子视图,每 5ms 采样一次按钮的
-// window / 窗口 frame / effectiveAppearance,1.5s 后移除退出 —— 菜单栏上只会短暂出现一个 1pt
-// 的空项,不点击、不发按键、不改任何状态。
-//
-// 为什么要有它(2026-09-07):设置页菜单栏预览"重建时闪一下",根因是 `MenuBarAppearanceStore`
-// 在状态栏项重建那一刻当场读按钮的 effectiveAppearance。这个探针在 macOS 27 上抓到的时间线
-// (见 MenuBar/MenuBarAppearance.swift 头注):刚建出来按钮已在窗口里但窗口高度 0、appearance 是
-// VibrantLight(错);~60ms 后状态栏排版,6ms 内 viewDidChangeEffectiveAppearance 连发七次,
-// 最后才落在 VibrantDark。要在别的 macOS 版本上核这段时序,跑一遍看输出即可。
+
 import AppKit
 
 final class Probe: NSObject, NSApplicationDelegate {

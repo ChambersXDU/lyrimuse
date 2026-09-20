@@ -30,8 +30,6 @@ func writeTestListenLog(t *testing.T, lines []listenLogLine) string {
 	return path
 }
 
-// 删除粒度是整个 uts。同一次收听可能有收听行(l)+回执行(s)+隔离行(q)，只删收听行
-// 会留下指向不存在收听的孤儿回执，而那些回执还会继续参与"已提交"判定。
 func TestDeleteListensRemovesEveryLineForThatUTS(t *testing.T) {
 	writeTestListenLog(t, []listenLogLine{
 		{T: "l", V: 1, UTS: 100, AR: "A", TI: "keep"},
@@ -62,7 +60,6 @@ func TestDeleteListensRemovesEveryLineForThatUTS(t *testing.T) {
 	}
 }
 
-// 没匹配上不是错误（界面上那条可能刚被别处删掉），也不该白重写一遍文件。
 func TestDeleteListensMissingUTSIsNotAnError(t *testing.T) {
 	path := writeTestListenLog(t, []listenLogLine{
 		{T: "l", V: 1, UTS: 100, AR: "A", TI: "x"},
@@ -105,8 +102,6 @@ func TestDeleteListensMultiple(t *testing.T) {
 	}
 }
 
-// uts<=0 必须在参数解析阶段就被拒。日志里 uts=0 的行是坏数据，
-// "顺手清掉所有坏数据"绝不该由一次「删这一条」的点击悄悄触发。
 func TestUTSFlagRejectsNonPositive(t *testing.T) {
 	for _, bad := range []string{"0", "-1", "abc", "1,0"} {
 		var f utsFlag

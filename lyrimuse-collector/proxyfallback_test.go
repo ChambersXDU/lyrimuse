@@ -14,10 +14,6 @@ import (
 	"time"
 )
 
-// ---- dohDialRace:并发拨号 ----
-
-// blackHoleDialer 造一份可控的拨号行为:blackHoles 里的地址永远不返回(直到 ctx 被取消,
-// 模拟 SYN 石沉大海),其余地址在 delay 之后返回一条可关闭的假连接。
 type raceDialLog struct {
 	mu     sync.Mutex
 	closed map[string]bool
@@ -64,10 +60,6 @@ func makeRaceDialer(logRef *raceDialLog, blackHoles map[string]bool, delay map[s
 	return dial, cleanup
 }
 
-// 这是 那个真 bug 的回归测试:**黑洞排在第一个**。
-// 串行版本(修复前)会把整个预算耗在第一个地址上,永远轮不到第二个;并发版本必须立刻拿到
-// 第二个。断言"很快返回"而不只是"返回了" —— 串行版本最终也会返回,只是要等到超时,那正是
-// 用户看到的"这个源整整半小时不可用"。
 func TestDohDialRaceBlackHoleFirstDoesNotBlockGoodAddress(t *testing.T) {
 	logRef := &raceDialLog{closed: map[string]bool{}}
 	dial, cleanup := makeRaceDialer(logRef, map[string]bool{"10.0.0.1:443": true}, nil)
@@ -91,7 +83,6 @@ func TestDohDialRaceBlackHoleFirstDoesNotBlockGoodAddress(t *testing.T) {
 	conn.Close()
 }
 
-// 顺序反过来同样成立(好地址在前),证明上面那条不是碰巧。
 func TestDohDialRaceGoodAddressFirst(t *testing.T) {
 	logRef := &raceDialLog{closed: map[string]bool{}}
 	dial, cleanup := makeRaceDialer(logRef, map[string]bool{"10.0.0.2:443": true}, nil)
@@ -109,7 +100,6 @@ func TestDohDialRaceGoodAddressFirst(t *testing.T) {
 	conn.Close()
 }
 
-// 慢一步也连上的那条必须被关掉,不能泄漏 fd。
 func TestDohDialRaceClosesLoser(t *testing.T) {
 	logRef := &raceDialLog{closed: map[string]bool{}}
 	dial, cleanup := makeRaceDialer(logRef, nil, map[string]time.Duration{"10.0.0.2:443": 60 * time.Millisecond})
@@ -143,13 +133,11 @@ func TestDohDialRaceAllFailAndEmpty(t *testing.T) {
 	if conn, err := dohDialRaceWith(context.Background(), failing, "tcp", []string{"10.0.0.1", "10.0.0.2"}, "443"); conn != nil || err == nil {
 		t.Errorf("全失败应返回 (nil, err), 得到 conn=%v err=%v", conn, err)
 	}
-	// ips 为空 → (nil, nil),由 dohDialContext 退回系统解析。
+
 	if conn, err := dohDialRaceWith(context.Background(), failing, "tcp", nil, "443"); conn != nil || err != nil {
 		t.Errorf("空地址表应返回 (nil, nil), 得到 conn=%v err=%v", conn, err)
 	}
 }
-
-// ---- proxyFallbackTransport ----
 
 type stubRoundTripper struct {
 	err   error
@@ -170,9 +158,6 @@ func (s *stubRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	}, nil
 }
 
-// newFallbackTestEnv 把测试跟真实环境隔开:HOME 换成临时目录(磁盘提示文件不许写进用户
-// 真正的 ~/.config/lyrimuse),HTTPS_PROXY 指向一个真的听着的本地端口(让 systemProxyURL
-// 的探活能过),系统代理缓存清零。
 func newFallbackTestEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
@@ -218,7 +203,6 @@ func TestProxyFallbackUsesProxyWhenDirectFails(t *testing.T) {
 		t.Errorf("direct=%d viaProxy=%d, 期望各 1 次", direct.calls, viaProxy.calls)
 	}
 
-	// 粘性:第二个请求应该**直接**走代理,不再白等一次直连。
 	resp2, err := tr.RoundTrip(newTestRequest(t))
 	if err != nil {
 		t.Fatalf("粘性期内应继续走代理, err=%v", err)
@@ -231,7 +215,6 @@ func TestProxyFallbackUsesProxyWhenDirectFails(t *testing.T) {
 		t.Errorf("viaProxy = %d 次, 期望 2", viaProxy.calls)
 	}
 
-	// 磁盘提示写下来了 —— 这是给一次性 CLI 子进程用的,它们内存粘性一律归零。
 	if !loadProxyFallbackHint("apic-appmobile.musixmatch.com") {
 		t.Error("磁盘提示没写下来,新起的 CLI 进程还要再白等一遍直连")
 	}
@@ -255,8 +238,7 @@ func TestProxyFallbackDirectSuccessNeverTouchesProxy(t *testing.T) {
 	if string(body) != "ok" {
 		t.Errorf("body = %q, 期望走直连", body)
 	}
-	// 这条是整个改动的核心纪律:代理在这台机器上是更差的通道(见 systemproxy.go 头注的
-	// Last.fm 测试),直连正常时一个包都不该经过它。
+
 	if viaProxy.calls != 0 {
 		t.Errorf("直连成功却动了代理 %d 次", viaProxy.calls)
 	}
@@ -276,7 +258,7 @@ func TestProxyFallbackReportsBlockedWhenBothFail(t *testing.T) {
 	if err == nil {
 		t.Fatal("两条路都失败应该返回错误")
 	}
-	// 报的是**直连**那次的错:上层真正关心的是我们本来想走的那条路怎么了。
+
 	if !strings.Contains(err.Error(), "i/o timeout") {
 		t.Errorf("err = %v, 期望是直连那次的错误", err)
 	}
@@ -287,13 +269,13 @@ func TestProxyFallbackReportsBlockedWhenBothFail(t *testing.T) {
 
 func TestProxyFallbackReportsBlockedWhenNoProxyConfigured(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	// 没有任何代理:环境变量清空,系统设置那边解析不出来也走同一条路。
+
 	for _, k := range []string{"HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy"} {
 		t.Setenv(k, "")
 	}
 	resetSystemProxyCacheForTest()
 	defer resetSystemProxyCacheForTest()
-	// 直接把缓存钉成"没有代理",免得这台机器真实的系统代理状态影响用例的可复现性。
+
 	systemProxyMu.Lock()
 	systemProxyValue, systemProxyReadAt = nil, time.Now()
 	systemProxyMu.Unlock()
@@ -314,8 +296,6 @@ func TestProxyFallbackReportsBlockedWhenNoProxyConfigured(t *testing.T) {
 	}
 }
 
-// 粘着走代理、代理却坏了(用户关掉了 / 换了端口):必须清掉粘性并当场回直连重试,
-// 否则会一直往一个死代理上撞,而直连说不定早就恢复了。
 func TestProxyFallbackFallsBackToDirectWhenStickyProxyDies(t *testing.T) {
 	newFallbackTestEnv(t)
 	host := "apic-appmobile.musixmatch.com"
@@ -345,15 +325,13 @@ func TestProxyFallbackFallsBackToDirectWhenStickyProxyDies(t *testing.T) {
 	}
 }
 
-// 磁盘提示是给跨进程用的:一个全新的 transport(等价于新起的 CLI 进程)读到提示就该
-// 直接走代理,不再白等一次直连探路。
 func TestProxyFallbackHintCrossesProcessBoundary(t *testing.T) {
 	newFallbackTestEnv(t)
 	saveProxyFallbackHint("apic-appmobile.musixmatch.com", true)
 
 	direct := &stubRoundTripper{err: errors.New("should not be tried")}
 	viaProxy := &stubRoundTripper{body: "via proxy"}
-	fresh := &proxyFallbackTransport{direct: direct, viaProxy: viaProxy} // stickyUntil 是零值
+	fresh := &proxyFallbackTransport{direct: direct, viaProxy: viaProxy}
 
 	resp, err := fresh.RoundTrip(newTestRequest(t))
 	if err != nil {
@@ -365,7 +343,6 @@ func TestProxyFallbackHintCrossesProcessBoundary(t *testing.T) {
 	}
 }
 
-// 带 body 的请求不做 fallback:req.Clone 不复制 body,重放过去会是个空 body 的请求。
 func TestProxyFallbackSkipsRetryForRequestsWithBody(t *testing.T) {
 	newFallbackTestEnv(t)
 	direct := &stubRoundTripper{err: errors.New("i/o timeout")}
@@ -384,8 +361,6 @@ func TestProxyFallbackSkipsRetryForRequestsWithBody(t *testing.T) {
 	}
 }
 
-// attempt 把 per-attempt 的 context 挂在 Body 上、等 Close 才释放。如果直接 cancel,
-// 调用方读 body 会拿到 "context canceled" —— 看起来像服务器提前关了连接,极难排查。
 func TestProxyFallbackBodyReadableAfterRoundTrip(t *testing.T) {
 	newFallbackTestEnv(t)
 	tr := &proxyFallbackTransport{
@@ -406,6 +381,6 @@ func TestProxyFallbackBodyReadableAfterRoundTrip(t *testing.T) {
 	if err := resp.Body.Close(); err != nil {
 		t.Errorf("Close 报错: %v", err)
 	}
-	// 重复 Close 不能 panic(sync.Once 保护 cancel)。
+
 	_ = resp.Body.Close()
 }

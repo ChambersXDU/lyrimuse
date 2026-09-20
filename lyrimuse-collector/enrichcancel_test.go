@@ -13,10 +13,8 @@ func TestCheckEnrichCancelRequest(t *testing.T) {
 	reqPath := filepath.Join(tmpDir, "enrich-cancel.txt")
 	setEnrichCancelRequestPath(reqPath)
 
-	// File doesn't exist: checkEnrichCancelRequest should exit cleanly without panic
 	checkEnrichCancelRequest()
 
-	// Register a cancel func
 	cancelled := false
 	cancelKey := "Artist|Title|Album"
 	enrichMu.Lock()
@@ -30,7 +28,6 @@ func TestCheckEnrichCancelRequest(t *testing.T) {
 		enrichMu.Unlock()
 	})
 
-	// Write cancel request file
 	if err := os.WriteFile(reqPath, []byte(cancelKey), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +38,6 @@ func TestCheckEnrichCancelRequest(t *testing.T) {
 		t.Errorf("expected cancel func to be called for key %q", cancelKey)
 	}
 
-	// File should be consumed and deleted
 	if _, err := os.Stat(reqPath); !os.IsNotExist(err) {
 		t.Errorf("expected cancel request file to be removed after check, got err: %v", err)
 	}
@@ -62,7 +58,7 @@ func TestStartEnrichCancelWatcherCleanExit(t *testing.T) {
 	cancel()
 	select {
 	case <-done:
-		// Clean exit
+
 	case <-time.After(1 * time.Second):
 		t.Fatal("startEnrichCancelWatcher did not exit promptly on ctx.Done()")
 	}
@@ -76,7 +72,7 @@ func TestResolveEnrichAsyncCancelWritesNoLyricsEntry(t *testing.T) {
 		enrichInflight, enrichCancelFuncs = savedInflight, savedCancelFuncs
 	})
 	enrichCache = map[string]enrichEntry{}
-	enrichPath = "" // 纯内存断言,不触碰磁盘——saveEnrichCache 在空路径时是安全的空操作
+	enrichPath = ""
 	enrichInflight = map[string]bool{}
 	enrichCancelFuncs = map[string]context.CancelFunc{}
 
@@ -84,7 +80,7 @@ func TestResolveEnrichAsyncCancelWritesNoLyricsEntry(t *testing.T) {
 	key := enrichKey(artist, title, album)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // 调用前就取消——模拟"停止搜索"按钮点下去、enrichcancel.go 的 watcher 已经调过 cancel
+	cancel()
 
 	done := make(chan struct{})
 	go func() {
@@ -110,4 +106,3 @@ func TestResolveEnrichAsyncCancelWritesNoLyricsEntry(t *testing.T) {
 		t.Errorf("TS 必须 > 0——EnrichCacheReader.lookup 靠它判定'这一轮解析真的跑完了',否则灵动岛/悬浮歌词会一直卡在'搜索歌词中…'")
 	}
 }
-

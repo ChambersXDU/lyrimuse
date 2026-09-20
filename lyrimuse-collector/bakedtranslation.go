@@ -7,40 +7,6 @@ import (
 	"unicode"
 )
 
-// 烘进正文的逐行译文。
-//
-// 起因:处理 PRINCE《Diamonds and Pearls (2023 Remaster)》匹配错了,追下去发现 QQ 那条正确候选
-// 的**正文**长这样(上传者用「krc转qrc工具」把中文译文直接烘进了歌词):
-//
-//	[00:36.08]This will be the day
-//	[00:38.34]这将是我们约定的日子
-//	[00:39.00]That you will hear me say
-//	[00:41.30]你会听见我郑重承诺
-//
-// 每句英文后面紧跟一行**独立时间戳**的中文译文,QRC 逐字轨里同样有这些行(每个汉字 66ms 的假计时)。
-// 后果有三层:①共识——正文里一半是中文,跟 lrclib/musixmatch 的纯英文正文 3-gram 相似度只有 0.41,
-// 拿不到 150~250 的共识分,而冠亚军分差中位只有 22 分;②行数——118 行里 59 行是译文,+1/行 的行数分
-// 虚高;③显示——App 把它当歌词逐行播,用户看到英中交替,悬浮窗逐字填色也会在中文行上跑一遍假计时。
-// collector 明明有 lyrics_tr 这条专门放译文的轨,这份数据只是放错了地方。
-//
-// 做法:候选装配前(rankLyricSourceResults)把这种形态识别出来,中文行从正文与逐字轨里摘掉、改挂到
-// 原文行的时间戳上放进 lyrics_tr(App 侧译文按 700ms 最近邻贴行,所以译文行必须复用原文行的时间戳,
-// 不能留上传者那个偏 2 秒的戳)。
-//
-// 判据刻意保守——误伤的代价是把一首**真的**中英双语歌的中文歌词降级成译文:
-//   - 这首歌得是外文歌:本地标签(歌手+歌名)不含汉字,或者原文行里过半带假名/谚文(日韩歌常用汉字
-//     标歌名,不能靠标签判);
-//   - 外文行(F)与纯汉字行(H)各 ≥ 8 行,H/F 在 0.7~1.3 之间(逐句对译才会一比一);
-//   - ≥ 80% 的 H 行紧跟在一个 F 行后面(逐句交替)。
-//
-// 拿用户 3481 条缓存里的**冠军**正文扫过:F、H 各 ≥8 行的有 351 条,其中"紧跟比例"最高的
-// 是 0.67(茜拉班级《日出》,真的中英混唱),没有一条 ≥0.8——真双语歌的中文行跟英文行是段落级
-// 交错,不是逐句一比一。阈值 0.8 与测试最高值之间有 0.13 的余量。
-//
-// 只处理"外文原文 + 中文译文"这一种方向:中文平台的上传者烘进去的几乎只有中文;反过来(中文歌烘英文译文)
-// 没见过实例,不猜。
-
-// yrcWordTimingRe 匹配 YRC 行里每个词前面的 (起始,时长[,0]) 计时段。
 var yrcWordTimingRe = regexp.MustCompile(`\(\d+,\d+(?:,\d+)?\)`)
 
 const (
@@ -54,19 +20,19 @@ const (
 type bakedLineClass int
 
 const (
-	bakedLineSkip    bakedLineClass = iota // 空行 / 元数据标签 / 署名 / 无时间戳
-	bakedLineForeign                       // 外文原文行:含假名/谚文,或 ≥2 个拉丁字母且不含汉字
-	bakedLineHan                           // 纯汉字行:≥2 个汉字,不含拉丁字母/假名/谚文
-	bakedLineMixed                         // 其它(中英混杂、纯数字/标点等)
+	bakedLineSkip    bakedLineClass = iota
+	bakedLineForeign
+	bakedLineHan
+	bakedLineMixed
 )
 
 type bakedLine struct {
 	raw     string
-	stamps  string // 行首全部时间戳原文,如 "[00:36.08]"
+	stamps  string
 	text    string
 	class   bakedLineClass
-	startMs int  // 第一个时间戳,毫秒;-1 = 无
-	jk      bool // 外文行里含假名/谚文
+	startMs int
+	jk      bool
 }
 
 func classifyBakedLine(line string) bakedLine {
@@ -76,7 +42,7 @@ func classifyBakedLine(line string) bakedLine {
 		bl.class = bakedLineSkip
 		return bl
 	}
-	// 只认行首连续的时间戳;正文中间夹的方括号不当时间戳看。
+
 	end := 0
 	for _, mm := range m {
 		if strings.TrimSpace(line[end:mm[0]]) != "" {
@@ -130,9 +96,6 @@ func classifyBakedLine(line string) bakedLine {
 	return bl
 }
 
-// splitBakedTranslation 识别"外文原文 + 逐行中文译文烘在一起"的正文。命中时返回摘掉译文的正文、
-// 挂回原文行时间戳的译文 LRC、摘掉对应行的逐字轨,以及摘掉的译文行数;不命中时原样返回、n=0。
-// foreignSong:本地标签(歌手+歌名)不含汉字。
 func splitBakedTranslation(lyrics, yrc string, foreignSong bool) (cleanLRC, trLRC, cleanYRC string, n int) {
 	if lyrics == "" {
 		return lyrics, "", yrc, 0
@@ -174,12 +137,11 @@ func splitBakedTranslation(lyrics, yrc string, foreignSong bool) (cleanLRC, trLR
 		return lyrics, "", yrc, 0
 	}
 
-	// 摘译文:每个 H 行挂到它前面最近那个 F 行的时间戳上;同一 F 行下连续多行译文合成一行。
 	var clean, tr []string
 	removedMs := map[int]bool{}
 	removedText := map[string]bool{}
 	lastStamps := ""
-	trText := map[string]string{} // stamps -> 译文
+	trText := map[string]string{}
 	var trOrder []string
 	for _, bl := range parsed {
 		switch bl.class {
@@ -214,8 +176,6 @@ func splitBakedTranslation(lyrics, yrc string, foreignSong bool) (cleanLRC, trLR
 	return cleanLRC, trLRC, cleanYRC, n
 }
 
-// stripBakedYRCLines 把逐字轨里对应被摘掉的译文行删掉:先按行起始毫秒对(±80ms),对不上再按
-// 词文本拼接后的归一形态对。
 func stripBakedYRCLines(yrc string, removedMs map[int]bool, removedText map[string]bool) string {
 	if yrc == "" || (len(removedMs) == 0 && len(removedText) == 0) {
 		return yrc
@@ -249,9 +209,6 @@ func stripBakedYRCLines(yrc string, removedMs map[int]bool, removedText map[stri
 	return strings.Join(kept, "\n")
 }
 
-// adoptBakedTranslation 是候选装配处的入口:命中就摘,译文轨为空时把摘出来的译文接上(语言固定中文,
-// 所以只给译文轨本来就是中文语义的源用——netease/qq/kugou;musixmatch/amll 的译文语言跟设置走,
-// 调用方传 acceptTr=false,只摘不接)。返回 (正文, 译文, 逐字轨, 摘掉的行数)。
 func adoptBakedTranslation(lyr, tr, yrc string, foreignSong, acceptTr bool) (string, string, string, int) {
 	clean, bakedTr, cleanYRC, n := splitBakedTranslation(lyr, yrc, foreignSong)
 	if n == 0 {

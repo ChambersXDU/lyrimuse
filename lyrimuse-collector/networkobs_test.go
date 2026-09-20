@@ -1,5 +1,3 @@
-// Command collector watches the macOS system now-playing state via
-// AppleScript and submits playing_now / listen events to ListenBrainz.
 package main
 
 import (
@@ -18,17 +16,11 @@ import (
 	"time"
 )
 
-// 回归测试:doHTTPTracked/networkLooksDown 是"联网搜索候选歌词"判断
-// "所有源都没找到"到底是真没有还是网络不通的核心逻辑,读增量(测试前后的差值)而不是
-// 绝对值——networkAttemptCount/networkFailureCount 是包级变量,同一个测试二进制里
-// 别的测试(或将来新增的测试)也可能调用到 doHTTPTracked,不能假设进测试时一定是
-// 零值,只看这个测试自己造成的变化量才是稳的。
 func attemptDelta(before int32) int32 { return atomic.LoadInt32(&networkAttemptCount) - before }
 func failureDelta(before int32) int32 { return atomic.LoadInt32(&networkFailureCount) - before }
 
 func TestDoHTTPTracked_SuccessfulResponseNotCountedAsFailure(t *testing.T) {
-	// 服务器正常响应(即使是非 200 状态码)不算网络层失败——这是区分"网络不通"和
-	// "服务器说没有"的关键:后者说明请求确实发出去、收到响应了。
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
@@ -56,14 +48,13 @@ func TestDoHTTPTracked_SuccessfulResponseNotCountedAsFailure(t *testing.T) {
 }
 
 func TestDoHTTPTracked_TransportErrorCountsAsFailure(t *testing.T) {
-	// 端口 0 上的临时监听器一开就关掉,连接必然被拒绝——这是可靠触发"请求根本没有
-	// 发出去/没有收到任何响应"这类真实网络层错误的标准手法,不依赖任何真实外部网络。
+
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
 	addr := ln.Addr().String()
-	ln.Close() // 立刻关闭,这个地址上不再有任何东西监听
+	ln.Close()
 
 	attemptsBefore := atomic.LoadInt32(&networkAttemptCount)
 	failuresBefore := atomic.LoadInt32(&networkFailureCount)
@@ -85,15 +76,6 @@ func TestDoHTTPTracked_TransportErrorCountsAsFailure(t *testing.T) {
 	}
 }
 
-// 用户要求"所有软件发出的对外请求全部都给我记录下日志",doHTTPTracked
-// 从这时起是全局的审计日志出口,不只是网络计数器。这两个测试钉住这一层:①正常/失败
-// 两条路径都真的写了一行日志;②日志行**不带 query string**——凭据(比如这里模拟的
-// api_key)不应该出现在里面,这是这条功能的核心安全承诺,比单纯"格式对不对"更重要。
-// 用 log.SetOutput 换成内存 buffer 是 Go 测试里安全捕获 log 包输出的标准做法——
-// installLogSink 只在真实运行时的 main 里调用,go test 不会跑到它;此时 slog 的默认
-// handler 正是经 log 包写出的,所以 slog.Warn / slog.Debug 也落进这个 buffer。逐次成功行
-// 在 Debug,测试里把桥接等级放到 Debug 才看得到。
-// defer 全部换回去,不影响其它测试。
 func TestDoHTTPTracked_LogsSuccessWithoutQueryString(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -160,13 +142,12 @@ func TestDoHTTPTracked_LogsFailure(t *testing.T) {
 }
 
 func TestNetworkLooksDown_RequiresMinimumAttemptsAndAllFailed(t *testing.T) {
-	// 直接操纵包级计数器本身来测 networkLooksDown 的判断逻辑,不需要真的再发请求——
-	// 上面两个测试已经验证过 doHTTPTracked 记录计数的正确性,这里只测纯粹的判断规则。
+
 	reset := func(attempts, failures int32) {
 		atomic.StoreInt32(&networkAttemptCount, attempts)
 		atomic.StoreInt32(&networkFailureCount, failures)
 	}
-	defer reset(atomic.LoadInt32(&networkAttemptCount), atomic.LoadInt32(&networkFailureCount)) // 恢复,不影响其它测试
+	defer reset(atomic.LoadInt32(&networkAttemptCount), atomic.LoadInt32(&networkFailureCount))
 
 	reset(0, 0)
 	if networkLooksDown() {
@@ -189,8 +170,6 @@ func TestNetworkLooksDown_RequiresMinimumAttemptsAndAllFailed(t *testing.T) {
 	}
 }
 
-// 审计汇总:同一 target 一分钟一行,count / failed / p50 / max 齐全;窗口没满且
-// 不 force 时什么都不写;结算后窗口清空。
 func TestAPICallSummary_AggregatesPerTargetPerMinute(t *testing.T) {
 	apiCallAgg.mu.Lock()
 	apiCallAgg.windows = map[string]*apiCallWindow{}
@@ -235,7 +214,6 @@ func TestAPICallSummary_AggregatesPerTargetPerMinute(t *testing.T) {
 	}
 }
 
-// 汇总分组键的路径归一化:资源 ID 抹成占位,版本段与普通路径不动。
 func TestNormalizeAuditPath(t *testing.T) {
 	cases := map[string]string{
 		"/artwork/f8863d3086cd50bf.jpg":                     "/artwork/<hex>.jpg",
@@ -255,10 +233,6 @@ func TestNormalizeAuditPath(t *testing.T) {
 	}
 }
 
-// 传输层失败分类的端到端形状:真 http.Client(带 Client.Timeout)+ 挂住不答的解析器。
-// 这正是评审匹配到的坑 —— Client.Timeout 会把错误换成 *http.timeoutError(纯字符串),错误链里
-// 没有 *net.DNSError;只有 doHTTPTracked 挂的 httptrace 轨迹能证明"死在 DNS 阶段"。
-// 用 lyricSourceForHost 认得的主机名(music.163.com),但解析器根本不发包,不碰真实网络。
 func TestDoHTTPTracked_HungDNSClassifiedAsDNSFailed(t *testing.T) {
 	saved := lyricSourceBreakerShared
 	lyricSourceBreakerShared = newLyricSourceBreaker(time.Now)
@@ -292,13 +266,11 @@ func TestDoHTTPTracked_HungDNSClassifiedAsDNSFailed(t *testing.T) {
 	}
 }
 
-// 对照:解析成功、连接被拒 → connect_failed(DNS 轨迹走完且无错,不能误归 dns)。
 func TestDoHTTPTracked_RefusedConnectionClassifiedAsConnectFailed(t *testing.T) {
 	saved := lyricSourceBreakerShared
 	lyricSourceBreakerShared = newLyricSourceBreaker(time.Now)
 	t.Cleanup(func() { lyricSourceBreakerShared = saved })
 
-	// 拿一个刚释放的本地端口,保证 connection refused。
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -308,7 +280,7 @@ func TestDoHTTPTracked_RefusedConnectionClassifiedAsConnectFailed(t *testing.T) 
 	localResolver := &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return nil, errors.New("unused") // 下面的 Dialer 直接改写目标地址,不会走到这里
+			return nil, errors.New("unused")
 		},
 	}
 	dialer := &net.Dialer{Resolver: localResolver}
@@ -316,8 +288,7 @@ func TestDoHTTPTracked_RefusedConnectionClassifiedAsConnectFailed(t *testing.T) 
 		Timeout: 2 * time.Second,
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				// 把 c.y.qq.com:80 改指到本机已关闭的端口。DNS 阶段在这里被跳过(没有钩子会触发),
-				// 分类只能靠错误链 —— connection refused 不含 DNSError → connect_failed。
+
 				return dialer.DialContext(ctx, network, net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 			},
 		},

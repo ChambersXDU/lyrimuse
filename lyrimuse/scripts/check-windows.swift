@@ -1,32 +1,5 @@
 #!/usr/bin/env swift
-//
-// 只读地问一句"Lyrimuse 现在到底显示着什么窗口"。
-//
-//   swift lyrimuse/scripts/check-windows.swift              # 列出全部窗口
-//   swift lyrimuse/scripts/check-windows.swift --require-overlay
-//   swift lyrimuse/scripts/check-windows.swift --owner Music
-//
-// 为什么要有这个脚本:验证"悬浮歌词到底有没有画出来"以前只有两条路 —— 肉眼看,或者用
-// AppleScript 去驱动界面。后者在这个项目上出过两次事故(盲发 Cmd+W 关掉了用户正在用的
-// 别的 App;为验证列宽对着窗口连点几十次,触发了"清空全部"把歌词缓存清掉了)。这个脚本
-// **只读** CGWindowList:不点击、不发按键、不激活、不改任何状态,拿到的却足以回答绝大多数
-// "它是不是真的显示出来了"的问题。
-//
-// 配合按窗口 ID 截图更好用 —— `screencapture -l <id>` 只抓那一个窗口,不会连带把别的
-// 窗口(比如聊天软件)拍进去:
-//
-//   swift lyrimuse/scripts/check-windows.swift | grep overlay
-//   screencapture -x -o -l <那个 id> /tmp/shot.png
-//
-// ⚠️ 这里印的 bounds 是 CGWindowList 的读数,**不等于 NSWindow.frame**:窗口在非主显示器
-// 上时会有系统级的缩放/取整偏差。2026-08-21 实测(本机外接 LS27B61x,NSScreen frame
-// (-526,956,2560,1440),1x):真实 frame 恰好 (849,1082,900,120) 的窗口在这里被报成
-// x=858 y=-245 w=882 h=118 —— 宽度差 18pt、x 差 9pt(等于宽度差的一半,看起来极像一次
-// "保持中心的缩放")、高度差 2pt。别拿这些数去反推"窗口是不是被谁挪过/缩过":那会追一个
-// 根本不存在的 bug(本会话差点)。要精确坐标就在 App 内读 NSWindow.frame,或者像那次一样
-// 起一个已知 frame 的探针窗口先量出这块屏的偏差。本脚本适合回答的是"在没在屏、是哪块屏、
-// 大致多大"这类问题。
-//
+
 import CoreGraphics
 import Foundation
 
@@ -91,11 +64,6 @@ if windows.isEmpty {
     exit(requireOverlay ? 1 : 0)
 }
 
-// 窗口层级(kCGWindowLayer)在这个 App 里的实际取值,实测:
-//   0     普通窗口（设置 / 歌词窗口 / 歌词管理）
-//   3     歌词悬浮层（经典悬浮歌词、灵动岛卡片）
-//   ≥1000 菜单栏那一项（滚动歌词的 MenuBarExtra，实测 layer=1000、约 179x32）
-// 菜单栏项必须跟悬浮窗分开 —— 它常驻在屏，混进去会让"悬浮窗可见"这个断言永远为真。
 func kind(of w: WindowInfo) -> String {
     if w.layer >= 1000 { return "menubar" }
     if w.layer > 0 { return "overlay" }
@@ -110,9 +78,7 @@ for w in windows {
 }
 
 if requireOverlay {
-    // 断言:至少有一个在屏、非零尺寸、不透明的悬浮层窗口。
-    // 尺寸和 alpha 都要查 —— 一个 0x0 或者 alpha=0 的窗口在列表里同样"存在",但用户
-    // 什么也看不见,只查存在性等于没查。
+
     let live = windows.filter {
         kind(of: $0) == "overlay" && $0.onscreen
             && $0.bounds.width > 0 && $0.bounds.height > 0 && $0.alpha > 0

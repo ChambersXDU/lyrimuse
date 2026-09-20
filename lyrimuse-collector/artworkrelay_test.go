@@ -12,13 +12,6 @@ import (
 	"time"
 )
 
-// 每个用例都得把这一组进程级状态复位——它们是包级变量,用例之间会互相串。
-//
-// ⚠️ 退出前必须**等后台上传排空**。scheduleArtworkUpload 起的 goroutine 是在自己跑起来
-// 之后才去读包级的 artworkRelayURL 的,所以上一个用例排下的上传,可能等到下一个用例把
-// artworkRelayURL 指向**它自己的** httptest 服务器之后才发出请求 —— 表现就是下一个用例
-// 平白多收到一次 HEAD(`-count=25` 压出来的:heads = 2)。
-// 生产里这个变量在 main 里设一次就再也不变,不存在这个问题,是测试特有的。
 func resetArtworkRelayState(t *testing.T) {
 	t.Helper()
 	artworkMu.Lock()
@@ -39,8 +32,6 @@ func resetArtworkRelayState(t *testing.T) {
 	})
 }
 
-// waitArtworkIdle 等到没有在飞的上传。等不到就报错——那说明真漏了个 goroutine,
-// 悄悄放过去只会让下一个用例莫名其妙地红。
 func waitArtworkIdle(t *testing.T) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
@@ -56,7 +47,7 @@ func waitArtworkIdle(t *testing.T) {
 	t.Error("退出时仍有上传在飞,会污染下一个用例")
 }
 
-const testSHA = "567de5eb77440ca8" // 真实存在过的一张(用户那首「死神」的封面)
+const testSHA = "567de5eb77440ca8"
 
 func TestDeviceArtworkRef(t *testing.T) {
 	cases := []struct {
@@ -68,7 +59,7 @@ func TestDeviceArtworkRef(t *testing.T) {
 		{"正常 png", "file:///Users/x/.config/lyrimuse/artwork/" + testSHA + ".png", testSHA, true},
 		{"远程 http 不认", "https://p1.music.126.net/x.jpg", "", false},
 		{"空串不认", "", "", false},
-		// 下面三条是"认错的代价不对称"那条注释在守的东西:误认会把本机路径当 sha 发出去。
+
 		{"后缀不对不认", "file:///Users/x/artwork/" + testSHA + ".webp", "", false},
 		{"文件名不是十六进制不认", "file:///Users/x/artwork/my-cover.jpg", "", false},
 		{"十六进制但长度不对不认", "file:///Users/x/artwork/abc123.jpg", "", false},
@@ -82,19 +73,15 @@ func TestDeviceArtworkRef(t *testing.T) {
 	}
 }
 
-// 这个函数是整条修复的闸门:任何情况下都不许把 file:// 原样放出去。
 func TestWebSafeCoverURLNeverLeaksLocalPath(t *testing.T) {
 	resetArtworkRelayState(t)
-	// ⚠️ 指向本地 httptest 而不是一个真实域名:这个用例会真的排一次后台上传,打到外网
-	// 域名上要等 DNS 超时(还可能真把用户本机的封面 POST 出去)。同理下面的本地路径也
-	// 用临时目录,不用 ~/.config 里那份真文件。
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
 	artworkRelayURL, artworkRelayToken = srv.URL, "tok"
 
-	// 远程封面原样透传。
 	const remote = "https://p1.music.126.net/abc.jpg?param=600y600"
 	if got := webSafeCoverURL(remote); got != remote {
 		t.Errorf("远程封面应原样返回, got %q", got)
@@ -110,15 +97,12 @@ func TestWebSafeCoverURLNeverLeaksLocalPath(t *testing.T) {
 	}
 	local := deviceArtworkURLPrefix + path
 
-	// 还没确认传上去 → 空串(而不是 file://)。网页据此走自己的 iTunes 兜底。
 	if got := webSafeCoverURL(local); got != "" {
 		t.Errorf("未上传时应返回空串,绝不能透传本地路径, got %q", got)
 	}
-	// 上一行会排一次后台上传,等它落定再往下走(否则它会在下面改 artworkRelayURL 之后
-	// 才真正发请求)。
+
 	waitArtworkIdle(t)
 
-	// 确认传上去之后 → 中继上的 https 地址。
 	artworkMu.Lock()
 	artworkUploaded[testSHA] = true
 	artworkMu.Unlock()
@@ -127,20 +111,17 @@ func TestWebSafeCoverURLNeverLeaksLocalPath(t *testing.T) {
 		t.Errorf("已上传时 = %q, want %q", got, want)
 	}
 
-	// 没配中继(用户没搭中继、只用 LB)→ 依然不能透传本地路径。
 	artworkRelayURL = ""
 	if got := webSafeCoverURL(local); got != "" {
 		t.Errorf("没配中继时应返回空串, got %q", got)
 	}
-	// 认不出的 file://(理论上不该出现)同样不许透传。
+
 	artworkRelayURL = srv.URL
 	if got := webSafeCoverURL("file:///etc/passwd"); got != "" {
 		t.Errorf("认不出的 file:// 应返回空串, got %q", got)
 	}
 }
 
-// HEAD 命中就绝不 POST —— KV 免费版 1000 写/天,这一条是省额度的关键(重启后内存里的
-// 已传集合是空的,没有 HEAD 就会把整个目录重传一遍)。
 func TestEnsureArtworkUploadedSkipsPostWhenAlreadyThere(t *testing.T) {
 	resetArtworkRelayState(t)
 	var mu sync.Mutex
@@ -218,7 +199,7 @@ func TestEnsureArtworkUploadedPostsWhenMissing(t *testing.T) {
 	if gotToken != "sekrit" {
 		t.Errorf("x-token = %q, 中继会 401", gotToken)
 	}
-	// 路由前缀必须跟 state-worker 那边逐字一致。
+
 	if gotPath != "/artwork/"+testSHA+".jpg" {
 		t.Errorf("上传路径 = %q", gotPath)
 	}
@@ -256,7 +237,6 @@ func TestEnsureArtworkUploadedPNGContentType(t *testing.T) {
 	}
 }
 
-// 中继报错时必须回错(调用方据此进冷却期,而不是每几秒重试一次)。
 func TestEnsureArtworkUploadedReportsRelayFailure(t *testing.T) {
 	resetArtworkRelayState(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +244,7 @@ func TestEnsureArtworkUploadedReportsRelayFailure(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		w.WriteHeader(http.StatusServiceUnavailable) // KV 写额度爆了就是这个
+		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer srv.Close()
 	artworkRelayURL = srv.URL
@@ -283,7 +263,7 @@ func TestEnsureArtworkUploadedReportsRelayFailure(t *testing.T) {
 func TestEnsureArtworkUploadedRejectsOversize(t *testing.T) {
 	resetArtworkRelayState(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound) // HEAD 未命中,逼它走到大小检查
+		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer srv.Close()
 	artworkRelayURL = srv.URL
@@ -298,7 +278,6 @@ func TestEnsureArtworkUploadedRejectsOversize(t *testing.T) {
 	}
 }
 
-// 启动补传:目录里认得出的都要确认一遍,认不出的文件不许被当成封面传上去。
 func TestSweepDeviceArtwork(t *testing.T) {
 	resetArtworkRelayState(t)
 	var mu sync.Mutex
@@ -307,7 +286,7 @@ func TestSweepDeviceArtwork(t *testing.T) {
 		mu.Lock()
 		seen[r.URL.Path] = true
 		mu.Unlock()
-		w.WriteHeader(http.StatusOK) // HEAD 一律命中 → 全程零写入
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
 	artworkRelayURL = srv.URL
@@ -329,8 +308,7 @@ func TestSweepDeviceArtwork(t *testing.T) {
 	if seen["/artwork/README.txt"] || seen["/artwork/not-a-sha.jpg"] {
 		t.Errorf("非封面文件不该被传上去, seen = %v", seen)
 	}
-	// HEAD 全命中,所以这一轮不该有任何东西被标成"这次刚传上去"以外的状态问题——
-	// 关键是它们现在都在已确认集合里,后续 webSafeCoverURL 能直接给出 URL。
+
 	artworkMu.Lock()
 	defer artworkMu.Unlock()
 	if !artworkUploaded[testSHA] {
@@ -338,7 +316,6 @@ func TestSweepDeviceArtwork(t *testing.T) {
 	}
 }
 
-// 失败之后进冷却期:lbMeta 每次轮询都会调 webSafeCoverURL,没有这道闸就是每几秒重试一次。
 func TestScheduleArtworkUploadBacksOffAfterFailure(t *testing.T) {
 	resetArtworkRelayState(t)
 	var mu sync.Mutex
@@ -361,7 +338,7 @@ func TestScheduleArtworkUploadBacksOffAfterFailure(t *testing.T) {
 	local := deviceArtworkURLPrefix + path
 
 	webSafeCoverURL(local)
-	// 等第一次上传跑完(它是后台 goroutine)。
+
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		artworkMu.Lock()
@@ -378,7 +355,7 @@ func TestScheduleArtworkUploadBacksOffAfterFailure(t *testing.T) {
 	if after1 == 0 {
 		t.Fatal("第一次应该真的尝试过")
 	}
-	// 冷却期内再调若干次,不该产生新的尝试。
+
 	for i := 0; i < 5; i++ {
 		if got := webSafeCoverURL(local); got != "" {
 			t.Errorf("失败期间仍然只能返回空串, got %q", got)

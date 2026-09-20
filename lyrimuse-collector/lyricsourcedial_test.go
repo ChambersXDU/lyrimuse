@@ -13,9 +13,6 @@ import (
 	"time"
 )
 
-// 歌词源拨号:系统 DNS 优先、不答才退 DoH(lyricsourcedial.go)。真实网络里没有
-// 可复现的"系统 DNS 不答",三个注入点全换成假的,连接用 net.Pipe 造。
-
 type dialProbe struct {
 	mu                            sync.Mutex
 	sysCalls, dohCalls, dialCalls int
@@ -97,7 +94,6 @@ func (tp *traceProbe) ctx() context.Context {
 	})
 }
 
-// 系统 DNS 正常:走标准拨号(带域名),DoH 一次都不问 —— 改动前的路径逐位不变。
 func TestLyricSourceDial_SystemDNSHealthyNeverTouchesDoH(t *testing.T) {
 	p := &dialProbe{sysAddrs: []net.IPAddr{{IP: net.ParseIP("1.2.3.4")}}}
 	installDialProbe(t, p)
@@ -114,7 +110,6 @@ func TestLyricSourceDial_SystemDNSHealthyNeverTouchesDoH(t *testing.T) {
 	}
 }
 
-// 系统 DNS NXDOMAIN → 问 DoH → 并发拨 DoH 给的地址;轨迹上 DNSDone 报成功(此后连不上是 connect 不是 dns)。
 func TestLyricSourceDial_FallsBackToDoHWhenSystemDNSFails(t *testing.T) {
 	p := &dialProbe{
 		sysErr: &net.DNSError{Err: "no such host", Name: "c.y.qq.com", IsNotFound: true},
@@ -139,7 +134,7 @@ func TestLyricSourceDial_FallsBackToDoHWhenSystemDNSFails(t *testing.T) {
 	if tp.dones == 0 || tp.lastDoneErr != nil || tp.lastAddrs != 2 {
 		t.Fatalf("DoH 解析成功应在轨迹上报 DNSDone(无错、2 个地址),实际 dones=%d err=%v addrs=%d", tp.dones, tp.lastDoneErr, tp.lastAddrs)
 	}
-	// 负缓存:60 秒内第二次不再问系统 DNS,但要补 DNSStart。
+
 	tp2 := &traceProbe{}
 	conn, err = lyricSourceDialContext(tp2.ctx(), "tcp", "c.y.qq.com:443")
 	if err != nil {
@@ -154,7 +149,6 @@ func TestLyricSourceDial_FallsBackToDoHWhenSystemDNSFails(t *testing.T) {
 	}
 }
 
-// 系统 DNS 失败、DoH 也空:返回的错误链里保留 *net.DNSError,轨迹 DNSDone 带错 → 传输层分类认成 dns_failed。
 func TestLyricSourceDial_BothFailKeepsDNSError(t *testing.T) {
 	sysErr := &net.DNSError{Err: "i/o timeout", Name: "lrclib.net", IsTimeout: true}
 	p := &dialProbe{sysErr: sysErr}
@@ -179,7 +173,6 @@ func TestLyricSourceDial_BothFailKeepsDNSError(t *testing.T) {
 	}
 }
 
-// DoH 解析成功但地址拨不通:错误链**不**带 DNSError,轨迹 DNSDone 无错 → connect_failed,不是 dns_failed。
 func TestLyricSourceDial_DoHResolvedButUnreachableIsConnectFailure(t *testing.T) {
 	p := &dialProbe{
 		sysErr:  &net.DNSError{Err: "no such host", Name: "mobilecdn.kugou.com", IsNotFound: true},
@@ -201,7 +194,6 @@ func TestLyricSourceDial_DoHResolvedButUnreachableIsConnectFailure(t *testing.T)
 	}
 }
 
-// 目标本来就是 IP:不解析、不问 DoH,直接拨。
 func TestLyricSourceDial_IPLiteralBypassesResolution(t *testing.T) {
 	p := &dialProbe{}
 	installDialProbe(t, p)
@@ -215,9 +207,6 @@ func TestLyricSourceDial_IPLiteralBypassesResolution(t *testing.T) {
 	}
 }
 
-// 源码级守卫:八个歌词源文件里不许再出现裸的 `&http.Client{` —— 那样造出来的 client 走
-// DefaultTransport,没有 DoH 兜底,VPN 那种 DNS 不答的场景下这个源就又"静默消失"了。
-// musixmatch 刻意不在名单里(它走 dohHTTPClient 那套)。
 func TestLyricSourceFilesUseLyricHTTPClient(t *testing.T) {
 	files := []string{"netease.go", "qq.go", "kugou.go", "lrclib.go", "kuwo.go", "migu.go", "amllttml.go", "ytmusic.go"}
 	raw := regexp.MustCompile(`&http\.Client\{`)
@@ -235,7 +224,7 @@ func TestLyricSourceFilesUseLyricHTTPClient(t *testing.T) {
 	if seen == 0 {
 		t.Fatal("一个 lyricHTTPClient( 都没扫到 —— 守卫失效")
 	}
-	// lyricHTTPClient 必须真的挂了自定义拨号器,否则等于没改。
+
 	if lyricSourceTransport.DialContext == nil {
 		t.Fatal("lyricSourceTransport 没有自定义 DialContext")
 	}

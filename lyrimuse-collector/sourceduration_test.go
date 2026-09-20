@@ -6,26 +6,12 @@ import (
 	"testing"
 )
 
-// 本案例的真实数据
-// 配了正常版歌词」):
-//
-//	本地 Apple 标签:Michael Jackson | Stranger in Moscow (Tee's In-House Club Mix)
-//	                | BLOOD ON THE DANCE FLOOR/ HIStory In The Mix | 414.32s
-//	原冠军(错) qq   :'Stranger In Moscow' | 'HIStory - PAST, PRESENT AND FUTURE - BOOK I (Explicit)'
-//	                | 源自报 344s | LRC 末句 ~335s | 有逐字 | 1027 分
-//	正主(酷狗第 1 条,当时压根没被搜到):'Stranger in Moscow (Tee's In-House Club Mix)'
-//	                | 'BLOOD ON THE DANCE FLOOR/ HIStory In The Mix' | 源自报 413s
-//	                | LRC 末句 304.9s | 有逐字
 const (
 	moscowLocalTitle = "Stranger in Moscow (Tee's In-House Club Mix)"
 	moscowLocalAlbum = "BLOOD ON THE DANCE FLOOR/ HIStory In The Mix"
 	moscowLocalDur   = 414.32
 )
 
-// 造 LRC 用 match_test.go 里已有的 lrcEndingAt(lastSecs, lines) —— 它的正文刻意是英文,
-// 本地标题是英文时中文正文会被 isProbablyWrongLanguageLyrics 直接判废(那边注释记过)。
-
-// TestVersionTagsCoverClubMixFamily:词表补了「…mix」家族之后,俱乐部混音能被认出来。
 func TestVersionTagsCoverClubMixFamily(t *testing.T) {
 	tagged := []string{
 		"Stranger in Moscow (Tee's In-House Club Mix)",
@@ -42,22 +28,16 @@ func TestVersionTagsCoverClubMixFamily(t *testing.T) {
 		}
 	}
 
-	// ⚠️ 反例守卫:裸「club」绝不能进词表。同一张专辑上的「Earth Song」本地标题没有任何
-	// 混音标记,而正确候选是 "Earth Song (Hani's club experience)" —— 收了裸 club 的话,
-	// 本地空集 vs 候选有标记 = 版本不符,-600 会打在**唯一正确**的那条上。
 	if got := titleVersionTags("Earth Song (Hani's club experience)"); len(got) != 0 {
 		t.Errorf("titleVersionTags(\"Earth Song (Hani's club experience)\") = %v, 必须为空 —— "+
 			"裸「club」进词表会把这首歌唯一正确的候选打成版本不符", got)
 	}
-	// 专辑名里的 "In The Mix" 也不能被误当限定词(它没在括号里、也不在最后一个 \" - \" 之后)
+
 	if got := titleVersionTags("BLOOD ON THE DANCE FLOOR/ HIStory In The Mix"); len(got) != 0 {
 		t.Errorf("专辑名 \"…HIStory In The Mix\" 不该抽出限定词,得到 %v", got)
 	}
 }
 
-// TestSearchTitleVariantsPutsClubMixTitleFirst:抽得出限定词之后,检索词顺序必须翻成
-// 「原样标题优先」。这是这次误判的**第一层**成因——裸标题优先时,酷狗第一条查询拿回正常版、
-// 过了校验就 break,排在第 1 位的混音版原样条目从没被看到。
 func TestSearchTitleVariantsPutsClubMixTitleFirst(t *testing.T) {
 	got := searchTitleVariants(moscowLocalTitle)
 	if len(got) == 0 || got[0] != moscowLocalTitle {
@@ -68,20 +48,17 @@ func TestSearchTitleVariantsPutsClubMixTitleFirst(t *testing.T) {
 	}
 }
 
-// TestVersionTagsMismatchFlagsStandardVersion:这次误判的**第二层**——正常版候选现在会被
-// 判成版本不符。
 func TestVersionTagsMismatchFlagsStandardVersion(t *testing.T) {
 	if !versionTagsMismatch(moscowLocalTitle, moscowLocalAlbum,
 		"Stranger In Moscow", "HIStory - PAST, PRESENT AND FUTURE - BOOK I (Explicit)") {
 		t.Errorf("本地是俱乐部混音、候选是正常专辑版,应判版本不符")
 	}
-	// 对版的混音版候选不该被误判
+
 	if versionTagsMismatch(moscowLocalTitle, moscowLocalAlbum, moscowLocalTitle, moscowLocalAlbum) {
 		t.Errorf("同一版本不该判不符")
 	}
 }
 
-// TestScoreSourceDurationMismatch:新的「源自报曲长」打分项本身。
 func TestScoreSourceDurationMismatch(t *testing.T) {
 	hasTerm := func(terms []scoreTerm) (int, bool) {
 		for _, tm := range terms {
@@ -118,10 +95,6 @@ func TestScoreSourceDurationMismatch(t *testing.T) {
 	}
 }
 
-// TestMoscowClubMixOutranksStandardVersion 是这次误判的端到端回归:用真实数字重建两条
-// 候选,断言修复后**混音版胜出**。刻意把跨源共识给正常版那一边(现实里 qq/musixmatch/
-// lrclib 三家都是同一份正常版歌词、互相印证),混音版孤身一条、没有共识分 —— 这是更难的
-// 那一侧,过了才算数。
 func TestMoscowClubMixOutranksStandardVersion(t *testing.T) {
 	standard := lyricCandidate{
 		source: "qq", lyrics: lrcEndingAt(335, 70), hasWordTiming: true, wordTimingYRC: "x",
@@ -136,9 +109,9 @@ func TestMoscowClubMixOutranksStandardVersion(t *testing.T) {
 		album:                      moscowLocalAlbum,
 	}
 	ss, sterms := scoreLyricCandidateDetailed("Michael Jackson", moscowLocalTitle, moscowLocalAlbum,
-		moscowLocalDur, standard, false, 2) // 正常版有 2 个跨源印证
+		moscowLocalDur, standard, false, 2)
 	cs, cterms := scoreLyricCandidateDetailed("Michael Jackson", moscowLocalTitle, moscowLocalAlbum,
-		moscowLocalDur, clubMix, false, 0) // 混音版孤身一条
+		moscowLocalDur, clubMix, false, 0)
 	dump := func(n string, s int, ts []scoreTerm) string {
 		var b strings.Builder
 		fmt.Fprintf(&b, "%s=%d [", n, s)

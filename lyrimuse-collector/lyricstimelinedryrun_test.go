@@ -8,10 +8,6 @@ import (
 	"testing"
 )
 
-// 对**本机真实 enrich 缓存**跑一遍重挂,只报告不写盘 —— 落地前确认"会改哪些、改成什么样"。
-// 用 LYRICTIMELINE_DRYRUN=1 门控,不设置时跳过,不影响日常 go test。
-//
-//	LYRICTIMELINE_DRYRUN=1 go test -run TestLyricTimelineDryRun -v .
 func boolStr(b bool) string {
 	if b {
 		return "T"
@@ -73,7 +69,7 @@ func TestLyricTimelineDryRun(t *testing.T) {
 		_, romaMoved := remapLRCTimestamps(e.LyricsRoma, remap)
 		hits = append(hits, hit{k, e.LyricsSource, oldLast, newLast, trMoved, romaMoved, dur})
 		bySrc[e.LyricsSource]++
-		// 幂等自检:改过的内容再跑一遍必须是空操作,否则每次开机都会重写整份缓存。
+
 		if _, _, again := rehangLRCOnYRC(newLyrics, e.LyricsYRC, dur, true); again {
 			t.Errorf("非幂等: %s", k)
 		}

@@ -1,21 +1,4 @@
 #!/usr/bin/env swift
-// 离屏复现 lyrimuse/Sources/lyrimuse/PlaybackCoordinator.swift 里
-// `bakeWindowBackgroundLayers` 的取色算法,脱离整个 App 直接对一张封面图跑一遍。
-//
-// 用途:诊断"歌词窗口背景颜色跟封面/跟 Apple Music 对不上"这类问题——不用真的
-// 播放音乐、不用重新编译 App,几秒钟就能看到某张封面会烘出什么颜色,配合
-// sample-bg-saturation.py 对着 Apple Music 原生「播放中」窗口的截图做定量对比。
-//
-// 背景/来龙去脉见 docs/features/07-lyrics-window.md 的"专项:背景取色逼近
-// Apple Music"一节——2026-08-23 那轮发现 satTarget 的基础倍率方向反了(该是
-// 源图鲜艳端的 ~0.35 倍,不是 1.5 倍),这份脚本就是当时用来反复验证的工具,
-// 从会话的 /private/tmp scratchpad 整理进仓库,后续要接着调参/换算法照这份改。
-//
-// 用法:
-//   swift scripts/bakebg-repro.swift path/to/cover.jpg [--verbose] [--out baked.png]
-//
-// 跟真实 PlaybackCoordinator.swift 保持同步的责任在改代码的人身上——这是离屏
-// 复现,不是同一份源码;每次改了正式代码里的算法,记得同步改这份脚本。
 
 import AppKit
 import CoreImage
@@ -52,8 +35,6 @@ struct BakeResult {
     let tintBright: Double
 }
 
-// 与 PlaybackCoordinator.bakeWindowBackgroundLayers 逐行对应(2026-08-27 第十轮,
-// 幂函数 satTarget 系数 refit 版)。
 func bake(cgImage: CGImage, verbose: Bool) -> BakeResult? {
     let W: CGFloat = 720
     let frame = CGRect(x: 0, y: 0, width: W, height: W)
@@ -125,9 +106,6 @@ func bake(cgImage: CGImage, verbose: Bool) -> BakeResult? {
         }
     }
 
-    // 近黑格的饱和度读数不可信(2026-08-27 第十一轮,见 PlaybackCoordinator.swift
-    // 同一处的完整推导注释)——用归一化前的原始格亮度设一道下限,低于它的格子不参与
-    // 色相判定/p75 统计/欠饱和格子的拉升修正。
     let darkLumaFloor = 0.08
     var hueSin = 0.0, hueCos = 0.0
     for i in 0..<36 where cellSat[i] > 0.05 && cellLuma[i] > darkLumaFloor {
@@ -175,8 +153,6 @@ func bake(cgImage: CGImage, verbose: Bool) -> BakeResult? {
         }
     }
 
-    // satP75 同样排除近黑格,亮格不够 9 个时退回全 36 格(见 PlaybackCoordinator.swift
-    // 同一处注释)。
     let brightIdx = (0..<36).filter { cellLuma[$0] > darkLumaFloor }
     let satP75: Double
     if brightIdx.count >= 9 {
@@ -185,10 +161,7 @@ func bake(cgImage: CGImage, verbose: Bool) -> BakeResult? {
     } else {
         satP75 = cellSat.sorted()[26]
     }
-    // 2026-08-27 第十轮:系数从 0.94/1.45 refit 到 1.029/1.433(36 组真机对拍回归,
-    // R²≈0.754);中途试过加色相项去修"暖色调发灰"但被数据推翻,不采纳。见
-    // PlaybackCoordinator.swift 同一行上方的完整推导注释,以及
-    // docs/features/07-lyrics-window.md 第十轮记录。
+
     let satTarget = min(0.95, 1.029 * pow(satP75, 1.433)) * hueCoherenceScale
     for i in 0..<36 where cellSat[i] > 0.01 && cellSat[i] < satTarget && cellLuma[i] > darkLumaFloor {
         let target = satTarget

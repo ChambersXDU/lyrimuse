@@ -1,30 +1,16 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「第 N 次听」的合并明细弹框(2026-09-04,用户要求)。
-//
-// 起因:那一格数字是**写法族合并后**的总数(繁简 / 括号风格 / 合唱署名……,见 12 章 §7),用户
-// 看得到「第 8 次」,看不到这 8 次是由哪几个 Last.fm 条目凑出来的、每个几次、为什么算同一首。
-// 「合并得对不对」在此之前只能靠肉眼在 Last.fm 网页上翻。点开这个弹框:上半段列每种写法 +
-// 各自次数 + 并进来的原因标签;下半段是合并后逐次的时刻(点的那一条高亮);底部把行上的数跟
-// 明细合计对账,不相等就直接标出来 —— 那正是「一边合并了、另一边没合并」的信号。
-//
-// 数据面见 PlayCountBreakdownLoader / PlayCountBreakdown(Core,纯函数,selftest 钉住编号与合并)。
-
-/// 最近记录里那格「第 N 次听」。原来是一段 Text,现在是一颗可点的小按钮 + 弹框宿主。
-/// `nil` 次数时照旧显示 `···` 占位(没确认「那边没有」才显示,理由见 unavailable)。
 struct PlayCountBadge: View {
     let artist: String
     let title: String
-    /// 行上显示的 N;nil = 还没解析出来。
+
     let count: Int?
-    /// 已确认 Last.fm 那边没有这一项 → 连 `···` 都不显示,否则这个占位会在极少数确实查不到
-    /// 次数的行上永远挂着,变成一个说谎的"正在加载"(沿用原来那格的判断)。
+
     let unavailable: Bool
-    /// 这一行自己那条 scrobble 的时刻,明细里高亮它。实时行传 nil(这一次还没落库)。
+
     let anchorDate: Date?
-    /// 行上的合计口径(`trackPlayCounts` 里整族合并总数),明细合计跟它对账。实时行传 nil ——
-    /// 那边的数是 userplaycount + 1,含还没落库的这一次,跟明细对不上是正常的、不该报。
+
     let expectedTotal: Int?
 
     @State private var showing = false
@@ -68,14 +54,11 @@ struct PlayCountBreakdownPopover: View {
         self.expectedTotal = expectedTotal
     }
 
-    /// 写法的标识色,按清单里的位置取;本尊永远是第 0 个。9 种写法之后循环 —— 族封顶 8 + 本尊,
-    /// 到不了。
     private static let palette: [Color] = [.accentColor, .orange, .green, .purple, .pink, .teal, .brown, .indigo, .mint]
     private static func color(_ index: Int) -> Color { palette[index % palette.count] }
 
     var body: some View {
-        // 440:比默认 380 宽 —— 写法行右边要同时放「N 次」和原因标签,量过最长的中文原因
-        // (「Remaster/feat. 等标注」)加上 30 字歌名在 380 里会把歌名压成省略号。
+
         SettingsPopoverShell(
             title: L10n.t("合并明细"),
             help: L10n.t("「第 N 次听」把同一首歌的不同写法（繁简、括号风格、合唱署名等）合并计数。这里列出并进这一行的每种写法、各自的次数和原因，以及逐次的时刻"),
@@ -99,20 +82,17 @@ struct PlayCountBreakdownPopover: View {
         .task { await loader.load() }
     }
 
-    // MARK: 内容
-
     @ViewBuilder private func content(_ b: PlayCountBreakdown) -> some View {
         summary(b)
         if b.variants.count > 1 {
-            // 多种写法:每种一行(带色点、次数、原因),写法下面再按专辑名分组(见 albumRows)。
+
             CardDivider()
             ForEach(Array(b.variants.enumerated()), id: \.element.id) { i, v in
                 variantRow(i, v)
                 albumRows(b, variantIndex: i, indented: true)
             }
         } else if b.albumGroups(variantIndex: 0).count > 1 {
-            // 只有一种写法时不再单独列它 —— 跟摘要行是同一条信息,列两遍像重复(2026-09-04 用户
-            // 反馈)。但同一条目下专辑名分裂的话,专辑分组照样列出来,那是用户真正想核对的东西。
+
             CardDivider()
             albumRows(b, variantIndex: 0, indented: false)
         }
@@ -123,9 +103,6 @@ struct PlayCountBreakdownPopover: View {
         footer(b)
     }
 
-    /// 同一种写法下按专辑名分组的子行:只在有 ≥ 2 个不同专辑名时画(《晴天》挂「葉惠美」12 次 +
-    /// 「叶惠美」11 次这种)。第一组(条数最多)当基准,其余组挂"为什么算不同专辑名"的原因标签。
-    /// 写法没拉完时数的是已拉到的那部分,次数前加「至少」,不冒充真实分布。
     @ViewBuilder private func albumRows(_ b: PlayCountBreakdown, variantIndex: Int, indented: Bool) -> some View {
         let groups = b.albumGroups(variantIndex: variantIndex)
         if groups.count > 1 {
@@ -138,7 +115,7 @@ struct PlayCountBreakdownPopover: View {
                     Text(g.album ?? "—")
                         .font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(1)
                     Spacer(minLength: 8)
-                    // 两个字面量分开写(不用三元表达式塞进 L10n.t):本地化守卫只认字面量入参。
+
                     Text(String(format: exhausted ? L10n.t("%@ 次") : L10n.t("至少 %@ 次"), "\(g.count)"))
                         .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                     if j > 0, let r = PlayCountFoldExplainer.albumReason(base: base, variant: g.album) {
@@ -172,7 +149,6 @@ struct PlayCountBreakdownPopover: View {
         .padding(.vertical, 9)
     }
 
-    /// 只在 ≥ 2 种写法时才画(见 content),所以色点和「本条」都是无条件的。
     private func variantRow(_ index: Int, _ v: PlayCountBreakdown.Variant) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Circle().fill(Self.color(index)).frame(width: 7, height: 7)
@@ -191,8 +167,7 @@ struct PlayCountBreakdownPopover: View {
             if v.isSelf {
                 tag(L10n.t("本条"), emphasized: true)
             } else if v.reasons.isEmpty {
-                // 写法完全一致却是两条 —— 只可能是 Last.fm 那边按大小写/空格分开存的,我们这边
-                // 折到同一个键。归到最轻的那一档,不留空白。
+
                 tag(Self.reasonLabel(.caseOrSpacing), emphasized: false)
             } else {
                 ForEach(v.reasons, id: \.self) { tag(Self.reasonLabel($0), emphasized: false) }
@@ -228,14 +203,12 @@ struct PlayCountBreakdownPopover: View {
         }
     }
 
-    // MARK: 逐次
-
     private func playsList(_ b: PlayCountBreakdown) -> some View {
         let ordinals = b.ordinals
         let multi = b.variants.count > 1
         return VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(b.plays.enumerated()), id: \.element.id) { i, p in
-                // 日期分隔行:跟上一行不同一天才画。
+
                 if i == 0 || !Calendar.current.isDate(p.date, inSameDayAs: b.plays[i - 1].date) {
                     Text(Self.dayLabel(p.date))
                         .font(.system(size: 10.5)).foregroundStyle(.tertiary)
@@ -250,7 +223,7 @@ struct PlayCountBreakdownPopover: View {
     }
 
     private func playRow(_ p: PlayCountBreakdown.Play, ordinal: Int?, multi: Bool) -> some View {
-        // 点的那一条:同一秒即同一条(scrobble 时间戳精度就是秒)。
+
         let isAnchor = anchorDate.map { abs($0.timeIntervalSince(p.date)) < 1 } ?? false
         return HStack(spacing: 8) {
             if multi {
@@ -262,18 +235,10 @@ struct PlayCountBreakdownPopover: View {
             Text(Self.timeLabel(p.date))
                 .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 .help(LastfmStatsSection.absolute(p.date))
-            // 刻意不在这里重复写法的歌名:色点对回上面的清单就够了,多一列字反而挤(2026-09-04 用户反馈)。
+
             Spacer(minLength: 8)
             if let album = p.album {
-                // 字号/色跟上半段的专辑分组行、跟同行的次数与时刻取齐。原来是 10.5 + `.quaternary`:
-                // `.quaternary` 在这套界面里本是背景填充色,唯二的文字用法是「···」占位和「未取到」
-                // 这种刻意淡掉的态 —— 拿它显示真实内容,浅色模式下 10.5pt 几乎读不出来(2026-09-09
-                // 用户截图圈出这一列「根本看不清」)。
-                //
-                // 宽度 150 → 240:440 的框里这一行左侧固定只吃掉 14+64+8+35+8+8+14 ≈ 151,余量一直
-                // 在那儿闲着,而 150 把「The Best of Earth, Wind & Fire Vol. 1」这类精选集名截成
-                // 省略号 —— 同一张专辑的相邻两行长得一模一样,本来能一眼看出的"这两次同一张"反而
-                // 看不出来了。真正超长的仍会截,`help` 兜住全名。
+
                 Text(album).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     .frame(maxWidth: 240, alignment: .trailing)
                     .help(album)
@@ -286,8 +251,6 @@ struct PlayCountBreakdownPopover: View {
                 .fill(isAnchor ? Color.accentColor.opacity(0.12) : .clear)
                 .padding(.horizontal, 6))
     }
-
-    // MARK: 尾部
 
     @ViewBuilder private func footer(_ b: PlayCountBreakdown) -> some View {
         let showsMismatch = !b.hasFailure && expectedTotal.map { $0 != b.total } ?? false
@@ -329,10 +292,6 @@ struct PlayCountBreakdownPopover: View {
         }
     }
 
-    // MARK: 格式化
-
-    /// 「今天 / 昨天 / 8月16日 / 2024年3月2日」—— 跟 RecentListensPanel 同一套前两档;跨年的
-    /// 记录必须带年份,这个弹框列的是一首歌几年来的全部收听,光「3月2日」分不清是哪一年。
     private static func dayLabel(_ date: Date) -> String {
         let cal = Calendar.current
         if cal.isDateInToday(date) || cal.isDateInYesterday(date) { return RelativeDayFormat.dayLabel(date) }

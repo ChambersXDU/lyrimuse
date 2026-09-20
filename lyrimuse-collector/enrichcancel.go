@@ -8,39 +8,15 @@ import (
 	"time"
 )
 
-// 手动停止"正在搜索"占位行(,处理这段等待没有任何上限——歌词那一步有
-// lyricSearchDeadline 兜底,但 resolveTrackEnrichment 整体(还跟着 MusicBrainz/Apple
-// Music/QQ 兜底封面这几步顺序网络请求)没有总超时,某一步卡住时占位行会一直挂着,此前
-// 用户没有任何退出方式)。
-//
-// App 侧(LyricsManagerView.swift 的 cancelPlaceholderSearch)往 enrichCancelRequestPath
-// 写一个纯文本文件,内容就是要取消的缓存 key(EnrichCacheKeys.normalizedKey 拼出来的
-// "artist|title|album",跟 resolveEnrichAsync 用的是同一个 key 空间,逐字节一致)。这里
-// 用一个独立的 1s ticker 检查这个文件,读到 key 就去 enrichCancelFuncs 登记表(见
-// enrich.go 的 var 块、resolveEnrichAsync)里找对应的 context.CancelFunc,找到就调用——
-// 真正让 resolveTrackEnrichment 内部还在飞的网络请求中断,不是"隔着进程装个样子"。
-//
-// 检查间隔意味着不是瞬时生效(最多等 1s),但比完全没有退出方式好得多;跟
-// startCompanionLaunchWatcher 是同一个"独立节奏的后台 watcher,由 run 单开 goroutine,
-// ctx 取消时退出"模式。
-
 var enrichCancelRequestPath string
 
-// setEnrichCancelRequestPath 在 main 启动时调一次,顺带清掉上一次运行遗留的请求文件——
-// 那份文件跟这次进程/这一轮解析无关,留着会在这次进程刚起来、还没有任何 key 在飞的时候被
-// 误当成"要取消某个 key"处理。查不到对应的 CancelFunc 本身是安全的空操作(见
-// checkEnrichCancelRequest),这里清掉纯粹是不想让下一次检查白跑这一轮、多打一行无意义
-// 的日志。
 func setEnrichCancelRequestPath(path string) {
 	enrichCancelRequestPath = path
 	_ = os.Remove(path)
 }
 
-// enrichCancelCheckInterval is relaxed to 2 seconds to reduce idle polling overhead.
 const enrichCancelCheckInterval = 2 * time.Second
 
-// startEnrichCancelWatcher runs independently of the poller loop, spawned by run
-// in a dedicated goroutine and terminates cleanly when ctx is cancelled.
 func startEnrichCancelWatcher(ctx context.Context) {
 	if enrichCancelRequestPath == "" {
 		return
@@ -60,14 +36,12 @@ func startEnrichCancelWatcher(ctx context.Context) {
 	}
 }
 
-// checkEnrichCancelRequest reads the request file only if it exists (via os.Stat check first)
-// and consumes it as a one-shot cancellation signal.
 func checkEnrichCancelRequest() {
 	if enrichCancelRequestPath == "" {
 		return
 	}
 	if _, err := os.Stat(enrichCancelRequestPath); err != nil {
-		return // Most intervals the file does not exist; avoid unnecessary ReadFile allocations
+		return
 	}
 	data, err := os.ReadFile(enrichCancelRequestPath)
 	if err != nil {
@@ -82,9 +56,7 @@ func checkEnrichCancelRequest() {
 	cancel, ok := enrichCancelFuncs[key]
 	enrichMu.Unlock()
 	if !ok {
-		// 大概率是这一轮已经自然跑完了(结果已经写进缓存,或者刚巧在这一刻还没来得及
-		// 登记)——用户点"停止"和 resolveEnrichAsync 真正收尾之间本来就有一段竞态窗口,
-		// 查不到不代表哪里坏了,不用报错级别。
+
 		log.Printf("enrich cancel: no in-flight search found for key=%q (already finished, or never started)", key)
 		return
 	}

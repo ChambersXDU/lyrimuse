@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-// 写一份待采纳文件到临时目录,返回路径。fields 是 key → 字段名 → 已经是 JSON 的值。
 func writeRestoreFile(t *testing.T, dir string, blob map[string]map[string]any) string {
 	t.Helper()
 	data, err := json.Marshal(blob)
@@ -30,13 +29,12 @@ func resetEnrichForRestoreTest(t *testing.T, dir string) {
 	enrichDirty = false
 }
 
-// 全新机器那条路径:缓存里压根没有这个 key,备份里的字段应该原样建出来。
 func TestAdoptEnrichRestoreCreatesMissingEntries(t *testing.T) {
 	dir := t.TempDir()
 	resetEnrichForRestoreTest(t, dir)
 	path := writeRestoreFile(t, dir, map[string]map[string]any{
 		"周杰伦|枫|十一月的萧邦": {
-			// lyrics_decision 是嵌套对象(见 decision.go 的 lyricsDecision),整块搬运。
+
 			"lyrics_decision": map[string]any{
 				"path":              "rescore",
 				"scoring_version":   9,
@@ -57,7 +55,7 @@ func TestAdoptEnrichRestoreCreatesMissingEntries(t *testing.T) {
 	if !ok {
 		t.Fatal("备份里的条目应该被新建出来")
 	}
-	// 决策存档是历史快照、重新解析只会写一份今天的 —— 这是这次修复最核心的那一类。
+
 	if e.LyricsDecision == nil {
 		t.Fatal("LyricsDecision 应该被搬过来")
 	}
@@ -67,14 +65,14 @@ func TestAdoptEnrichRestoreCreatesMissingEntries(t *testing.T) {
 	if len(e.LyricsDecision.SourcesResponded) != 3 {
 		t.Errorf("嵌套数组也要完整搬过来, SourcesResponded = %v", e.LyricsDecision.SourcesResponded)
 	}
-	// 这一项是这次修复的核心动机之一:丢了会让全库排进"按新规则重选"的队列。
+
 	if e.LyricsScoringVersion != 9 {
 		t.Errorf("LyricsScoringVersion = %d, want 9", e.LyricsScoringVersion)
 	}
 	if e.CanonicalArtist != "周杰伦" {
 		t.Errorf("CanonicalArtist = %q, want 周杰伦", e.CanonicalArtist)
 	}
-	// plain_lyrics 此前不在任何备份里(没有对应的导出文件),必须跟着 meta 走。
+
 	if e.PlainLyrics != "没有时间戳的纯文本" {
 		t.Errorf("PlainLyrics = %q, want 没有时间戳的纯文本", e.PlainLyrics)
 	}
@@ -83,12 +81,11 @@ func TestAdoptEnrichRestoreCreatesMissingEntries(t *testing.T) {
 	}
 }
 
-// 合并粒度必须是字段级:备份里没有的字段(尤其六个歌词字段)不许把本机的值清掉。
 func TestAdoptEnrichRestoreKeepsFieldsAbsentFromBackup(t *testing.T) {
 	dir := t.TempDir()
 	resetEnrichForRestoreTest(t, dir)
 	const key = "方大同|特别的人|危险世界"
-	// 本机这条已经有歌词(importLyricsFromFiles 灌进来的那种),还有一个备份里没有的字段。
+
 	enrichCache[key] = enrichEntry{
 		Lyrics:       "[00:01.00]本机正文",
 		LyricsYRC:    "本机逐字",
@@ -106,14 +103,14 @@ func TestAdoptEnrichRestoreKeepsFieldsAbsentFromBackup(t *testing.T) {
 	adoptEnrichRestore(path)
 
 	e := enrichCache[key]
-	// 备份里有的赢。
+
 	if e.LyricsDecision == nil || e.LyricsDecision.Winner != "kugou" {
 		t.Errorf("LyricsDecision 没被搬过来: %+v", e.LyricsDecision)
 	}
 	if e.CanonicalArtist != "方大同" {
 		t.Errorf("CanonicalArtist = %q, want 方大同", e.CanonicalArtist)
 	}
-	// 备份里没有的一个都不许动 —— 六个歌词字段的权威源是 lyrics/ 文件族。
+
 	if e.Lyrics != "[00:01.00]本机正文" {
 		t.Errorf("Lyrics 被动过: %q", e.Lyrics)
 	}
@@ -126,13 +123,12 @@ func TestAdoptEnrichRestoreKeepsFieldsAbsentFromBackup(t *testing.T) {
 	if !e.ManualLyrics {
 		t.Error("ManualLyrics 被动过,应该保持 true")
 	}
-	// 本机自己解析出来、备份里没有的东西也不该被抹掉。
+
 	if e.SpotifyURL != "https://example.invalid/only-local" {
 		t.Errorf("SpotifyURL 被抹掉了: %q", e.SpotifyURL)
 	}
 }
 
-// 采纳成功要改名,而且不能被下一次启动重复采纳。
 func TestAdoptEnrichRestoreRenamesAfterSuccess(t *testing.T) {
 	dir := t.TempDir()
 	resetEnrichForRestoreTest(t, dir)
@@ -148,8 +144,7 @@ func TestAdoptEnrichRestoreRenamesAfterSuccess(t *testing.T) {
 	if !fileExistsForTest(path + enrichRestoreSuffix) {
 		t.Error("应该改名成 .applied 留一条人工找回的路,而不是直接删掉")
 	}
-	// 再跑一次:文件已经不在了,应该完全无操作、不 panic。
-	// (enrichEntry 含切片字段、不能直接 != 比较,挑一个标量字段看就够。)
+
 	before := enrichCache["a|b|c"].CanonicalArtist
 	adoptEnrichRestore(path)
 	if got := enrichCache["a|b|c"].CanonicalArtist; got != before {
@@ -157,7 +152,6 @@ func TestAdoptEnrichRestoreRenamesAfterSuccess(t *testing.T) {
 	}
 }
 
-// 解不出来的文件:原样留着(那是用户搬家时唯一一份决策数据),缓存一个字节都不许动。
 func TestAdoptEnrichRestoreKeepsUnparseableFile(t *testing.T) {
 	dir := t.TempDir()
 	resetEnrichForRestoreTest(t, dir)
@@ -180,7 +174,6 @@ func TestAdoptEnrichRestoreKeepsUnparseableFile(t *testing.T) {
 	}
 }
 
-// 空 key / 空字段表要跳过,不能在缓存里留下垃圾条目。
 func TestAdoptEnrichRestoreSkipsEmpty(t *testing.T) {
 	dir := t.TempDir()
 	resetEnrichForRestoreTest(t, dir)

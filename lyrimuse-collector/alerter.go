@@ -1,21 +1,15 @@
-// Command collector watches the macOS system now-playing state via
-// AppleScript and submits playing_now / listen events to ListenBrainz.
 package main
 
 import (
 	"bytes"
 	"context"
-	_ "image/jpeg" // 注册 JPEG 解码器
-	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
+	_ "image/jpeg"
+	_ "image/png"
 	"log"
 	"net/http"
 	"time"
 )
 
-// alerter 推送一条通知。platform 决定 push 怎么拼 body/URL——见 notify.go 的
-// buildNotifyPayload/dingtalkSignedURL/feishuSign。这里不再有故障告警(连续失败 N
-// 次才推、恢复时再推一次)的 ok/fail 逻辑,该能力已整体下线;weeklyDigestPush
-// 仍复用这个类型的 push。
 type alerter struct {
 	platform       string
 	url            string

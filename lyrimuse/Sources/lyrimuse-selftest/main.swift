@@ -1,33 +1,12 @@
 import LyrimuseCore
 import Foundation
 
-// lyrimuse-selftest 的入口:只放「注册表 + 参数 + 汇总」。断言本身按领域放在同目录的
-// XxxTests.swift 里,每个文件一个 runXxxTests(),由下面的 groups 表按顺序调用;断言函数与
-// 计数器在 Harness.swift。
-//
-// 加断言:
-//   - 已有领域 → 写进对应文件的 runXxxTests() 函数体里(顺序执行,失败只计数不中断),
-//     用 `// ---- 小节标题 ----` 分节,跟原来一样。
-//   - 新领域   → 新建 XxxTests.swift(平铺在本目录,别建子目录:好几条守卫靠 #filePath 往上数
-//     目录层数定位仓库文件),写 func runXxxTests() { … },再在 groups 里加一行。
-//     忘了加会被下面的「注册表守卫」当场 FAIL:它扫本目录所有 run…Tests() 定义,逐个核对
-//     本文件有没有引用。
-//   - 本文件不放断言:放在这里的断言不属于任何一组,--filter 选不到、汇总里也没它的名字。
-//
-// 用法:
-//   lyrimuse-selftest                    全部组,每条断言一行 ok/FAIL
-//   lyrimuse-selftest --filter lastfm    只跑组名含 lastfm 的组(可重复给多个;不区分大小写)
-//   lyrimuse-selftest --quiet            不打 ok 行,只留 FAIL + 每组一行汇总
-//   lyrimuse-selftest --list             列出所有组
-// 退出码:0 全部通过;1 有 FAIL;2 参数错误,或 --filter 一组都没匹配上(手滑拼错不能拿到假绿)。
-
 struct TestGroup {
-    /// --filter 匹配的对象,小写短横线。
+
     let name: String
-    /// --list 里的一句话说明。
+
     let summary: String
-    /// 标成 @MainActor:原先这些断言是 main.swift 的顶层语句、天然跑在主 actor 上,拆进函数后
-    /// 要显式保住这层隔离,否则引用 Core 里 @MainActor 的属性会报「nonisolated context」。
+
     let run: @MainActor () -> Void
 }
 
@@ -57,8 +36,6 @@ let groups: [TestGroup] = [
     TestGroup(name: "contracts", summary: "跨文件契约(多数靠 #filePath 扫源码文本):设置页分段 / 本地化 / 滑杆 / 封面口径 / 灵动岛对齐 / 引导页", run: runSourceContractTests),
     TestGroup(name: "ops-diagnostics", summary: "诊断脱敏 / 备份发现 / 导入策略 / 安全写文件 / launchd / 进程", run: runOpsDiagnosticsTests),
 ]
-
-// ---- 参数 ----
 
 let usage = """
 用法: lyrimuse-selftest [--filter <组名子串>]... [--quiet] [--list]
@@ -114,11 +91,6 @@ if selected.isEmpty {
     exit(2)
 }
 
-// ---- 注册表守卫 ----
-//
-// 目录里每一个 `func run…Tests()` 都必须在上面的 groups 里被引用。漏注册的组编译照过、
-// 一条断言都不跑、输出里也看不出少了什么 —— 这是拆多文件之后唯一新增的坑,所以用文本扫描
-// 钉死(跟本地化守卫同一路数:#filePath 定位本目录,读不到就 FAIL 而不是静默跳过)。
 do {
     let selfPath = #filePath
     let dir = URL(fileURLWithPath: selfPath).deletingLastPathComponent()
@@ -137,20 +109,17 @@ do {
     }
     let mainText = (try? String(contentsOfFile: selfPath, encoding: .utf8)) ?? ""
     let referenced = Set(matches(referencePattern, in: mainText, group: 0))
-    expectEqual(defined.isEmpty, false, "注册表守卫: 本目录能扫到 run…Tests() 定义(扫不到 = 目录挪了或正则失效)")
-    expectEqual(defined.filter { !referenced.contains($0) }, [], "注册表守卫: 每个 run…Tests() 都在 main.swift 的 groups 里注册了")
-    expectEqual(groups.count, defined.count, "注册表守卫: 注册的组数等于定义的组数(重复注册会在这里露出来)")
+    expectEqual(defined.isEmpty, false)
+    expectEqual(defined.filter { !referenced.contains($0) }, [])
+    expectEqual(groups.count, defined.count)
 }
-
-// ---- 逐组运行 + 汇总 ----
 
 let runStarted = Date()
 for group in selected {
     let assertionsBefore = assertions
     let failuresBefore = failures
     let started = Date()
-    // 顶层代码在这个包的语言模式下不是主 actor 上下文,直接调 @MainActor 函数编不过;selftest
-    // 只有主线程,所以在这里断言一次「就在主 actor 上」再调,跟各组里原有的 MainActor.assumeIsolated 同一路数。
+
     MainActor.assumeIsolated { group.run() }
     let elapsedMs = Int(Date().timeIntervalSince(started) * 1000)
     let failed = failures - failuresBefore

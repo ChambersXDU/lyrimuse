@@ -8,7 +8,6 @@ import (
 
 func f64(v float64) *float64 { return &v }
 
-// 契约:Swift 侧 PositionBiasFile 写出来的 JSON 长这样(字段名两边逐字节一致,selftest 那边有对称断言)。
 const positionBiasFixture = `{"anchor_elapsed":0,"artist":"Olivia Rodrigo","bias_secs":-1.957,"bundle_id":"com.spotify.client","title":"vampire","written_at_ms":1789002067341}`
 
 func TestPositionBiasRecordDecodesSwiftShape(t *testing.T) {
@@ -25,7 +24,7 @@ func TestPositionBiasRecordDecodesSwiftShape(t *testing.T) {
 }
 
 func TestPositionBiasApplies(t *testing.T) {
-	// 真机案例(vampire,15:01):锚点 0@07:01:02Z,App 15:01:07.341(本地)量到 −1.957。
+
 	anchorTS := time.Date(2026, 9, 9, 7, 1, 2, 0, time.UTC)
 	written := anchorTS.Add(5341 * time.Millisecond)
 	now := written.Add(30 * time.Second)
@@ -57,8 +56,7 @@ func TestPositionBiasApplies(t *testing.T) {
 }
 
 func TestPositionBiasSignMatchesSwift(t *testing.T) {
-	// Swift 侧:reported = raw − bias;负偏置(锚点落后真声)扣掉等于往前补。这里只固化"扣"的方向,
-	// 免得哪天有人在 system.go 写成 elapsed += bias。
+
 	raw := 4.462
 	bias := -1.957
 	if got := raw - bias; got < 6.4 || got > 6.42 {

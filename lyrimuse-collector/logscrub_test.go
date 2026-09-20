@@ -15,16 +15,13 @@ func resetSecretsForTest(t *testing.T) {
 	secretReplace.Store(nil)
 }
 
-// 这一行是真实泄露形态,
-// key 换成了假的。它同时覆盖两件事:api_key 必须消失,而失败原因和其余 query
-// 参数必须留下 —— 脱敏不能把日志脱成看不出问题在哪。
 const lastfmErrLine = `2026/08/17 01:50:05 lastfmRecent: request failed: Get ` +
 	`"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=someone` +
 	`&api_key=0123456789abcdef0123456789abcdef&format=json&limit=50": context canceled`
 
 func TestScrubSecretsRedactsAPIKeyByParamName(t *testing.T) {
 	resetSecretsForTest(t)
-	// 一个字都没登记过,也要靠第二道防线(按参数名)把它打掉
+
 	got := scrubSecrets(lastfmErrLine)
 	if strings.Contains(got, "0123456789abcdef0123456789abcdef") {
 		t.Fatalf("api_key 仍是明文: %s", got)
@@ -45,7 +42,7 @@ func TestScrubSecretsRedactsRegisteredValueAnywhere(t *testing.T) {
 	resetSecretsForTest(t)
 	const secret = "wsrCZ35QuZxaC9zJj3MJVe"
 	registerSecrets(secret)
-	// 按值这一道不挑位置:path、正文、任意一句话里都算
+
 	cases := []string{
 		`bark: notify failed: Post "https://api.day.app/` + secret + `/hi": timeout`,
 		`loaded token ` + secret + ` from config`,
@@ -60,7 +57,7 @@ func TestScrubSecretsRedactsRegisteredValueAnywhere(t *testing.T) {
 			t.Errorf("应该留下打码标记: %s", got)
 		}
 	}
-	// host 要留着 —— 日志里还得看得出这条推送是往哪个平台发的
+
 	if got := scrubSecrets(`Post "https://api.day.app/` + secret + `"`); !strings.Contains(got, "api.day.app") {
 		t.Errorf("host 不该被打掉: %s", got)
 	}
@@ -77,7 +74,7 @@ func TestRegisterSecretsIgnoresShortValues(t *testing.T) {
 
 func TestRegisterSecretsLongestFirst(t *testing.T) {
 	resetSecretsForTest(t)
-	// 短值是长值的前缀:先替短的会在长值中间留下半截明文
+
 	registerSecrets("abcdefgh", "abcdefghijklmnop")
 	got := scrubSecrets("key=abcdefghijklmnop")
 	if got != "key="+redactedMark {
@@ -99,7 +96,7 @@ func TestRememberConfigSecretsCoversBarkPathToken(t *testing.T) {
 	if !strings.Contains(got, "api.day.app") {
 		t.Errorf("host 不该被打掉: %s", got)
 	}
-	// 普通 path 段(短于 minPathSecretLen)不该被当凭据
+
 	resetSecretsForTest(t)
 	rememberConfigSecrets(&config{NotificationWebhookURL: "https://hooks.example.com/services/send"})
 	if got := scrubSecrets("services send done"); got != "services send done" {
@@ -107,7 +104,6 @@ func TestRememberConfigSecretsCoversBarkPathToken(t *testing.T) {
 	}
 }
 
-// log 包把"写出字节数 < 传入长度"当短写错误。脱敏后长度必变,Writer 必须报原始长度。
 func TestSecretScrubberReportsOriginalLength(t *testing.T) {
 	resetSecretsForTest(t)
 	registerSecrets("0123456789abcdef0123456789abcdef")
@@ -126,7 +122,6 @@ func TestSecretScrubberReportsOriginalLength(t *testing.T) {
 	}
 }
 
-// 端到端:走真正的 log.Printf,确认接管出口这条路是通的。
 func TestInstalledScrubberFiltersLogPrintf(t *testing.T) {
 	resetSecretsForTest(t)
 	registerSecrets("0123456789abcdef0123456789abcdef")

@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-// 一页 recenttracks 的样本(字段形状照 Last.fm 真实响应:数字全是字符串、now-playing 行
-// 没有 date 只有 @attr.nowplaying、image 是按 size 分档的数组)。歌名全是合成的。
 const sampleRecentJSON = `{"recenttracks":{"track":[
  {"artist":{"#text":"A"},"name":"Now","album":{"#text":"NP"},
   "image":[{"size":"small","#text":"s.png"},{"size":"large","#text":"l-np.png"}],
@@ -38,7 +36,7 @@ func TestParseLastfmRecent(t *testing.T) {
 	if len(page.Done) != 2 {
 		t.Fatalf("done rows: got %d want 2 (空歌名那行要丢掉)", len(page.Done))
 	}
-	// large 缺席退 extralarge;只有 small 时退最后一档。
+
 	if page.Done[0].Image != "xl1.png" || page.Done[1].Image != "only-small.png" {
 		t.Fatalf("image pick: %q %q", page.Done[0].Image, page.Done[1].Image)
 	}
@@ -131,7 +129,7 @@ func TestWriteLastfmRecentFeedShape(t *testing.T) {
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("feed 不是合法 JSON: %v", err)
 	}
-	// 字段名是 App 侧(LastfmRecentFeed.swift)逐字对应的契约。
+
 	for _, k := range []string{"username", "fetchedAt", "total", "nowPlaying", "tracks"} {
 		if _, ok := got[k]; !ok {
 			t.Fatalf("缺字段 %q: %s", k, raw)
@@ -153,14 +151,13 @@ func TestWriteLastfmRecentFeedShape(t *testing.T) {
 		t.Fatalf("now-playing 行不该带 uts: %v", np)
 	}
 
-	// 内容没变、心跳未到:不重写(mtime 不动)。
 	info1, _ := os.Stat(lastfmFeedPath)
 	writeLastfmRecentFeed("KhalilChan3", page, at.Add(10*time.Second))
 	info2, _ := os.Stat(lastfmFeedPath)
 	if !info1.ModTime().Equal(info2.ModTime()) {
 		t.Fatal("内容没变、10s 内不该重写")
 	}
-	// 没有 now-playing 了 → 内容变了 → 重写,且 nowPlaying 键消失。
+
 	page.NowPlaying = nil
 	writeLastfmRecentFeed("KhalilChan3", page, at.Add(20*time.Second))
 	raw, _ = os.ReadFile(lastfmFeedPath)
@@ -184,7 +181,7 @@ func TestLastfmFeedNudge(t *testing.T) {
 	if lastfmFeedNudgeDue(time.Now()) {
 		t.Fatal("5s 之内不该到期")
 	}
-	// 更晚的第二次请求不能把已有的更早待办推后。
+
 	first := lastfmFeedNudgeAt.Load()
 	requestLastfmFeedRefresh(30 * time.Second)
 	if lastfmFeedNudgeAt.Load() != first {
@@ -198,8 +195,6 @@ func TestLastfmFeedNudge(t *testing.T) {
 	}
 }
 
-// 跨进程信号文件:回填子命令 touch、常驻进程消费。钉三件事:没文件不触发;
-// touch 之后恰好触发一次并把文件删掉;路径为空(单测/未配置)整个通道关闭、touch 也不写。
 func TestLastfmFeedNudgeFile(t *testing.T) {
 	saved := lastfmFeedNudgePath
 	defer func() { lastfmFeedNudgePath = saved }()
@@ -229,17 +224,6 @@ func TestLastfmFeedNudgeFile(t *testing.T) {
 	}
 }
 
-// 回填的跨进程信号必须走**延迟**拉取,不能当场拉。
-//
-// 这是「补提交之后下面的列表没刷新」第三次被报出来的根因。bridge 原来把
-// lastfmFeedNudgeFileDue 直接摆进"要不要现在拉"的或条件里,信号一到就立刻拉一次 ——
-// 而那一刻 Last.fm 还没把刚补进去的 scrobble 并进 recenttracks,拉回来的是旧内容,却照样
-// 把 feed 的 fetchedAt 刷成此刻。App 侧那道「feed 不新鲜才补一发强刷」的兜底判据是
-// fetchedAt 落在 180 s 窗口内,于是永远判"新鲜"、永远不触发;而 feed 只要 collector 活着
-// 就每 feedHeartbeat 重写一次,fetchedAt 跟内容变没变根本无关。两头一叠,用户只能干等
-// 下一个 15 s/60 s 周期 —— 表现就是"点了补提交,下面的列表半天不动"。
-//
-// 钉的是:信号在、周期没到 → 这一拍**不拉**,但排下一个 backfillFeedNudgeDelay 之后到期的请求。
 func TestBackfillFeedNudgeIsDelayedNotImmediate(t *testing.T) {
 	savedPath := lastfmFeedNudgePath
 	lastfmFeedNudgeAt.Store(0)
@@ -257,7 +241,7 @@ func TestBackfillFeedNudgeIsDelayedNotImmediate(t *testing.T) {
 	p := &poller{
 		ctx: context.Background(),
 		cfg: &config{LastfmUser: "someone", LastfmAPIKey: "key"},
-		// 周期刚走过,这一拍唯一可能的触发源就是信号文件。
+
 		lastfmCheckedAt: now,
 	}
 	touchLastfmFeedNudgeFile()

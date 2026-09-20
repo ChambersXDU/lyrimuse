@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-// 等级解析:大小写不敏感、空串 = info、warning 是 warn 的别名、认不出报 false。
 func TestParseLogLevel(t *testing.T) {
 	cases := map[string]slog.Level{
 		"debug": slog.LevelDebug, "INFO": slog.LevelInfo, "": slog.LevelInfo,
@@ -27,7 +26,6 @@ func TestParseLogLevel(t *testing.T) {
 	}
 }
 
-// handler 输出:时间是 UTC RFC3339 毫秒带 Z,等级与 key=value 都在;低于等级的记录不写。
 func TestLogHandler_TimeFormatAndLevel(t *testing.T) {
 	var buf bytes.Buffer
 	prevLevel := logLevel.Level()
@@ -49,7 +47,6 @@ func TestLogHandler_TimeFormatAndLevel(t *testing.T) {
 	}
 }
 
-// 模板口径:去掉 time= 属性、数字抹成 #。
 func TestLineTemplate(t *testing.T) {
 	a := lineTemplate("time=2026-09-05T00:00:01.000Z level=WARN msg=\"api call: POST x FAILED\" elapsed_ms=10001\n")
 	b := lineTemplate("time=2026-09-05T00:00:07.500Z level=WARN msg=\"api call: POST x FAILED\" elapsed_ms=9800\n")
@@ -62,7 +59,6 @@ func TestLineTemplate(t *testing.T) {
 	}
 }
 
-// 折叠:连续同模板只写第一条,换一条时补 "repeated N times";超过窗口后同一条重新完整打印。
 func TestRepeatSquelcher_FoldsConsecutiveRepeats(t *testing.T) {
 	var buf bytes.Buffer
 	sq := newRepeatSquelcher(&buf)
@@ -90,8 +86,7 @@ func TestRepeatSquelcher_FoldsConsecutiveRepeats(t *testing.T) {
 	if idx := strings.Index(out, "repeated 2 times"); idx > strings.Index(out, "now playing") {
 		t.Fatalf("repeat count must precede the new line, got: %q", out)
 	}
-	// 只差数字的同模板行在窗口内被折;窗口外再出现:完整打印,并结算之前攒的计数。
-	// (字母不同就是不同模板 —— "track 1" 和 "song 1" 不折,这是有意的:抹的只有数字。)
+
 	buf.Reset()
 	now = now.Add(2 * time.Second)
 	write("time=2026-09-05T00:00:13.000Z level=INFO msg=\"now playing: track 2\"\n")
@@ -104,7 +99,7 @@ func TestRepeatSquelcher_FoldsConsecutiveRepeats(t *testing.T) {
 	if !strings.Contains(out, "repeated 1 times") || !strings.Contains(out, "now playing: track 3") {
 		t.Fatalf("after the window the line prints in full and the pending count is settled, got: %q", out)
 	}
-	// Flush:窗口内不结算(可能马上又来),窗口外结算并清模板。
+
 	buf.Reset()
 	now = now.Add(time.Second)
 	write("time=2026-09-05T00:01:15.000Z level=INFO msg=\"now playing: track 4\"\n")
@@ -119,7 +114,6 @@ func TestRepeatSquelcher_FoldsConsecutiveRepeats(t *testing.T) {
 	}
 }
 
-// 运行期轮转:累计写入要越过上限时先归档成 .old、新开一份;轮转事件那一行写在新文件开头。
 func TestRotatingLogFile_RotatesAtRuntime(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "lyrimuse.log")
@@ -156,7 +150,6 @@ func TestRotatingLogFile_RotatesAtRuntime(t *testing.T) {
 	}
 }
 
-// 子命令判定:无参数 / 只有 flag = 常驻;有子命令名 = 子命令。
 func TestIsDaemonInvocation(t *testing.T) {
 	if !isDaemonInvocation([]string{"collector"}) || !isDaemonInvocation([]string{"collector", "-dry-run"}) {
 		t.Fatalf("no subcommand must count as daemon")
@@ -180,4 +173,3 @@ func TestLogSinkMaintenanceLoop_StopsCleanly(t *testing.T) {
 		t.Fatal("logSinkMaintenanceLoop did not stop after stopCh was closed")
 	}
 }
-

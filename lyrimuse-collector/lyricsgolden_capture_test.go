@@ -1,33 +1,3 @@
-// lyricsgolden_capture_test.go — 金标样本的**采集器**。默认跳过;只在显式要求时联网跑一次真实检索,
-// 把各源原始应答置乱后写成 testdata/lyricsgolden/<id>.json。
-//
-//	LYRICS_GOLDEN_CAPTURE=1 \
-//	LYRICS_GOLDEN_KEY='周杰伦|东风破|叶惠美' \      # enrich 缓存里的 key(歌手|歌名|专辑)
-//	LYRICS_GOLDEN_ID=zh-studio-dongfengpo \         # 文件名 / 样本 id
-//	LYRICS_GOLDEN_CATEGORY=zh-studio-multisource \  # goldenRequiredCategories 里的键
-//	LYRICS_GOLDEN_NOTE='...' \                      # 为什么挑这首
-//	[LYRICS_GOLDEN_PLAYER=com.apple.Music] \        # 这一刻"在放"的播放器(同源 +250 的判据),缺省不加分
-//	[LYRICS_GOLDEN_CACHE_KNOWN_WRONG=1] \           # 见下:缓存里那份就是被修的 bug 本身时,解除"缓存不一致即拒绝"
-//	GOTOOLCHAIN=go1.24.4 go test -run TestLyricsGoldenCapture -v .
-//
-// 写入前的四道硬闸,任何一道不过就不写文件:
-//  1. **可回放**:只回放第一轮(按本地标签的那一轮)的原始应答,rankLyricSourceResults 的冠军必须与
-//     联网那次完整流程(含歌手别名重试等后续轮次)的冠军**同源且正文逐字节相同**——否则这首歌的
-//     正确性靠的是后续轮次,单轮样本复现不了,不能拿来当金标;
-//  2. **独立判据成立**(goldenJudgeEvidence,不依赖缓存):歌名过闸、版本一致、自报曲长 ≤3%、末句不超
-//     曲长且覆盖过半、有别的源印证正文(单候选则曲长 ≤1% 且覆盖 ≥70%)、现场专辑要对得上同一场;
-//     缓存里那份只作旁证——它跟冠军**不是同一份**(且不是手选)就算有争议,拒绝。没有 FORCE:
-//     有争议的不采(用户 定)。唯一的例外是 LYRICS_GOLDEN_CACHE_KNOWN_WRONG=1:正在给一个
-//     **用户已报错、代码已修**的案例采回归样本时,缓存里那份恰恰就是那个 bug 的产物,它跟新冠军不一致
-//     不是争议、是修复本身——这时只解除"缓存不一致"这一条,其余每一项独立判据照样全部要过,并把
-//     "differs=…, cache known wrong" 原样写进 label_evidence 让人看得见。采集器会把冠军正文的头尾各 4 行
-//     明文打到终端供人过目;
-//  3. **置乱保形**:置乱前后 rankLyricSourceResults 的结果逐项相同(冠军、判决、分数、分项、附属);
-//  4. **样本自洽**:写出的 JSON 读回来、按 TestLyricsGolden 同一条路跑一遍,diff 为零。
-//
-// ~/.config/lyrimuse 下的数据文件(enrich 缓存、歌手别名/主名/Apple 目录/QQ 歌手名缓存)只读——
-// 加载进内存后把回写路径清空。跟跑一次 search-lyrics 一样,Musixmatch 匿名 token 与代理提示这类
-// 运行缓存可能被刷新,那不是用户数据。
 package main
 
 import (
@@ -80,7 +50,6 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		t.Fatalf("key=%q 必须是 歌手|歌名|专辑 三段", key)
 	}
 
-	// ---- 缓存条目(只读) ----
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatal(err)
@@ -102,19 +71,16 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		t.Logf("注意:这条是用户手选的(manual_lyrics),缓存正文是人挑的、不是自动决策的产物")
 	}
 
-	// ---- 跟 search-lyrics CLI 一样把包级状态装好 ----
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
 	loadArtistAliasCache(filepath.Join(cfgDir, clientName+"-artist-alias-cache.json"))
 	loadMBPrimaryNameCache(filepath.Join(cfgDir, clientName+"-artist-primary-cache.json"))
 	loadAppleCatalogCache(filepath.Join(cfgDir, clientName+"-apple-catalog-cache.json"))
 	loadAppleStorefrontArtistCache(filepath.Join(cfgDir, clientName+"-apple-storefront-artist-cache.json"))
 	loadQQArtistNameCache(filepath.Join(cfgDir, clientName+"-qq-artist-name-cache.json"))
-	// 上面几个 load 会把文件路径记在包级变量里,后续查到新东西会回写——采集器只读用户目录,
-	// 装完内存就把路径清掉,新查到的别名只活在这个进程里。
+
 	artistAliasPath, mbPrimaryNamePath, qqArtistNamePath, appleStorefrontArtistPath, appleCatalogPath = "", "", "", "", ""
 	setNativeLyricSourcesForPlayer(player)
 
-	// ---- 查询词与时长:优先用决策存档里"当时实际用的",没有就按生产同一规则算 ----
 	qArtist, qTitle, qAlbum := toSimplified(parts[0]), toSimplified(parts[1]), toSimplified(parts[2])
 	dur := entry.ResolvedDurationSecs
 	if dur <= 0 {
@@ -122,8 +88,7 @@ func TestLyricsGoldenCapture(t *testing.T) {
 	}
 	if d := entry.Decision; d != nil {
 		if d.QueryTitle != "" {
-			// 存档里的查询词再过一遍 toSimplified:resolveTrackEnrichment 传给检索/打分的就是简体
-			// (见那里的注释),而个别存量存档是别的路径写的、还带着繁体原文。
+
 			qArtist, qTitle, qAlbum = toSimplified(d.QueryArtist), toSimplified(d.QueryTitle), toSimplified(d.QueryAlbum)
 		}
 		if d.DurationSecs > 0 {
@@ -131,8 +96,7 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		}
 	}
 	if dur <= 0 {
-		// 跟 search-lyrics 一样向 Apple 目录要一个真实时长兜底(那边的注释解释了 duration=0 会让
-		// 时长判据整套失效)。纯音乐条目没有歌词候选可打分,允许没有时长。
+
 		if m := appleMusicMatchCached(context.Background(), qArtist, qTitle, qAlbum); m.durationSecs > 0 {
 			t.Logf("缓存没有时长,用 Apple 目录的 %.3fs", m.durationSecs)
 			dur = m.durationSecs
@@ -141,7 +105,6 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		}
 	}
 
-	// ---- 联网跑一次完整流程,顺手用 tap 把第一轮原始应答收下来 ----
 	var tapped []lyricSourceResult
 	lyricSourceResultTap = func(r lyricSourceResult) { tapped = append(tapped, r) }
 	t.Cleanup(func() { lyricSourceResultTap = nil })
@@ -164,7 +127,6 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		t.Logf("  第 %d 轮(别名/变体重试): %v", i+1, names)
 	}
 
-	// 闸 1:可回放。
 	replay := rankLyricSourceResults(qArtist, qTitle, qAlbum, dur, raw)
 	replayPick := pickLyricCandidate(replay)
 	for _, c := range replay {
@@ -178,7 +140,6 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		t.Fatalf("闸1 不可回放:联网冠军 %s 与单轮回放冠军 %s 不一致(多轮合并的结果,单轮样本复现不了)", livePick.Source, replayPick.Source)
 	}
 
-	// 闸 2:独立判据 + 缓存旁证。
 	ev := goldenComputeEvidence(goldenQuery{Artist: qArtist, Title: qTitle, Album: qAlbum, DurationSecs: dur}, replay)
 	switch {
 	case entry.ManualLyrics:
@@ -193,8 +154,7 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		ev.CacheAgreement = "exact"
 	default:
 		sim := gramJaccard(lyricGram3Set(lyricConsensusBody(livePick.Lyrics)), lyricGram3Set(lyricConsensusBody(entry.Lyrics)))
-		// 同一份歌词跨源转写(标点/空行/繁简)相似度通常 >0.7,串了版本/曲目的 <0.3;打分层自己认
-		// "同一份内容"的门槛是 lyricConsensusSimThreshold(0.55),这里沿用同一个数。
+
 		if sim >= lyricConsensusSimThreshold {
 			ev.CacheAgreement = fmt.Sprintf("similar=%.2f", sim)
 		} else {
@@ -220,7 +180,6 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		t.Logf("注意:联网冠军源 %s ≠ 缓存里的源 %s(正文关系 %s)", livePick.Source, entry.LyricsSource, ev.CacheAgreement)
 	}
 
-	// 闸 3:置乱保形。
 	scrambled := scrambleLyricRound(raw, id)
 	before := goldenExpectFromRanked(replay)
 	after := goldenExpectFromRanked(rankLyricSourceResults(qArtist, qTitle, qAlbum, dur, scrambled))
@@ -236,7 +195,6 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		}
 	}
 
-	// ---- 组装样本 ----
 	fx := &goldenFixture{
 		ID: id, Category: category, Note: note, LabelEvidence: ev,
 		Track:                   goldenTrack{Artist: parts[0], Title: parts[1], Album: parts[2]},
@@ -261,7 +219,6 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		t.Fatalf("这首歌的这一轮结果没有体现类别 %s(%v),不写入——换一首,或者这一类的判据这次没触发", category, err)
 	}
 
-	// 闸 4:样本自洽——按 TestLyricsGolden 同一条路读回来跑一遍。
 	if err := os.MkdirAll(lyricsGoldenDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +246,6 @@ func TestLyricsGoldenCapture(t *testing.T) {
 	}
 }
 
-// splitGoldenRounds 把 tap 收到的顺序流按"源名重复出现"切成轮次。
 func splitGoldenRounds(tapped []lyricSourceResult) []map[string]lyricSourceResult {
 	var rounds []map[string]lyricSourceResult
 	cur := map[string]lyricSourceResult{}

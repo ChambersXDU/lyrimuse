@@ -1,28 +1,3 @@
-// lyricsgolden_scramble_test.go — 金标样本的**保形置乱**(见 lyricsgolden_test.go 头注第三段)。
-//
-// 目标:样本里不出现任何一句能读的歌词,但打分链路读到的每一个特征跟原文逐位相同。做法是
-// **同一首歌内一致的字符双射**:
-//   - 汉字 → CJK 扩展 A 区(U+3400–U+4DBF)的汉字。\p{Han} / unicode.Han / unicode.IsLetter 对它们
-//     全部为真,所以 cjkRatio / genericHanCreditLineRe / normLoose 的判定不变;真实歌词几乎不用
-//     这一区的字,于是"正文里出现了基本区汉字"就能当作"混进了明文"的探针(goldenFindUnscrambledLine);
-//     池子刻意剔掉 OpenCC 繁→简词典和异体字表里出现过的字,保证 toSimplified 对置乱后的文本是恒等;
-//   - 拉丁字母 → a–z 上的一个置换,大写跟着小写走(ToLower 与置乱可交换);
-//   - 平假名 / 片假名 → 各自块内置换(kanaRatio 的范围判定不变);谚文 → 音节块内置换;
-//   - 数字、标点、空白、其它文字:原样。
-//
-// 置乱之前先做一次 toSimplified + foldDiacritics(canon):normLoose 内部会做同样的归一,先归一
-// 再置乱,置乱后的文本对 normLoose 来说就是"已经归一好了的",3-gram 集合与原文的 3-gram 集合一一
-// 对应,Jaccard 逐位相同。
-//
-// 哪些不置乱(打分把它们当结构而不是正文读,改了就会改变判定,而且它们本来也不是歌词):
-//   - LRC 时间戳、YRC 的 [行始,行长] 与 (词始,词长,0);
-//   - 元数据标签行([ti:]/[ar:]/[offset:]…);[kana:…] 行只置乱方括号里的内容;
-//   - 行首的「标签 + 冒号」(演唱者标签「男：」「v1：」、署名「作词：」——lyricSplitLabel /
-//     creditLineRe / genericHanCreditLineRe 都只看这一段);
-//   - 含「纯音乐」占位文案的整行。
-//
-// 采集器(lyricsgolden_capture_test.go)在写样本之前会用置乱前后的 rankLyricSourceResults 结果
-// 逐项比对,任何一项不同都拒绝入库——这份保形是被验证的,不是被相信的。
 package main
 
 import (
@@ -35,10 +10,8 @@ import (
 	"unicode"
 )
 
-// ---------- 字符池 ----------
-
 const (
-	goldenHanPoolLo      = 0x3400 // CJK 扩展 A 区起点
+	goldenHanPoolLo      = 0x3400
 	goldenHanPoolHi      = 0x4DBF
 	goldenHiraganaLo     = 0x3041
 	goldenHiraganaHi     = 0x3096
@@ -49,11 +22,6 @@ const (
 	goldenScrambleMarker = "纯音乐"
 )
 
-// goldenHanPool 返回扩展 A 区里**不在**任何繁→简词典 / 异体字表出现过的字,按码位升序。
-//
-// ⚠️ 必须是惰性的(sync.Once),不能写成包级 var 的初始化表达式:t2sCharMap 等词典是在 t2s.go 的
-// init 里填的,而包级 var 初始化跑在所有 init 之前——那时三张表还是 nil,"剔除词典字"会静默
-// 变成什么都不剔(第一版就是这么写的,TestGoldenHanPoolIsSimplifiedStable 当场匹配到 U+346E)。
 var goldenHanPoolOnce sync.Once
 var goldenHanPoolCache []rune
 
@@ -96,14 +64,12 @@ func goldenRangePool(lo, hi rune) []rune {
 	return pool
 }
 
-// ---------- 字符分类 ----------
-
 type goldenRuneClass int
 
 const (
 	goldenClassOther goldenRuneClass = iota
 	goldenClassHan
-	goldenClassLatin // 已折叠成 ASCII 的小写形式参与映射,大写跟着走
+	goldenClassLatin
 	goldenClassHiragana
 	goldenClassKatakana
 	goldenClassHangul
@@ -125,8 +91,6 @@ func goldenClassify(r rune) goldenRuneClass {
 	return goldenClassOther
 }
 
-// ---------- 分段:哪些字符该置乱 ----------
-
 type goldenSeg struct {
 	text     string
 	scramble bool
@@ -136,7 +100,6 @@ var goldenLRCStampPrefixRe = regexp.MustCompile(`^(?:\[\d{1,2}:\d{2}[.:]\d{1,3}\
 var goldenYRCHeadRe = regexp.MustCompile(`^\[\d+,\d+\]`)
 var goldenYRCWordRe = regexp.MustCompile(`\(\d+,\d+(?:,\d+)?\)`)
 
-// goldenSegmentLRCLine 把一行 LRC(歌词 / 译文 / 罗马音都是这个形状)切成"原样 / 置乱"两类段。
 func goldenSegmentLRCLine(line string) []goldenSeg {
 	var segs []goldenSeg
 	keep := func(s string) {
@@ -150,7 +113,7 @@ func goldenSegmentLRCLine(line string) []goldenSeg {
 		}
 	}
 	rest := line
-	// BOM / 前导空白原样。
+
 	lead := 0
 	for _, r := range rest {
 		if r == '\uFEFF' || unicode.IsSpace(r) {
@@ -161,7 +124,7 @@ func goldenSegmentLRCLine(line string) []goldenSeg {
 	}
 	keep(rest[:lead])
 	rest = rest[lead:]
-	// 时间戳前缀。
+
 	if m := goldenLRCStampPrefixRe.FindString(rest); m != "" {
 		keep(m)
 		rest = rest[len(m):]
@@ -189,16 +152,7 @@ func goldenSegmentLRCLine(line string) []goldenSeg {
 		keep(rest)
 		return segs
 	}
-	// 行首「标签+冒号」怎么处理,取决于打分怎么读它(见文件头注):
-	//   - 演唱者标记(男：/v1：)——lyricConsensusBody 只取冒号后的正文,标签原样、正文置乱;
-	//   - 内容决定分类的标签(署名关键词、乐器/职能词根、代词虚词、精确署名表)——它们的判定读的是
-	//     字面(lyricPlausibleSpeakerName / creditLineRe / lyricExactCreditLabels),置乱会翻转判定,
-	//     标签原样;这类行几乎都是署名行,整行会被共识比对丢掉,正文置不置乱都不影响特征,置乱只为少漏
-	//     人名;
-	//   - 其它标签(人名、普通英文词)——分类只看形状(汉字数、有没有字母/标点),置乱保形,**整行连标签
-	//     一起置乱**。这里不能像第一版那样"标签一律原样":原样标签与置乱正文的接缝会造出原文里没有的
-	//     3-gram(或反过来抹掉重复),3-gram 集合基数一变 Jaccard 就漂——测试《躺在你的衣柜》netease
-	//     0.559→0.544 跨过 0.55 阈值丢了 100 分共识,采集闸 3 当场拦下。
+
 	if label, _, ok := lyricSplitLabel(trimmed); ok {
 		if lyricKnownSpeakerSet[label] || !lyricPlausibleSpeakerName(label) {
 			off := strings.Index(rest, trimmed)
@@ -208,7 +162,7 @@ func goldenSegmentLRCLine(line string) []goldenSeg {
 			return segs
 		}
 	} else if m := creditLineRe.FindStringIndex(trimmed); m != nil {
-		// 「作词 : 某某」——标签与冒号之间有空格,lyricSplitLabel 认不出,creditLineRe 认得出。
+
 		off := strings.Index(rest, trimmed)
 		keep(rest[:off+m[1]])
 		scramble(rest[off+m[1]:])
@@ -218,7 +172,6 @@ func goldenSegmentLRCLine(line string) []goldenSeg {
 	return segs
 }
 
-// goldenLabelPrefixLen 返回 trimmed 行首「标签+冒号」的字节长度(调用方已确认 lyricSplitLabel 认得出)。
 func goldenLabelPrefixLen(trimmed string) int {
 	for i, r := range trimmed {
 		if r == ':' || r == '：' {
@@ -228,14 +181,10 @@ func goldenLabelPrefixLen(trimmed string) int {
 	return 0
 }
 
-// goldenSegmentYRCLine:YRC 行只置乱词文本,[行始,行长] 与 (词始,词长,0) 原样;词文本本身是
-// 「标签+冒号」形态(v1：/男：)时也原样。不是 YRC 行(元数据标签、[kana:] 等)交给 LRC 分段。
 func goldenSegmentYRCLine(line string) []goldenSeg {
 	trimmedLead := strings.TrimLeft(line, "\uFEFF \t")
 	if strings.HasPrefix(trimmedLead, "{") {
-		// 网易云 YRC 开头的 JSON 元数据行({"t":…,"c":[{"tx":"作词: "},…]}):署名与链接,不是歌词,
-		// 打分也不读(lastYRCTimestampMs 只认 [行始,行长] 开头的行)。原样保留,别把 JSON 键和
-		// URL 也置乱成乱码。
+
 		return []goldenSeg{{text: line}}
 	}
 	if !goldenYRCHeadRe.MatchString(trimmedLead) {
@@ -268,7 +217,7 @@ func goldenYRCTextSeg(s string) goldenSeg {
 		return goldenSeg{text: s}
 	}
 	if label, rest, ok := lyricSplitLabel(trimmed); ok && rest == "" && (lyricKnownSpeakerSet[label] || !lyricPlausibleSpeakerName(label)) {
-		return goldenSeg{text: s} // 独立的「v1：」词元
+		return goldenSeg{text: s}
 	}
 	return goldenSeg{text: s, scramble: true}
 }
@@ -277,7 +226,7 @@ func goldenSegmentText(text string, yrc bool) [][]goldenSeg {
 	lines := strings.Split(text, "\n")
 	out := make([][]goldenSeg, 0, len(lines))
 	for _, line := range lines {
-		// CRLF 的 \r 挂在行尾,当空白原样保留。
+
 		if yrc {
 			out = append(out, goldenSegmentYRCLine(line))
 		} else {
@@ -287,21 +236,15 @@ func goldenSegmentText(text string, yrc bool) [][]goldenSeg {
 	return out
 }
 
-// goldenCanon:置乱前的归一,与 normLoose 内部的 toSimplified + foldDiacritics 同一口径(不含 ToLower,
-// 大小写由映射自己保持)。
 func goldenCanon(s string) string {
 	return foldDiacritics(toSimplified(s))
 }
-
-// ---------- 映射 ----------
 
 type goldenScrambler struct {
 	han, hira, kata, hangul map[rune]rune
 	latin                   [26]rune
 }
 
-// newGoldenScrambler 扫一遍 texts(每个元素 = 文本 + 是不是 YRC)里所有会被置乱的段,给出现过的每个
-// 字符分配替身。seed 只决定分配顺序,同一 seed 同一输入结果确定。
 func newGoldenScrambler(seed string, texts []goldenText) *goldenScrambler {
 	h := fnv.New64a()
 	h.Write([]byte(seed))
@@ -338,7 +281,7 @@ func newGoldenScrambler(seed string, texts []goldenText) *goldenScrambler {
 			if i < len(shuffled) {
 				m[r] = shuffled[i]
 			} else {
-				m[r] = r // 池子不够(一首歌不可能),退回原样
+				m[r] = r
 			}
 		}
 		return m
@@ -417,8 +360,6 @@ func (s *goldenScrambler) scrambleText(text string, yrc bool) string {
 	return b.String()
 }
 
-// scrambleLyricRound 对一整轮各源原始应答做一致置乱。只动歌词类文本;标题/歌手/专辑/封面/时长/
-// 语种/标记全部原样(它们是元数据,打分按原文比对,也不是版权正文)。
 func scrambleLyricRound(raw map[string]lyricSourceResult, seed string) map[string]lyricSourceResult {
 	var texts []goldenText
 	for _, r := range raw {
@@ -428,7 +369,7 @@ func scrambleLyricRound(raw map[string]lyricSourceResult, seed string) map[strin
 			goldenText{r.amll.lrc, false}, goldenText{r.amll.yrc, true}, goldenText{r.amll.tr, false},
 		)
 	}
-	// texts 的顺序会影响 present 集合的收集顺序?不会——集合是 map,分配前统一排序。
+
 	s := newGoldenScrambler(seed, texts)
 	out := make(map[string]lyricSourceResult, len(raw))
 	for src, r := range raw {
@@ -448,16 +389,11 @@ func scrambleLyricRound(raw map[string]lyricSourceResult, seed string) map[strin
 	return out
 }
 
-// ---------- 明文探针 ----------
-
-// goldenCommonEnglish:置乱后的拉丁文本不可能整词命中这些高频词;命中 ≥3 个不同的词就当明文。
 var goldenCommonEnglish = map[string]bool{
 	"the": true, "you": true, "and": true, "love": true, "that": true, "with": true,
 	"your": true, "this": true, "have": true, "what": true, "never": true, "when": true,
 }
 
-// goldenFindUnscrambledLine 在**会被置乱的段**里找明文迹象:基本区(非扩展 A)的汉字,或整段英文
-// 高频词。返回第一条可疑的行。
 func goldenFindUnscrambledLine(text string) (string, bool) {
 	if text == "" {
 		return "", false

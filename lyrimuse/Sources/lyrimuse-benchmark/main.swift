@@ -2,8 +2,6 @@ import CoreGraphics
 import Foundation
 import LyrimuseCore
 
-// MARK: - Benchmark Utilities
-
 private func nowNanoseconds() -> UInt64 {
     clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
 }
@@ -33,8 +31,6 @@ struct Percentiles {
     }
 }
 
-// MARK: - 1. Menu Bar Slot Stability Benchmark
-
 struct MenuBarStabilityBenchmark {
     struct Event {
         let trackTitle: String
@@ -55,37 +51,34 @@ struct MenuBarStabilityBenchmark {
     static func generateSession() -> [Event] {
         var events: [Event] = []
 
-        // Track 1: Multi-line pop track with fluctuating lengths and fake pauses
         let track1Lines: [CGFloat] = [
             180.0, 240.0, 195.0, 310.0, 260.0, 140.0, 175.0, 290.0, 160.0, 220.0
         ]
         for (i, len) in track1Lines.enumerated() {
             events.append(Event(trackTitle: "晴天", trackArtist: "周杰伦", lineLength: len, isPause: false, pauseDuration: 0))
             if i == 2 {
-                // Fake pause 1.88s (media layer artifact)
+
                 events.append(Event(trackTitle: "晴天", trackArtist: "周杰伦", lineLength: 38.0, isPause: true, pauseDuration: 1.88))
             } else if i == 5 {
-                // Fake pause 4.11s
+
                 events.append(Event(trackTitle: "晴天", trackArtist: "周杰伦", lineLength: 38.0, isPause: true, pauseDuration: 4.11))
             } else if i == 7 {
-                // Fake pause 6.53s
+
                 events.append(Event(trackTitle: "晴天", trackArtist: "周杰伦", lineLength: 38.0, isPause: true, pauseDuration: 6.53))
             }
         }
 
-        // Track 2: English pop song with long bridge
         let track2Lines: [CGFloat] = [
             210.0, 130.0, 195.0, 380.0, 160.0, 275.0, 145.0, 320.0, 190.0
         ]
         for (i, len) in track2Lines.enumerated() {
             events.append(Event(trackTitle: "Cruel Summer", trackArtist: "Taylor Swift", lineLength: len, isPause: false, pauseDuration: 0))
             if i == 3 {
-                // Inter-line pause 2.2s
+
                 events.append(Event(trackTitle: "Cruel Summer", trackArtist: "Taylor Swift", lineLength: 38.0, isPause: true, pauseDuration: 2.2))
             }
         }
 
-        // Track 3: Ballad with short lines
         let track3Lines: [CGFloat] = [
             120.0, 160.0, 140.0, 180.0, 150.0, 130.0
         ]
@@ -93,13 +86,11 @@ struct MenuBarStabilityBenchmark {
             events.append(Event(trackTitle: "青花瓷", trackArtist: "周杰伦", lineLength: len, isPause: false, pauseDuration: 0))
         }
 
-        // Genuine pause (> 8s) at end of session
         events.append(Event(trackTitle: "青花瓷", trackArtist: "周杰伦", lineLength: 38.0, isPause: true, pauseDuration: 10.0))
 
         return events
     }
 
-    /// Simulates naive behavior without MenuBarSlotFloor (geometry follows each line length).
     static func simulateNaive(events: [Event]) -> SimulationResult {
         var currentLength: CGFloat = 38.0
         var currentTrack: String = ""
@@ -114,7 +105,7 @@ struct MenuBarStabilityBenchmark {
             if isNewTrack { currentTrack = trackKey }
 
             if e.isPause {
-                // Under naive 3s collapse delay, pauses > 3s collapse geometry
+
                 if e.pauseDuration >= 3.0 {
                     if currentLength != 38.0 {
                         currentLength = 38.0
@@ -145,7 +136,6 @@ struct MenuBarStabilityBenchmark {
         )
     }
 
-    /// Simulates production behavior using MenuBarSlotFloor & separated collapse delay (8s).
     static func simulateOptimized(events: [Event], slotReleaseSecs: TimeInterval = 8.0) -> SimulationResult {
         var floor = MenuBarSlotFloor()
         var currentLength: CGFloat = 38.0
@@ -161,7 +151,7 @@ struct MenuBarStabilityBenchmark {
             if isNewTrack { currentTrack = trackKey }
 
             if e.isPause {
-                // Geometry holds for slotReleaseSecs (8.0s upstream 761df776)
+
                 if e.pauseDuration >= slotReleaseSecs {
                     if currentLength != 38.0 {
                         currentLength = 38.0
@@ -204,8 +194,6 @@ struct MenuBarStabilityBenchmark {
     }
 }
 
-// MARK: - 2. Sync Engine Tick Latency Benchmark
-
 struct SyncEngineBenchmark {
     struct BenchmarkResult {
         let rateHz: Int
@@ -214,7 +202,7 @@ struct SyncEngineBenchmark {
         let avgLatencyMs: Double
         let percentiles: Percentiles
         let frameDrops: Int
-        let targetExceededCount: Int // > 0.2ms
+        let targetExceededCount: Int
         let pass: Bool
     }
 
@@ -271,7 +259,6 @@ struct SyncEngineBenchmark {
         var frameDrops = 0
         var targetExceededCount = 0
 
-        // Warm up cache
         for ms in stride(from: 0, through: 40000, by: 500) {
             _ = engine.tickQuery(atMs: ms)
             _ = engine.activeLine(atMs: ms)
@@ -285,11 +272,9 @@ struct SyncEngineBenchmark {
 
             let tickStartNs = nowNanoseconds()
 
-            // 1. Tick query resolution
             let resolution = engine.tickQuery(atMs: simulatedTimeMs)
             let activeLine = engine.currentLine(at: simulatedTimeMs)
 
-            // 2. Karaoke progress evaluation
             if let words = activeLine?.words {
                 for word in words {
                     _ = KaraokeFill.fillFraction(for: word, atMs: simulatedTimeMs)
@@ -298,7 +283,6 @@ struct SyncEngineBenchmark {
                 _ = KaraokeFill.lineFillSettledMs(words: words, groups: activeLine?.wordGroups)
             }
 
-            // Prevent optimization
             if resolution.index == -999999 { print("unreachable") }
 
             let tickEndNs = nowNanoseconds()
@@ -316,7 +300,6 @@ struct SyncEngineBenchmark {
         let sorted = latenciesMs.sorted()
         let percentiles = Percentiles.compute(from: sorted)
 
-        // Target: < 0.2ms avg per tick, 0 frame drops
         let pass = (avgLatencyMs < 0.2) && (frameDrops == 0)
 
         return BenchmarkResult(
@@ -331,8 +314,6 @@ struct SyncEngineBenchmark {
         )
     }
 }
-
-// MARK: - 3. Enrich Cache Lookup Performance Benchmark
 
 struct EnrichCacheBenchmark {
     struct TierResult {
@@ -350,7 +331,6 @@ struct EnrichCacheBenchmark {
     static func setupMockCache() -> [String: EnrichCacheEntry] {
         var entries: [String: EnrichCacheEntry] = [:]
 
-        // Create 600 realistic entries
         let artists = ["周杰伦", "丁世光", "Taylor Swift", "Ed Sheeran", "林俊杰", "陈奕迅", "米津玄師", "YOASOBI", "落日飞车", "新裤子"]
         let albums = ["叶惠美", "神经志", "1989", "Divide", "学不会", "U87", "STRAY SHEEP", "THE BOOK", "Vanilla Villa", "生命因你而火热"]
 
@@ -378,7 +358,6 @@ struct EnrichCacheBenchmark {
             }
         }
 
-        // Special test cases
         entries["丁世光|如果我们当时一起会怎么样|神经志"] = EnrichCacheEntry(
             lyrics: "[00:01.00]当时如果一起会怎样\n[00:05.00]现在又是在哪里",
             lyricsSource: "netease",
@@ -437,7 +416,6 @@ struct EnrichCacheBenchmark {
         let percentiles = Percentiles.compute(from: sorted)
         let accuracyRate = Double(correctMatches) / Double(iterations)
 
-        // Pass SLA: 100% accuracy, throughput > 10,000 ops/s, avg < 100 µs
         let pass = (accuracyRate >= 0.9999) && (avgLatencyUs < 100.0)
 
         return TierResult(
@@ -459,7 +437,6 @@ struct EnrichCacheBenchmark {
         EnrichCacheReader.setEntriesForTesting(mock)
         defer { EnrichCacheReader.setEntriesForTesting(nil) }
 
-        // Tier 1 Queries: Exact artist|title|album match
         let tier1Queries = [
             ("周杰伦", "晴天", "叶惠美", "故事的小黄花"),
             ("丁世光", "如果我们当时一起会怎么样", "神经志", "当时如果一起会怎样"),
@@ -467,7 +444,6 @@ struct EnrichCacheBenchmark {
             ("Taylor Swift", "Song_Taylor Swift_5", "1989", "Lyrics of Song_Taylor Swift_5"),
         ]
 
-        // Tier 2 Queries: Loose match (case, whitespace, punctuation variants)
         let tier2Queries = [
             ("  周杰伦  ", "晴天", "叶惠美", "故事的小黄花"),
             ("taylor swift", "song_taylor swift_5", "1989", "Lyrics of Song_Taylor Swift_5"),
@@ -475,12 +451,11 @@ struct EnrichCacheBenchmark {
             ("ed sheeran", "song_ed sheeran_1", "divide", "Lyrics of Song_Ed Sheeran_1"),
         ]
 
-        // Tier 3 Queries: Mismatched/empty album fallback and collaboration credit fallback
         let tier3Queries = [
-            ("丁世光", "如果我们当时一起会怎么样", "The Journal", "当时如果一起会怎样"), // mismatched album (Apple Music Radio)
-            ("丁世光", "如果我们当时一起会怎么样", "", "当时如果一起会怎样"),           // empty album
-            ("周杰伦", "晴天", "Single", "故事的小黄花"),                             // mismatched album
-            ("Sebastien Najand", "PROJECT: Ashe", "", "Ashe Project"),             // collab fallback to main artist
+            ("丁世光", "如果我们当时一起会怎么样", "The Journal", "当时如果一起会怎样"),
+            ("丁世光", "如果我们当时一起会怎么样", "", "当时如果一起会怎样"),
+            ("周杰伦", "晴天", "Single", "故事的小黄花"),
+            ("Sebastien Najand", "PROJECT: Ashe", "", "Ashe Project"),
         ]
 
         let t1 = runTier(tierName: "Tier 1 (Exact Match)",
@@ -499,8 +474,6 @@ struct EnrichCacheBenchmark {
     }
 }
 
-// MARK: - Benchmark Runner & Report Formatter
-
 @main
 struct BenchmarkApp {
     @MainActor
@@ -514,7 +487,6 @@ struct BenchmarkApp {
 
         var overallPass = true
 
-        // 1. Menu Bar Stability Benchmark
         print("▶ Running Benchmark 1: Menu Bar Slot Stability & Anti-Jitter...")
         let (naiveStability, optStability, regressionDetected, stabilityPass) = MenuBarStabilityBenchmark.run()
         if !stabilityPass { overallPass = false }
@@ -527,7 +499,6 @@ struct BenchmarkApp {
         print("  • Regression Sensitivity:    \(regressionDetected ? "Active (verified under naive 3.0s)" : "Inactive") -> [\(regressionDetected ? "PASS" : "FAIL")]")
         print("  • Slot Stability Status:     [\(stabilityPass ? "QUALIFIED" : "DISQUALIFIED")]\n")
 
-        // 2. Sync Engine Tick Latency Benchmark
         print("▶ Running Benchmark 2: Sync Engine Tick Latency (20Hz & 60Hz)...")
         let bench20Hz = SyncEngineBenchmark.runBenchmark(rateHz: 20, iterations: 5000)
         let bench60Hz = SyncEngineBenchmark.runBenchmark(rateHz: 60, iterations: 5000)
@@ -547,7 +518,6 @@ struct BenchmarkApp {
         print("  • Frame Drops (> 16.67ms):   \(bench60Hz.frameDrops) (target: 0)")
         print("  • Status:                    [\(bench60Hz.pass ? "QUALIFIED" : "DISQUALIFIED")]\n")
 
-        // 3. Enrich Cache Lookup Performance Benchmark
         print("▶ Running Benchmark 3: Enrich Cache Lookup Performance (Tier 1, 2, 3)...")
         let cacheResults = EnrichCacheBenchmark.runAll(iterations: 30000)
         for r in cacheResults {
@@ -572,7 +542,6 @@ struct BenchmarkApp {
         print("OVERALL RESULT: [\(overallPass ? "ALL QUALIFICATION METRICS PASSED" : "FAILED")]")
         print("================================================================================")
 
-        // Generate Markdown report
         let report = generateMarkdownReport(
             stabilityNaive: naiveStability,
             stabilityOpt: optStability,
@@ -583,10 +552,10 @@ struct BenchmarkApp {
         )
 
         let repoRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // lyrimuse-benchmark
-            .deletingLastPathComponent() // Sources
-            .deletingLastPathComponent() // lyrimuse
-            .deletingLastPathComponent() // repo root
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
         let reportURL = repoRoot.appendingPathComponent("docs/BENCHMARK_REPORT.md")
         try? report.write(to: reportURL, atomically: true, encoding: .utf8)
         print("\nRelease Qualification Report written to: \(reportURL.path)")

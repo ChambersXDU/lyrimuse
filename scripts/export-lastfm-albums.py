@@ -1,21 +1,4 @@
 #!/usr/bin/env python3
-"""导出 Last.fm 全部听过的专辑成 markdown,带同专辑变体归并。
-
-归并规则(2026-08-18 与用户逐对核定):
-  基础: 简繁折叠(需外部 t2s 映射)/NFKC/大小写/标点、Deluxe/Explicit/Remastered 等
-        同内容再版标签剥除、歌手别名统一(与 collector artistAliasTable 同步)。
-  R1 双语拼接名: 标题恰由一段CJK+一段拉丁拼成时,两段各自都算这张专辑的名字
-      (Timeless 可啦思刻 = Timeless = 可啦思刻;神經誌 The Journal = 神经志)。
-  R2 单曲后缀: 尾部 "- Single"/"- EP" 是商店标记,剥除后参与比较(玩樂 = 玩乐 - Single)。
-  R3 歌手名剥除: 专辑名里出现歌手自己的任何已知写法(含英文艺名)则剥掉再比较
-      (15 Khalil Fong Live In Hong Kong 2011 = 15 (Live in Hong Kong 2011);
-       周杰倫范特西 = 范特西)。剥空则回退原名(自专辑《陶喆》不受影响)。
-  刻意不做: 前缀/子集归并(范特西⊂依然范特西、Soulboy⊂The SOULBOY Collection 都是
-      不同专辑)、Live 与录音室版归并、纪念版(Thriller 40)归并。
-
-用法: python3 export-lastfm-albums.py <t2s-in.txt> <t2s-out.txt> <albums-raw.json> <输出.md>
-  t2s 映射由 ICU 生成(swift CFStringTransform Traditional-Simplified,行对齐)。
-"""
 import json, re, sys, unicodedata
 from datetime import date
 
@@ -31,13 +14,12 @@ def main(t2s_in, t2s_out, raw_json, out_md):
     t2s = dict(zip(open(t2s_in).read().split('\n'), open(t2s_out).read().split('\n')))
     rows = json.load(open(raw_json))
 
-    VARIANTS = str.maketrans({'晩': '晚'})  # 日文兼容字→中文正字
+    VARIANTS = str.maketrans({'晩': '晚'})
     def fold(s):
         return re.sub(r'[\s\W_]+', '', unicodedata.normalize('NFKC', s).casefold().translate(VARIANTS))
     def artdisp(a): return ALIAS.get(a.strip().lower(), a)
     def artkey(a): return fold(t2s.get(artdisp(a), artdisp(a)))
 
-    # 每个歌手的全部已知写法(数据里出现过的 + 别名表双向),给 R3 用
     writings = {}
     for r in rows:
         writings.setdefault(artkey(r['artist']), set()).add(r['artist'].strip())
@@ -48,9 +30,9 @@ def main(t2s_in, t2s_out, raw_json, out_md):
     def albkeys(album, ak):
         s = t2s.get(album, album)
         s = EDITION.sub('', s)
-        s = SINGLE_SUFFIX.sub('', s)                     # R2
+        s = SINGLE_SUFFIX.sub('', s)
         low = unicodedata.normalize('NFKC', s).casefold()
-        for w in sorted(writings.get(ak, ()), key=len, reverse=True):   # R3
+        for w in sorted(writings.get(ak, ()), key=len, reverse=True):
             w2 = unicodedata.normalize('NFKC', t2s.get(w, w)).casefold()
             if w2 and w2 in low:
                 stripped = low.replace(w2, ' ')
@@ -58,7 +40,7 @@ def main(t2s_in, t2s_out, raw_json, out_md):
                     low = stripped
         base = fold(low)
         keys = {base} if base else {fold(album)}
-        # R1: 恰好一段CJK+一段拉丁(以折叠后字符分类判断连续段)
+
         runs, cur = [], None
         for ch in base:
             kind = 'h' if '一' <= ch <= '鿿' else ('l' if ch.isascii() else 'x')
@@ -72,7 +54,6 @@ def main(t2s_in, t2s_out, raw_json, out_md):
                     keys.add(seg)
         return keys
 
-    # 并查集(按共享 key 分组)
     n = len(rows)
     parent = list(range(n))
     def find(x):
@@ -93,7 +74,7 @@ def main(t2s_in, t2s_out, raw_json, out_md):
 
     buckets = {}
     order = []
-    for i, r in enumerate(rows):   # 输入按播放降序,首见写法=播放最多
+    for i, r in enumerate(rows):
         root = find(i)
         b = buckets.get(root)
         if b is None:

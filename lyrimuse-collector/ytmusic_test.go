@@ -10,11 +10,6 @@ import (
 	"time"
 )
 
-// :歌词第七个候选来源。这些测试的 JSON 片段字段名/嵌套结构全部来自
-// 对真实 InnerTube 端点发裸 HTTP 请求测试匹配到的响应(不是照抄文档/库源码
-// 假设的形状)——手写成最小片段而不是整段塞真实响应,是为了让每条测试一眼看出在验
-// 哪一层结构,跟 amllttml_test.go 手写 TTML 样本同一个理由。
-
 func TestYtmusicParseDurationText(t *testing.T) {
 	cases := map[string]float64{
 		"3:21":    201,
@@ -32,9 +27,6 @@ func TestYtmusicParseDurationText(t *testing.T) {
 	}
 }
 
-// 真实 search 响应一条 item 的最小结构(对 "Taylor Swift Anti-Hero" 测试
-// 核实过这几段字段路径:flexColumns[0]=歌名、flexColumns[1]="歌手 • 专辑 • 时长"
-// 用 U+2022 连接、overlay 里的 watchEndpoint 带 videoId + musicVideoType)。
 func ytmusicSearchItemJSON(title, meta, videoID, musicVideoType string) string {
 	return `{"musicResponsiveListItemRenderer":{` +
 		`"flexColumns":[` +
@@ -71,8 +63,6 @@ func TestYtmusicParseSearchItem(t *testing.T) {
 		t.Error("应该拿到封面 URL")
 	}
 
-	// 专辑名本身含 " • "(测试真实存在,见 ytmusic.go 头注引用的多段元数据)——
-	// 中间段全部拼回专辑名,不能只取第一段。
 	raw2 := ytmusicSearchItemJSON("彩虹+軌跡", "周杰倫 • 魔天倫世界巡迴演唱會 • 3:18", "x", "MUSIC_VIDEO_TYPE_ATV")
 	var item2 ytmusicSearchItem
 	if err := json.Unmarshal([]byte(raw2), &item2); err != nil {
@@ -83,7 +73,6 @@ func TestYtmusicParseSearchItem(t *testing.T) {
 		t.Errorf("中日文/长专辑名解析不对: %+v ok=%v", p2, ok)
 	}
 
-	// videoId 缺失(没有可播放的曲目)→ 不接受这条。
 	raw3 := ytmusicSearchItemJSON("Foo", "Bar • Baz • 3:00", "", "MUSIC_VIDEO_TYPE_ATV")
 	var item3 ytmusicSearchItem
 	_ = json.Unmarshal([]byte(raw3), &item3)
@@ -92,15 +81,11 @@ func TestYtmusicParseSearchItem(t *testing.T) {
 	}
 }
 
-// 验证:不带 songs 过滤器的默认搜索"Top result"经常命中演唱会直拍/
-// 翻唱视频而不是录音室曲目(Taylor Swift "Anti-Hero" 命中过 Eras Tour 现场版)。
-// 这组测试钉住挑选逻辑本身:曲名/歌手门 + 版本限定词门 + ATV 优先 + 时长最接近。
 func TestYtmusicPickSearchItem(t *testing.T) {
 	atv := func(title, artist, album string, dur float64) ytmusicParsedSearchItem {
 		return ytmusicParsedSearchItem{videoID: "v", title: title, artist: artist, album: album, durationSecs: dur, isATV: true}
 	}
 
-	// 曲名/歌手对不上的候选必须挡掉。
 	items := []ytmusicParsedSearchItem{
 		atv("Anti-Hero", "Someone Else", "Midnights", 201),
 		atv("A Completely Different Song", "Taylor Swift", "Midnights", 201),
@@ -109,13 +94,11 @@ func TestYtmusicPickSearchItem(t *testing.T) {
 		t.Error("曲名/歌手都对不上,不该选出任何候选")
 	}
 
-	// 版本限定词相反(本地是 Live,候选不是)必须挡掉——同一套 versionTagsMismatch 判定。
 	items = []ytmusicParsedSearchItem{atv("Anti-Hero", "Taylor Swift", "Midnights", 201)}
 	if _, ok := ytmusicPickSearchItem(items, "Taylor Swift", "Anti-Hero (Live)", "", 201); ok {
 		t.Error("版本限定词相反的候选不该被采纳")
 	}
 
-	// isATV 优先于时长吻合度:非 ATV 那条时长完全吻合,但 ATV 的那条即使差一点也该赢。
 	nonATV := atv("Anti-Hero", "Taylor Swift", "Midnights", 201)
 	nonATV.isATV = false
 	realATV := ytmusicParsedSearchItem{videoID: "v2", title: "Anti-Hero", artist: "Taylor Swift", album: "Midnights", durationSecs: 205, isATV: true}
@@ -124,7 +107,6 @@ func TestYtmusicPickSearchItem(t *testing.T) {
 		t.Errorf("应该优先选 ATV(真录音室曲目),实际 %+v", got)
 	}
 
-	// 都是 ATV 时按时长挑最接近的(跟 pickLRCLIBSearchResult 同一个判据)。
 	multi := []ytmusicParsedSearchItem{
 		atv("Anti-Hero", "Taylor Swift", "", 270),
 		atv("Anti-Hero", "Taylor Swift", "", 202),
@@ -135,7 +117,6 @@ func TestYtmusicPickSearchItem(t *testing.T) {
 		t.Errorf("应该挑最接近 201s 的 202s,实际 %+v", got)
 	}
 
-	// 本地时长未知(<=0)时退回"第一个过门的"。
 	got, ok = ytmusicPickSearchItem(multi, "Taylor Swift", "Anti-Hero", "", 0)
 	if !ok || got.durationSecs != 270 {
 		t.Errorf("时长未知时应退回第一个过门的候选,实际 %+v", got)
@@ -143,10 +124,7 @@ func TestYtmusicPickSearchItem(t *testing.T) {
 }
 
 func TestYtmusicExtractSearchItems(t *testing.T) {
-	// 真实响应把候选包在 tabbedSearchResultsRenderer 深处的 musicShelfRenderer.contents
-	// 数组里。ytmusicExtractSearchItems
-	// 故意不按这条精确路径导航、而是通用递归找 key——这条测试把它包在一个*不同*的外壳
-	// 里(用一个虚构的容器名),确认这个函数真的是按 key 名找,不依赖外层路径。
+
 	raw := `{"someWeirdContainer":{"nested":[` +
 		ytmusicSearchItemJSON("Song A", "Artist A • Album A • 3:00", "vidA", "MUSIC_VIDEO_TYPE_ATV") + `,` +
 		ytmusicSearchItemJSON("Song B", "Artist B • Album B • 4:00", "vidB", "MUSIC_VIDEO_TYPE_ATV") +
@@ -158,9 +136,7 @@ func TestYtmusicExtractSearchItems(t *testing.T) {
 }
 
 func TestYtmusicLyricsBrowseID(t *testing.T) {
-	// 真实 "next" 响应里 tabs 数组混着好几个 tab(Up next/Lyrics/Comments/Related),
-	// 只有 pageType 是 MUSIC_PAGE_TYPE_TRACK_LYRICS 的那个才是歌词 —— 
-	// 核实过这个数组的真实位置和其它三个 tab 的存在,这条测试确认判定不会误认别的 tab。
+
 	raw := `{
 		"contents": {"singleColumnMusicWatchNextResultsRenderer": {"tabbedRenderer": {
 			"watchNextTabbedResultsRenderer": {"tabs": [
@@ -185,7 +161,6 @@ func TestYtmusicLyricsBrowseID(t *testing.T) {
 		t.Errorf("应该挑中歌词 tab 的 browseId,实际 %q", got)
 	}
 
-	// 没有歌词 tab(纯音乐/太冷门)时返回空串。
 	noLyrics := `{"contents": {"singleColumnMusicWatchNextResultsRenderer": {"tabbedRenderer": {
 		"watchNextTabbedResultsRenderer": {"tabs": [{"tabRenderer": {"title": "Up next"}}]}
 	}}}}`
@@ -194,16 +169,12 @@ func TestYtmusicLyricsBrowseID(t *testing.T) {
 	}
 }
 
-// 用户追问验证:只在真是 LyricFind 时才接受候选,Musixmatch 换个管道重发的
-// 一律当"这一源没查到"——理由见 ytmusicLyric 文件头注(跨源共识会被虚假印证 + 6/9 的
-// 命中在已有 musixmatch 源上零增量)。这条钉住判定本身,真实的两种 sourceMessage 取值
-// 都覆盖到。
 func TestYtmusicIsLyricFindSource(t *testing.T) {
 	cases := map[string]bool{
 		"Source: LyricFind":   true,
 		"Source: Musixmatch":  false,
 		"":                    false,
-		"source: lyricfind":   true, // 大小写不敏感只是防御性写法,见函数注释
+		"source: lyricfind":   true,
 		"LyricFind":           true,
 		"Some Other Provider": false,
 	}
@@ -215,9 +186,7 @@ func TestYtmusicIsLyricFindSource(t *testing.T) {
 }
 
 func TestYtmusicParseTimedLyrics(t *testing.T) {
-	// 真实结构:timedLyricsData 和 sourceMessage
-	// 是同一个 lyricsData 对象的兄弟字段,startTimeMilliseconds/endTimeMilliseconds
-	// 在原始 JSON 里是**字符串**、不是数字。
+
 	raw := `{"contents": {"elementRenderer": {"newElement": {"type": {"componentType": {"model": {
 		"timedLyricsModel": {"lyricsData": {
 			"sourceMessage": "Source: LyricFind",
@@ -236,17 +205,12 @@ func TestYtmusicParseTimedLyrics(t *testing.T) {
 		t.Errorf("逐行歌词解析不对: %+v", lines)
 	}
 
-	// "歌词不可用" 的响应(见 ytmusic.go 头注:同一个 browseId 换 WEB_REMIX 身份、
-	// 或者这首歌真的没有带时间戳的歌词时都会是这个形状)——没有 timedLyricsData,
-	// 必须返回空,不能 panic 或者拼出一份假歌词。
 	notAvailable := `{"contents": {"messageRenderer": {"text": {"runs": [{"text": "Lyrics not available"}]}}}}`
 	lines, source = ytmusicParseTimedLyrics([]byte(notAvailable))
 	if len(lines) != 0 || source != "" {
 		t.Errorf("歌词不可用时应该返回空,实际 lines=%v source=%q", lines, source)
 	}
 
-	// 脏数据:endTimeMilliseconds < startTimeMilliseconds 的行要被跳过,不能产出
-	// 一个负时长的词条(下游 formatLRCTime/isTimedLRC 对这种数据没有防御)。
 	dirty := `{"timedLyricsData": [
 		{"lyricLine": "bad", "cueRange": {"startTimeMilliseconds": "100", "endTimeMilliseconds": "50", "metadata": {"id": "0"}}},
 		{"lyricLine": "good", "cueRange": {"startTimeMilliseconds": "100", "endTimeMilliseconds": "200", "metadata": {"id": "1"}}}
@@ -268,10 +232,6 @@ func TestYtmusicBuildLRC(t *testing.T) {
 		t.Errorf("拼出的 LRC 不对:\n实际 %q\n期望 %q", lrc, want)
 	}
 
-	// 拼出来的结果必须真的能通过这个项目的 isTimedLRC 判定(至少 3 行、过半带
-	// [mm:ss.xx] 时间戳),不然这一路即使查到候选也会在下游被判"不算逐行歌词"、
-	// 白接——这条断言直接复用生产代码走的同一道闸,用一份够长(真实歌曲不会只有
-	// 两行)的样本测,别让上面那条 2 行的最小样本掩盖这个要求。
 	longer := ytmusicBuildLRC([]ytmusicLyricLine{
 		{text: "♪", startMs: 0, endMs: 5370},
 		{text: "I have this thing", startMs: 5370, endMs: 10310},
@@ -283,8 +243,7 @@ func TestYtmusicBuildLRC(t *testing.T) {
 }
 
 func TestYtmusicExtractVisitorID(t *testing.T) {
-	// 真实首页 HTML 里内联的 ytcfg.set({...}),VISITOR_DATA 就在这个 JSON 里
-	// 。
+
 	html := `<html><script>ytcfg.set({"VISITOR_DATA":"abc123==","INNERTUBE_CONTEXT":{}});</script></html>`
 	if got := ytmusicExtractVisitorID(html); got != "abc123==" {
 		t.Errorf("应该抠出 abc123==,实际 %q", got)
@@ -297,10 +256,6 @@ func TestYtmusicExtractVisitorID(t *testing.T) {
 	}
 }
 
-// 处理"批量解析时 musixmatch 交出候选的比例远低于单首查询"——根因是并发
-// goroutine 各自判定"没有可用凭据"就都去发一次网络请求,YouTube 首页有同样的隐患
-// (抓 visitor id 也是一次网络请求)。这里从一开始就按单飞锁写,这条测试直接照抄
-// musixmatch_test.go 的 TestMusixmatchEnsureTokenSingleFlight,验证同一个机制。
 func TestYtmusicEnsureVisitorIDSingleFlight(t *testing.T) {
 	ytmusicVisitorMu.Lock()
 	ytmusicVisitorID = ""
@@ -355,8 +310,6 @@ func TestYtmusicEnsureVisitorIDSkipsFetchWhenCached(t *testing.T) {
 	}
 }
 
-// 抓取失败(返回空串)不该"poison"住——下一次调用必须能重试,不能因为第一次没匹配到
-// 就让这一路永远死掉(进程是长驻的,一次瞬时网络问题不该拖垮整个运行周期)。
 func TestYtmusicEnsureVisitorIDRetriesAfterFailure(t *testing.T) {
 	ytmusicVisitorMu.Lock()
 	ytmusicVisitorID = ""
@@ -368,7 +321,7 @@ func TestYtmusicEnsureVisitorIDRetriesAfterFailure(t *testing.T) {
 	ytmusicDoFetchVisitorID = func(ctx context.Context) string {
 		n := atomic.AddInt32(&calls, 1)
 		if n == 1 {
-			return "" // 第一次抓失败
+			return ""
 		}
 		return "visitor-B"
 	}
@@ -386,8 +339,7 @@ func TestYtmusicEnsureVisitorIDRetriesAfterFailure(t *testing.T) {
 
 func TestYtmusicWebClientVersionFormat(t *testing.T) {
 	v := ytmusicWebClientVersion()
-	// 形如 "1.20260825.01.00" —— 跟 WEB_REMIX 客户端约定的日期版本号格式一致
-	// (ytmusicapi 的做法:日期串永远"看起来最新",不需要手动跟着网页版更新)。
+
 	if !strings.HasPrefix(v, "1.") || !strings.HasSuffix(v, ".01.00") || len(v) != len("1.20260825.01.00") {
 		t.Errorf("客户端版本号格式不对: %q", v)
 	}

@@ -45,7 +45,7 @@ func TestLyricRoundFailureGetsOnePromptRetry(t *testing.T) {
 	if len(failed) != 1 || failed[0] != "netease" {
 		t.Fatalf("failed sources = %v", failed)
 	}
-	// Avoid process-global breaker state from other test cases.
+
 	previous := lyricSourceBreakerShared
 	lyricSourceBreakerShared = newLyricSourceBreaker(time.Now)
 	defer func() { lyricSourceBreakerShared = previous }()

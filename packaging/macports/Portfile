@@ -29,8 +29,6 @@ checksums           ${distname}${extract.suffix} \
                         sha256  7273bd69d4283794c9f8680b8dd3cefe59efed0ea7d30d0aa821eb1cc75f3a74 \
                         size    20109994
 
-# The app builds with Command Line Tools alone (no full Xcode needed), but the
-# source requires the macOS 26 SDK (upstream CI builds on macos-26).
 if {${os.platform} eq "darwin" && ${os.major} < 25} {
     known_fail      yes
     pre-fetch {
@@ -40,40 +38,23 @@ current Command Line Tools) to build."
     }
 }
 
-# media-control reads playback state of the MediaRemote-backed players (QQ
-# Music, NetEase Cloud Music, Kugou, Spotify) — it is a runtime dependency,
-# spawned as a helper process. Go builds the bundled collector daemon; the
-# Swift toolchain comes from the Command Line Tools.
 depends_build-append \
                     port:go
 depends_lib-append  port:media-control
 
-# Backport of upstream's package-manager build hooks (media-control prefix,
-# extra swift build flags, Go toolchain selection) — committed upstream after
-# the v1.6.0 tag; drop with the next release.
 patchfiles          patch-build-env-hooks.diff
 patch.pre_args-append -p1
 
 post-patch {
-    # An app installed by MacPorts must not update itself — 'port upgrade' is
-    # the supported path — so drop the Sparkle dependency, as aqua/Ice does.
-    # The updater manager is swapped for a stub with the same surface instead
-    # of patching its ~16 call sites across seven files.
     reinplace {/sparkle-project\/Sparkle/d} ${worksrcpath}/lyrimuse/Package.swift
     reinplace {s|"LyrimuseCore", "KeyboardShortcuts", "Sparkle"|"LyrimuseCore", "KeyboardShortcuts"|} \
         ${worksrcpath}/lyrimuse/Package.swift
     copy -force ${filespath}/SparkleUpdaterManager.swift \
         ${worksrcpath}/lyrimuse/Sources/lyrimuse/Settings/SparkleUpdaterManager.swift
 
-    # The diagnostics export reaches through to Sparkle's own updater object;
-    # read the equivalent values off the stub instead.
     reinplace {s|let sparkle = SparkleUpdaterManager.shared.controller.updater|let sparkle = SparkleUpdaterManager.shared|} \
         ${worksrcpath}/lyrimuse/Sources/lyrimuse/Settings/DiagnosticsExporter.swift
 
-    # ... and take the two update entry points out of the UI, so this build
-    # does not show controls that cannot do anything. (The menu bar panel
-    # needs no change: it only offers an update row when one was found, which
-    # never happens here, and otherwise just shows the version.)
     reinplace {/^            updateCard$/d} \
         ${worksrcpath}/lyrimuse/Sources/lyrimuse/SettingsView.swift
     reinplace {/menu.addItem(action(L10n.t("检查更新…"), symbol: "arrow.triangle.2.circlepath",/,+1d} \
@@ -87,9 +68,6 @@ build.cmd           ./build.sh
 build.target
 build.args          --dest ${workpath}/stage/Lyrimuse.app
 
-# SwiftPM resolves the remaining source dependency (KeyboardShortcuts) during
-# the build; redirect all of its working state into ${workpath} so nothing is
-# written outside the sandbox-allowed tree (same approach as aqua/Ice).
 build.env-append    LYRIMUSE_VERSION=${version} \
                     LYRIMUSE_GOTOOLCHAIN=local \
                     GOFLAGS=-buildvcs=false \
@@ -106,9 +84,6 @@ pre-build {
     file mkdir ${workpath}/tmp
     file mkdir ${workpath}/home/Library/Caches
 
-    # SwiftPM sandboxes its manifest-loading subprocesses via sandbox-exec, but
-    # macOS rejects nested sandbox_apply calls when the process is already
-    # sandboxed by MacPorts. Allow sandbox-exec to apply its own profile.
     append portsandbox_profile " (allow process-exec (literal \"/usr/bin/sandbox-exec\") (with no-profile))"
 }
 

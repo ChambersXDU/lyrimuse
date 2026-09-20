@@ -2,10 +2,6 @@ package main
 
 import "testing"
 
-// plainTextFallbackFromScored 的判据(,:"自动解析流程试遍
-// 所有源、真的找不到任何带时间戳版本时,才把纯文本兜底自动采纳进去"——在此之前这类候选
-// 只能靠用户在"搜索候选歌词"弹窗里手动点"采纳为静态文本",见 PlainLyrics 字段定义处的
-// 完整说明)。
 func TestPlainTextFallbackFromScored(t *testing.T) {
 	cases := []struct {
 		name       string

@@ -1,6 +1,3 @@
-// 置乱器自身的单测:双射 / 分类保持 / 结构段原样 / 明文探针,以及最关键的一条——对一组合成的
-// 多源候选,置乱前后 rankLyricSourceResults 的结果逐项相同(这也是采集器写样本前的硬闸)。
-// 下面的"歌词"全是虚构占位,不是任何真实曲目。
 package main
 
 import (
@@ -28,8 +25,8 @@ func TestGoldenHanPoolIsSimplifiedStable(t *testing.T) {
 func TestGoldenSegmentLRCLineKeepsStructure(t *testing.T) {
 	cases := []struct {
 		line       string
-		wantKeep   []string // 必须原样出现在 keep 段里的片段
-		wantScramb string   // 唯一的置乱段
+		wantKeep   []string
+		wantScramb string
 	}{
 		{"[00:12.34]占位歌词一句", []string{"[00:12.34]"}, "占位歌词一句"},
 		{"[00:12.34][01:20.00]两个戳的占位行\r", []string{"[00:12.34][01:20.00]"}, "两个戳的占位行\r"},
@@ -65,7 +62,7 @@ func TestGoldenSegmentLRCLineKeepsStructure(t *testing.T) {
 		if got := strings.Join(scr, ""); got != c.wantScramb {
 			t.Errorf("%q: 置乱段 期望 %q 实际 %q", c.line, c.wantScramb, got)
 		}
-		// 段拼回去必须等于原行——分段不许丢字。
+
 		var all strings.Builder
 		for _, s := range segs {
 			all.WriteString(s.text)
@@ -141,8 +138,6 @@ func TestGoldenScramblerIsClassPreservingBijection(t *testing.T) {
 	}
 }
 
-// 合成一组多源候选(占位文本),验证置乱前后打分链路结果逐项相同——共识、时长、署名、语言闸、
-// 逐字、译文/罗马音全部走到。
 func TestGoldenScrambleKeepsRankingParity(t *testing.T) {
 	featuresMu.Lock()
 	saved := features
@@ -211,13 +206,13 @@ func TestGoldenScrambleKeepsRankingParity(t *testing.T) {
 	before := goldenExpectFromRanked(rankLyricSourceResults("占位歌手", "占位曲", "占位专辑", 130, raw))
 	scrambled := scrambleLyricRound(raw, "parity")
 	after := goldenExpectFromRanked(rankLyricSourceResults("占位歌手", "占位曲", "占位专辑", 130, scrambled))
-	// 冠军正文指纹本来就会变(正文换了字),比对前对齐。
+
 	after.WinnerFingerprint = before.WinnerFingerprint
 	d := diffGoldenExpect(before, after)
 	if len(d.semantic)+len(d.snapshot) > 0 {
 		t.Fatalf("置乱破坏了打分结果:\n  %s", strings.Join(append(d.semantic, d.snapshot...), "\n  "))
 	}
-	// 这组合成数据得真的走到那几条判据,不然 parity 是空话。
+
 	if before.Winner == "" || len(before.Ranked) < 5 {
 		t.Fatalf("合成数据没产生足够的候选: %+v", before)
 	}

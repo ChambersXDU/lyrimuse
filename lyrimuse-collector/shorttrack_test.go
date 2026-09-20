@@ -10,12 +10,6 @@ import (
 	"time"
 )
 
-// 「短于 30 秒的曲目」开关**只管 Last.fm**(用户原话:"这个配置项是 lastfm 的,和
-// listenbrainz 没有一点关系")。这里钉的是活路径的分流:开关开着、短曲目走进提交漏斗之后,
-//   - ListenBrainz **一个请求都不发**;
-//   - 会话照常收尾(listenSent=true,免得每轮 poll 重判)、本地收听日志照常记(它是给 Last.fm
-//     回填兜底的);
-//   - 同一条件下的普通曲目仍然正常发 LB —— 分流只认"短",不是把 LB 整个关掉。
 func TestSubmitSingleShortTrackSkipsListenBrainz(t *testing.T) {
 	savedFlag, savedPath := features.ScrobbleShortTracks, listenLogPath
 	defer func() { features.ScrobbleShortTracks = savedFlag; listenLogPath = savedPath }()
@@ -38,7 +32,6 @@ func TestSubmitSingleShortTrackSkipsListenBrainz(t *testing.T) {
 		submitDoneCh: make(chan submitOutcome, 8),
 	}
 
-	// 短曲目:20 秒,听满一半。
 	short := &playSession{meta: snapshot{Title: "过场", Artist: "A", Duration: 20}, startedAt: time.Now().Add(-time.Minute), submitting: true}
 	p.submitSingleAsync(short, short.meta, short.startedAt.Unix())
 	if !short.listenSent || short.submitting {
@@ -57,7 +50,6 @@ func TestSubmitSingleShortTrackSkipsListenBrainz(t *testing.T) {
 		t.Fatalf("短曲目应记进本地收听日志(给 Last.fm 回填),got %+v", logged)
 	}
 
-	// 对照:普通曲目照常发 LB。
 	long := &playSession{meta: snapshot{Title: "正常歌", Artist: "A", Duration: 240}, startedAt: time.Now().Add(-5 * time.Minute), submitting: true}
 	p.submitSingleAsync(long, long.meta, long.startedAt.Unix())
 	select {
@@ -77,8 +69,6 @@ func TestSubmitSingleShortTrackSkipsListenBrainz(t *testing.T) {
 	}
 }
 
-// shortTrackLastfmOnly 只在开关开着、且曲长在 (0, 30) 时为真——开关关着时短曲目根本进不了
-// 漏斗,这个判据为假只是"不额外分流"。
 func TestShortTrackLastfmOnly(t *testing.T) {
 	saved := features.ScrobbleShortTracks
 	defer func() { features.ScrobbleShortTracks = saved }()

@@ -2,14 +2,8 @@ package main
 
 import "testing"
 
-// (周杰伦《简单爱 (Live)》/《The One 周杰伦演唱会》,「搜索候选歌词」
-// 弹窗 8 个源只有酷狗回了一条错场次的「无与伦比演唱会」版):这首歌在网易云明明存在
-// (album 18906 / song 186043,自报 273.0s 与本地 273.227s 只差 0.227s,52 行 LRC),但
-// 曲目搜索被 UGC 翻做/仿冒号刷屏,四条查询词各自的前 30 条里官方版一次都没出现——搜索
-// 召回失败不等于曲库没有。anchorAlbumTrackForLocalTitle 是补这个缺口的专辑锚定判据,
-// 见其头注。
 func TestAnchorAlbumTrackForLocalTitle(t *testing.T) {
-	// 按 /api/album/18906 的真实数据裁剪(时长取真实值)。
+
 	theOne := []albumTrack{
 		{title: "双截棍(Live)", artist: "周杰伦", duration: 250.0, neteaseSongID: 186025, neteaseAlbum: "The One 周杰伦演唱会"},
 		{title: "星晴(Live)", artist: "周杰伦", duration: 262.0, neteaseSongID: 186038, neteaseAlbum: "The One 周杰伦演唱会"},
@@ -28,8 +22,7 @@ func TestAnchorAlbumTrackForLocalTitle(t *testing.T) {
 	})
 
 	t.Run("标题闸:时长接近但标题对不上的曲目不能锚定", func(t *testing.T) {
-		// 262.0s 的《星晴(Live)》离 261.9 只差 0.1s,但本地放的是《爱在西元前 (Live)》——
-		// 这张裁剪过的列表里没有它,时长再近也不能拿别的歌顶包。
+
 		if got, ok := anchorAlbumTrackForLocalTitle(theOne, "周杰伦", "爱在西元前 (Live)", 261.9); ok {
 			t.Errorf("不该锚定,却给了 %q", got.title)
 		}
@@ -61,8 +54,7 @@ func TestAnchorAlbumTrackForLocalTitle(t *testing.T) {
 
 	t.Run("歧义:两条标题不同的曲目同误差时整体放弃", func(t *testing.T) {
 		tracks := []albumTrack{
-			// 「简单爱」和「简单爱(Live)」都能过 lyricTitleAccepted(剥括号相等档),
-			// 时长又一样——分不出该是哪条,宁可没有,也不要错。
+
 			{title: "简单爱", artist: "周杰伦", duration: 273.0, neteaseSongID: 1},
 			{title: "简单爱(Live)", artist: "周杰伦", duration: 273.0, neteaseSongID: 2},
 		}

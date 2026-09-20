@@ -6,7 +6,6 @@ def norm(s):
     s = unicodedata.normalize('NFKC', s or '').casefold()
     return ''.join(ch for ch in s if ch.isalnum())
 
-# --- 1. lyrics 文件夹:当前流水线的选择(权威 6 字段) ---
 tracks = {}
 for p in glob.glob(os.path.expanduser('~/.config/lyrimuse/lyrics/*.lrc')):
     try:
@@ -24,10 +23,9 @@ for p in glob.glob(os.path.expanduser('~/.config/lyrimuse/lyrics/*.lrc')):
                    'lrc_file': os.path.basename(p)}
 print('lyrics folder tracks:', len(tracks))
 
-# --- 2. ListenBrainz 拉听歌记录取 duration_ms ---
 cfg = json.load(io.open(os.path.expanduser('~/.config/lyrimuse/config.json')))
 tok, lbuser = cfg['listenbrainz_token'], cfg['listenbrainz_user']
-durs = {}   # key -> [secs...]
+durs = {}
 max_ts = None
 fetched = 0
 for page in range(40):
@@ -52,7 +50,6 @@ for page in range(40):
     time.sleep(0.3)
 print('LB listens fetched:', fetched, 'unique with duration:', len(durs))
 
-# --- 3. join ---
 joined = []
 for key, t in tracks.items():
     if key in durs:
@@ -62,6 +59,5 @@ for key, t in tracks.items():
 print('joined (track + duration):', len(joined))
 io.open(SP + '/dataset.json', 'w', encoding='utf-8').write(json.dumps(joined, ensure_ascii=False, indent=1))
 
-# 顺带统计当前选择的来源分布
 from collections import Counter
 print('chosen source dist:', Counter(t['chosen_source'] for t in joined))

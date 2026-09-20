@@ -2,11 +2,8 @@ package main
 
 import "testing"
 
-// 测试数据全部取自真实缓存条目 Adele|Rumour Has It|21。
-// 它是这条修复的原始案例:LRC 与 YRC 逐行文本完全相同、行数相同,只有时间戳是两套。
 const (
-	// 坏的行级 LRC:第 4/5 行间隔 0.75s(唱不完一整句),第 14/15 行是带**字面左括号**的
-	// "(rumour)" —— 这一对是那个正则 bug 的回归钉子。
+
 	rumourLRC = "[ti:Rumour Has It]\n" +
 		"[ar:Adele]\n" +
 		"\n" +
@@ -23,9 +20,6 @@ const (
 		"[00:48.43]有传言（谣言）"
 )
 
-// 字面左括号的回归钉子:词文本里的 "(rumour)" 必须完整解析出来。
-// 早先用 `\((\d+),(\d+),\d+\)([^(]*)` 抓词文本时,这一行会被解析成 "Rumour has it",
-// 与 LRC 侧的 "Rumour has it (rumour)" 字面对不上,整份条目被静默放弃重挂。
 func TestYRCLineHeadsKeepsLiteralParens(t *testing.T) {
 	heads := yrcLineHeads(rumourYRC)
 	if len(heads) != 4 {
@@ -54,18 +48,16 @@ func TestRehangLRCOnYRCRealCase(t *testing.T) {
 	if got != want {
 		t.Errorf("重挂结果不符\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	// 元数据行与空行必须原样保留 —— 打分的 lines 项按 len(Split(lyrics,"\n")) 计,
-	// 丢了它们会让候选平白掉分(测试这个 bug 在消融里造出 175 条假翻盘)。
+
 	if n := len(splitLines(got)); n != len(splitLines(rumourLRC)) {
 		t.Errorf("行数变了: got %d want %d", n, len(splitLines(rumourLRC)))
 	}
-	// 映射给译文用:旧 27.41s → 新 18.315s
+
 	if remap[27410] != 18315 {
 		t.Errorf("remap[27410]: got %d want 18315", remap[27410])
 	}
 }
 
-// 幂等:重挂过的内容再跑一次必须是空操作(启动期迁移每次开机都会跑)。
 func TestRehangLRCOnYRCIdempotent(t *testing.T) {
 	once, _, ok := rehangLRCOnYRC(rumourLRC, rumourYRC, 223.266, true)
 	if !ok {
@@ -83,7 +75,7 @@ func TestRehangLRCOnYRCRejects(t *testing.T) {
 		yrc  string
 	}{
 		{
-			// netease 那 544/568 条的形态:LRC 多一行署名,行数对不上就别猜。
+
 			name: "行数不等",
 			lrc:  "[00:27.41] She, she ain't real\n[00:28.16] She ain't gon' be able to love you like I will\n[00:48.43] 制作人 : Someone",
 			yrc:  rumourYRC,
@@ -94,7 +86,7 @@ func TestRehangLRCOnYRCRejects(t *testing.T) {
 			yrc:  rumourYRC,
 		},
 		{
-			// 一行挂多个时间戳(同一句在多处重复唱),与 YRC 行不再一一对应。
+
 			name: "一行多戳",
 			lrc:  "[00:27.41][01:27.41] She, she ain't real\n[00:28.16] She ain't gon' be able to love you like I will\n[00:48.43] Rumour has it (rumour)\n[00:50.82] Rumour has it (rumour)",
 			yrc:  rumourYRC,
@@ -123,11 +115,6 @@ func TestRehangLRCOnYRCRejects(t *testing.T) {
 	}
 }
 
-// 安全闸:重挂后 durationFits 从 true 变 false 就放弃。
-//
-// 真实反例 MJ《Rock With You (Single Version)》(曲长 204.2s):两套轴同样打架,但坏的是
-// **YRC** 那边 —— 重挂后末句从 176.1s 跳到 216.6s,尾巴甩出曲目 12 秒。全库 516 条可判
-// 时长的条目里正好有这么 1 条会被改坏。这里用同款数字构造最小用例。
 func TestRehangLRCOnYRCDurationGuard(t *testing.T) {
 	lrc := "[02:56.10]first line here\n[02:56.20]second line here"
 	yrc := "[216600,500](216600,250,0)first (216850,250,0)line (217100,100,0)here\n" +
@@ -136,12 +123,11 @@ func TestRehangLRCOnYRCDurationGuard(t *testing.T) {
 	if _, _, ok := rehangLRCOnYRC(lrc, yrc, dur, true); ok {
 		t.Error("重挂会让歌词尾巴甩出曲目,安全闸应当拦下")
 	}
-	// 同样的数据,不给曲长(无从判断)时不设闸 —— 拿不准就按既有纪律放行。
-	// 曲长未知 + 带闸 = 放弃(校验不了就不赌)。
+
 	if _, _, ok := rehangLRCOnYRC(lrc, yrc, 0, true); ok {
 		t.Error("曲长未知时带闸应当放弃")
 	}
-	// 不带闸(只有消融在用)才照改。
+
 	if _, _, ok := rehangLRCOnYRC(lrc, yrc, 0, false); !ok {
 		t.Error("不带闸时应当照改")
 	}
@@ -162,8 +148,7 @@ func TestRemapLRCTimestamps(t *testing.T) {
 	if got != want {
 		t.Errorf("译文重挂不符\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	// 附属歌词常比正文少几行(没译到的行本来就不写),缺行是正常情况,
-	// 不该因此整份放弃 —— 只搬查得到的。
+
 	partial := "[00:27.41]她，她不是真的\n[09:99.99]查不到的一行"
 	got2, changed2 := remapLRCTimestamps(partial, remap)
 	if !changed2 {
@@ -180,7 +165,7 @@ func TestRemapLRCTimestamps(t *testing.T) {
 func TestRehangCandidateTimelines(t *testing.T) {
 	cands := []lyricCandidate{
 		{source: "musixmatch", lyrics: rumourLRC, wordTimingYRC: rumourYRC},
-		{source: "lrclib", lyrics: rumourLRC}, // 没有逐字轴,不该被碰
+		{source: "lrclib", lyrics: rumourLRC},
 	}
 	rehangCandidateTimelines(cands, 223.266)
 	if cands[0].lyrics == rumourLRC {
@@ -194,14 +179,6 @@ func TestRehangCandidateTimelines(t *testing.T) {
 	}
 }
 
-// ---- 逐字轴自相矛盾 → 弃用 ----
-//
-// 测试数据取自真实缓存条目 陈奕迅|2001太空漫游 (Live)|The Easy Ride 演唱会 (Live)
-// (处理"LRC 写着 32 秒有词、播放到 32 秒人已开唱歌词却不出"):netease 的行级与逐字
-// 是两条独立产线,这一条两套轴断行方式不同、行数不等(39 vs 40),rehangLRCOnYRC 修不了,
-// 而配对行的时间差 41~72 秒(中位 55.5s)——播放走 YRC,首句 74.3s 才出,比 LRC(和人声)
-// 晚了 42 秒。以下各取真实第一段主歌(10 行 LRC / 10 行 YRC,其中"水星"一行两边转写
-// 不同、配不上,恰好覆盖"允许少数行配不上"的路径)。
 const (
 	taikongLRC = "[00:32.30]大预言话:地球是大限将至\n" +
 		"[00:36.10]到今天还是未有事\n" +
@@ -226,11 +203,11 @@ const (
 )
 
 func TestWordTimingContradictsLRC(t *testing.T) {
-	// 真实打架数据:9/10 行配上、中位偏差约 41.5s → 矛盾成立
+
 	if !wordTimingContradictsLRC(taikongLRC, taikongYRC) {
 		t.Error("《2001太空漫游 (Live)》形态(中位偏差 40s+)应判为矛盾")
 	}
-	// 同一批 YRC,把 LRC 时间戳换成跟 YRC 一致的 → 不矛盾(自洽双轴的常态,全库 92% <0.5s)
+
 	consistent := "[01:14.35]大预言话:地球是大限将至\n" +
 		"[01:17.64]到今天还是未有事\n" +
 		"[01:21.64]未是时候就无谓乱下赌注\n" +
@@ -244,8 +221,7 @@ func TestWordTimingContradictsLRC(t *testing.T) {
 	if wordTimingContradictsLRC(consistent, taikongYRC) {
 		t.Error("时间戳基本一致的双轴不该判矛盾")
 	}
-	// 配对行不足 8 行时不可判 —— Rumour Has It 那组只有 4 行,单行偏差 9~11s,
-	// 但样本太少、中位数不可信,必须放行(那一类归 rehangLRCOnYRC 管,而且它真能修)。
+
 	if wordTimingContradictsLRC(rumourLRC, rumourYRC) {
 		t.Error("配对行不足下限时不该判矛盾(拿不准就不动)")
 	}
@@ -254,8 +230,6 @@ func TestWordTimingContradictsLRC(t *testing.T) {
 	}
 }
 
-// 候选构造路径:重挂修不了且矛盾成立的候选,逐字轴连同 hasWordTiming 一起清掉 ——
-// 它拿不到打分层 wordTiming 那 +400(自相矛盾的逐字轴不是质量证据),播放也退回行级。
 func TestRehangCandidateTimelinesDropsContradictoryYRC(t *testing.T) {
 	cands := []lyricCandidate{
 		{source: "netease", lyrics: taikongLRC, wordTimingYRC: taikongYRC, hasWordTiming: true},
@@ -265,7 +239,7 @@ func TestRehangCandidateTimelinesDropsContradictoryYRC(t *testing.T) {
 	if cands[0].wordTimingYRC != "" || cands[0].hasWordTiming {
 		t.Error("自相矛盾的逐字轴应被弃用")
 	}
-	// Rumour 那条是可重挂的(1:1 对应),必须走修复路径而不是弃用路径
+
 	if cands[1].wordTimingYRC == "" || !cands[1].hasWordTiming {
 		t.Error("可重挂的双轴不该被弃用")
 	}

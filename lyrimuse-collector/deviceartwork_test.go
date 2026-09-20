@@ -36,8 +36,6 @@ func makeTestPNG(t *testing.T, w, h int) []byte {
 	return buf.Bytes()
 }
 
-// decodeDeviceArtwork 的质量门槛——见其头注(Arc 播 Apple Music 网页版《Immortal》
-// 那次真实案例:媒体自己上送的封面是 140x140、方形,过这两条门槛完全没问题)。
 func TestDecodeDeviceArtworkQuality(t *testing.T) {
 	t.Run("正常尺寸方形_通过", func(t *testing.T) {
 		img, ok := decodeDeviceArtwork(makeTestJPEG(t, 300, 300))
@@ -53,9 +51,7 @@ func TestDecodeDeviceArtworkQuality(t *testing.T) {
 	})
 
 	t.Run("Web端常见小尺寸封面_通过", func(t *testing.T) {
-		// :Arc/Edge 播 Apple Music 网页版《Immortal》时,MediaSession
-		// API 实际上送的就是这个尺寸——不是占位图,是真封面,必须放行(这条用例就是当初
-		// deviceArtworkMinEdge 从 200 订正到 64 的直接依据,别再改回去)。
+
 		if _, ok := decodeDeviceArtwork(makeTestJPEG(t, 120, 120)); !ok {
 			t.Error("120x120 是真实观测到的 MediaSession 封面尺寸,不应该被拒绝")
 		}
@@ -74,7 +70,7 @@ func TestDecodeDeviceArtworkQuality(t *testing.T) {
 	})
 
 	t.Run("长宽比在容差内_通过", func(t *testing.T) {
-		// 300 vs 280: (300-280)/300 = 6.7%,在 deviceArtworkMaxAspectSkew(15%)容差内。
+
 		if _, ok := decodeDeviceArtwork(makeTestJPEG(t, 300, 280)); !ok {
 			t.Error("6.7% 的长宽差应该在容差内,不该被拒绝")
 		}
@@ -99,8 +95,6 @@ func TestDecodeDeviceArtworkQuality(t *testing.T) {
 	})
 }
 
-// saveDeviceArtwork:按内容 sha256 命名,同一张图重复保存不重复写盘(用 mtime 间接验证——
-// 第二次保存后 mtime 不变说明没有真的重新 WriteFile)。
 func TestSaveDeviceArtworkDedupesByContent(t *testing.T) {
 	saved := deviceArtworkDir
 	t.Cleanup(func() { deviceArtworkDir = saved })
@@ -124,8 +118,7 @@ func TestSaveDeviceArtworkDedupesByContent(t *testing.T) {
 		t.Fatalf("重复保存同一张图不应该多出文件, got %d", got)
 	}
 
-	// 不同内容的图落到不同文件。
-	other := makeTestJPEG(t, 300, 301) // 内容不同(尺寸不同 -> 编码字节不同)
+	other := makeTestJPEG(t, 300, 301)
 	url3, ok := saveDeviceArtwork(other, "image/jpeg")
 	if !ok || url3 == url1 {
 		t.Fatalf("不同内容的封面应该落到不同的 URL, url1=%q url3=%q", url1, url3)

@@ -7,9 +7,6 @@ import (
 	"testing"
 )
 
-// 接回酷狗 KRC `[language:<base64>]` 内嵌的译文 / 罗马音两轨。样本按当天直连接口
-// 看到的真实结构仿写(Lemon / Ditto 的形状,正文换成占位文字),钉住的是解析与对齐规则。
-
 func krcLanguageB64(t *testing.T, content []map[string]any) string {
 	t.Helper()
 	raw, err := json.Marshal(map[string]any{"content": content, "version": 1})
@@ -43,8 +40,6 @@ func TestSplitKRCLanguageLineStripsFromBody(t *testing.T) {
 	}
 }
 
-// 两轨按行序号对齐 KRC 计时行的行始;空片段(署名行)与 `//` 跳过;罗马音片段自带空格、多余
-// 空白折成一个。
 func TestKRCLanguageTracksAlignByLineIndex(t *testing.T) {
 	b64 := krcLanguageB64(t, []map[string]any{
 		{"type": 1, "language": 0, "lyricContent": [][]string{{""}, {"要是这是场梦"}, {"该有多好"}, {"至今仍会梦见你"}}},
@@ -61,7 +56,6 @@ func TestKRCLanguageTracksAlignByLineIndex(t *testing.T) {
 	}
 }
 
-// 行数与 KRC 计时行数不等 → 整轨放弃(对不齐宁可整体不要)。
 func TestKRCLanguageTracksRejectLineCountMismatch(t *testing.T) {
 	b64 := krcLanguageB64(t, []map[string]any{
 		{"type": 1, "lyricContent": [][]string{{"只有"}, {"三行"}, {"译文"}}},
@@ -71,8 +65,6 @@ func TestKRCLanguageTracksRejectLineCountMismatch(t *testing.T) {
 	}
 }
 
-// 韩文歌的 type 0 轨是中文谐音(测试 Ditto:「马列做 say it back」),不是罗马音——按汉字占比挡掉;
-// 译文轨不受影响。
 func TestKRCLanguageTracksDropHomophoneRomaTrack(t *testing.T) {
 	b64 := krcLanguageB64(t, []map[string]any{
 		{"type": 0, "lyricContent": [][]string{{""}, {"马列做 ", "say ", "it ", "back"}, {"啊亲们 ", "挠木 ", "摸咯"}, {"呼走 ", "扣剖撩搜"}}},
@@ -87,7 +79,6 @@ func TestKRCLanguageTracksDropHomophoneRomaTrack(t *testing.T) {
 	}
 }
 
-// 坏 base64 / 坏 JSON / 空串都安静地返回空,不影响逐字主路径。
 func TestKRCLanguageTracksTolerateGarbage(t *testing.T) {
 	for _, b64 := range []string{"", "not base64!!", base64.StdEncoding.EncodeToString([]byte("{not json"))} {
 		if tr, roma := krcLanguageTracks(b64, krcLangSampleBody); tr != "" || roma != "" {

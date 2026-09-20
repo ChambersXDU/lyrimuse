@@ -23,16 +23,16 @@ func yrcTo(ms int) string {
 }
 
 func TestUsableWordTiming(t *testing.T) {
-	lyrics := lrcTo(260) // 整行歌词覆盖到 260 秒
+	lyrics := lrcTo(260)
 
 	cases := []struct {
 		name string
 		yrc  string
 		want bool
 	}{
-		// 真实数据:被截断那条覆盖 19.1%
+
 		{"截断到 19%", yrcTo(50_000), false},
-		// 正常条目里最低的一条(netease,差在 LRC 末尾空行)是 85.4%
+
 		{"正常 85%", yrcTo(222_000), true},
 		{"完整", yrcTo(260_000), true},
 		{"恰好过线 50%", yrcTo(130_000), true},
@@ -45,7 +45,7 @@ func TestUsableWordTiming(t *testing.T) {
 				t.Errorf("usableWordTiming = %v, want %v (yrcEnd=%d lrcEnd=%d)",
 					got, c.want, lastYRCTimestampMs(c.yrc), lastLRCTimestampMs(lyrics))
 			}
-			// 取值版必须跟判定版一致
+
 			gotYRC := usableYRC(lyrics, c.yrc)
 			if (gotYRC != "") != c.want {
 				t.Errorf("usableYRC 跟 usableWordTiming 不一致")
@@ -54,7 +54,6 @@ func TestUsableWordTiming(t *testing.T) {
 	}
 }
 
-// 拿不准就放行:任一侧没有可解析的时间戳时无从比较,误杀一份好逐字比放过一份残片更亏。
 func TestUsableWordTimingFailsOpenWhenUncomparable(t *testing.T) {
 	if !usableWordTiming("", yrcTo(50_000)) {
 		t.Error("整行歌词没有时间戳时应放行")
@@ -65,7 +64,7 @@ func TestUsableWordTimingFailsOpenWhenUncomparable(t *testing.T) {
 }
 
 func TestLastTimestampParsers(t *testing.T) {
-	// 两位小数 = 厘秒,三位 = 毫秒
+
 	if got := lastLRCTimestampMs("[00:10.50]x\n"); got != 10_500 {
 		t.Errorf("厘秒解析错: %d", got)
 	}

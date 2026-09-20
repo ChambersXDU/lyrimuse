@@ -1,41 +1,3 @@
-// lyricsgolden_test.go — 歌词搜索的**回归金标集**(golden corpus)。
-//
-// 这里守的不是"某条规则对某个输入怎么判",而是"**这首真实的歌,拿到这组真实的候选,最后选对了**"——
-// 从各源原始应答一路到冠军的整条离线链路(候选构建 → 时间轴自洽修复 → 跨源末尾印证 →
-// 跨源正文共识 → 逐条打分 → 纯音乐标记 → 逐字加分撤销 → 稳定排序 → 挑选),跑的是生产同一份
-// 代码 rankLyricSourceResults / pickLyricCandidate,不在测试里另抄一份骨架。
-//
-// 为什么需要它:116 个测试文件里全是按函数钉的规则,历次"全库回放"都是一次性脚本、
-// 跑完就丢,simeval 又依赖本机数据默认跳过——改一档权重之后"哪几类歌会换冠军"在仓库里没有任何
-// 常驻证据。金标集把每一类已确认正确的真实决策固化成样本,以后任何打分/守卫改动都必须先过它。
-//
-// 样本在 testdata/lyricsgolden/*.json,一首歌一个文件。结构见 goldenFixture;每个样本记着:
-//   - query:发给各源的查询词(已 toSimplified,跟生产传给 rankLyricSourceResults 的完全一样)与时长;
-//   - settings:当时的译文语言 / 来源开关 / 挑选模式 / 播放器 / 歌手中文别名提示——打分会偷读的
-//     全部包级状态,测试跑前照样设上、跑完还原;
-//   - sources:各源的**原始应答**(lyricSourceResult 逐字段);
-//   - expect:冠军、每条候选的判决(accepted / 哪条 reject)、纯音乐标记、以及完整分项快照。
-//
-// ⚠️ 正文不入库明文:01 章版权立场写的是"不托管、不转发、不再分发",真实歌词进 git 就违背这一条。
-// 样本里的歌词/逐字/译文/罗马音都经过 scrambleLyricRound 的**保形置乱**(同一首内一致的字符双射,
-// 汉字→汉字、拉丁→拉丁保大小写、假名/谚文各自块内;时间戳、标点、数字、署名行、演唱者标签、
-// 元数据标签、纯音乐占位原样不动)。打分读到的每一个特征——时间戳密度、末句时刻、行数、汉字/假名
-// 占比、3-gram 共识、署名结构——置乱前后逐位相同,采集器(lyricsgolden_capture_test.go)会把
-// "置乱前后 rank 结果逐项一致"当作写入前的硬闸,不一致就拒绝入库。所以样本文本看起来是乱码是**预期**,
-// 别试图"修好"它。
-//
-// 两层断言:
-//   - 语义硬断言:冠军、每条候选的判决、纯音乐标记。这三样变了就是"这首歌选错了 / 该拒的没拒",
-//     即使设了 LYRICS_GOLDEN_UPDATE 也不会静默改写——必须再显式给 LYRICS_GOLDEN_ACCEPT_SEMANTIC
-//     (样本 id 逗号分隔,或 all),让"我知道这首歌的冠军换了"成为一个刻意的动作,留在命令行里、
-//     也留在 git diff 里;
-//   - 分项快照:每条候选的分数与全部 scoreTerm(kind+points)、逐字/译文/罗马音有无。改权重时
-//     大面积变化是正常的,LYRICS_GOLDEN_UPDATE=1 重生成 expect,靠 git diff 审"哪些歌的哪一项动了"。
-//
-// 另有一道类别覆盖契约(TestLyricsGoldenCategoryCoverage):goldenRequiredCategories 里每一类至少
-// 一个样本;删样本或漏类别直接红。新增一类判据/新踩一个坑,就在那张表加一行、采一个样本。
-//
-// 采样方法见 testdata/lyricsgolden/README.md。
 package main
 
 import (
@@ -52,25 +14,20 @@ import (
 
 const lyricsGoldenDir = "testdata/lyricsgolden"
 
-// ---------- 样本结构 ----------
-
 type goldenFixture struct {
-	// ID 是文件名(不含 .json),也是 LYRICS_GOLDEN_ACCEPT_SEMANTIC 里引用它的名字。
+
 	ID string `json:"id"`
-	// Category 必须是 goldenRequiredCategories 里的一个键。
+
 	Category string `json:"category"`
-	// Note:为什么挑这首、这一类在守什么(人写)。
+
 	Note string `json:"note"`
-	// LabelEvidence:这首歌的冠军**为什么算对**——一组不依赖缓存的独立判据(见 goldenLabelEvidence),
-	// 采集时算、写样本前逐条过闸(goldenJudgeEvidence),TestLyricsGoldenWinnersAreIndependentlyJustified
-	// 每次都拿样本数据重算一遍。"缓存里就是这份"只是其中一项旁证,不是依据。
+
 	LabelEvidence goldenLabelEvidence `json:"label_evidence"`
-	// Track:未置乱的本地标签原文,只给人看。打分入参是下面的 Query。
+
 	Track      goldenTrack `json:"track"`
 	CapturedAt string      `json:"captured_at"`
 	CapturedBy string      `json:"captured_by,omitempty"`
-	// ScoringVersionAtCapture:采集时的 lyricsScoringVersion。只是信息,不参与断言——
-	// 快照跟着 UPDATE 走,版本号跟着 match.go 走。
+
 	ScoringVersionAtCapture int                        `json:"scoring_version_at_capture"`
 	Query                   goldenQuery                `json:"query"`
 	Settings                goldenSettings             `json:"settings"`
@@ -93,19 +50,16 @@ type goldenQuery struct {
 
 type goldenSettings struct {
 	TranslationLanguage string `json:"translation_language"`
-	// Sources:nil/空 = 全部启用(跟 lyricSourceEnabled 的口径一致)。
+
 	Sources     map[string]bool `json:"sources,omitempty"`
 	SourceMode  string          `json:"source_mode,omitempty"`
 	SourceOrder []string        `json:"source_order,omitempty"`
-	// PlayerBundleID:这一刻在放的播放器(同源 +250 的判据),空 = 不加分。
+
 	PlayerBundleID string `json:"player_bundle_id,omitempty"`
-	// ArtistCJKHint:采集时 resolvedArtistCJKHint(query.artist) 的值——isProbablyWrongLanguageLyrics
-	// 在打分热路径上偷读的那份歌手别名缓存。空 = 当时也是空。
+
 	ArtistCJKHint string `json:"artist_cjk_hint,omitempty"`
 }
 
-// goldenSourceRaw 是 lyricSourceResult 的 JSON 形态,字段一一对应(netease/amll 各自的子结构
-// 也原样带上)。文本字段全部已置乱。
 type goldenSourceRaw struct {
 	Lyrics       string  `json:"lyrics,omitempty"`
 	YRC          string  `json:"yrc,omitempty"`
@@ -119,10 +73,9 @@ type goldenSourceRaw struct {
 	Language     string  `json:"language,omitempty"`
 	Instrumental bool    `json:"instrumental,omitempty"`
 	PlainOnly    bool    `json:"plain_only,omitempty"`
-	// Netease:只有 source=netease 有。lyricSourceResult 对网易云走的是 ne neteaseInfo 这个
-	// 独立子结构,不复用上面的 lyr/yrc/tr。
+
 	Netease *goldenNetease `json:"netease,omitempty"`
-	// AMLL:只有 source=amll 有。
+
 	AMLL *goldenAMLL `json:"amll,omitempty"`
 }
 
@@ -150,17 +103,15 @@ type goldenAMLL struct {
 }
 
 type goldenExpect struct {
-	// ---- 语义硬断言 ----
+
 	Winner string `json:"winner"`
-	// InstrumentalMarker:搭车的纯音乐标记来自哪个源,空 = 没有。
+
 	InstrumentalMarker string `json:"instrumental_marker,omitempty"`
-	// Verdicts:源 → "accepted" 或 reject 的 kind(scoreRejectNotTimed 等)。
+
 	Verdicts map[string]string `json:"verdicts"`
-	// ---- 分项快照 ----
-	// Ranked:排序后的候选列表(纯音乐标记那条不在里面)。
+
 	Ranked []goldenRankedCandidate `json:"ranked"`
-	// WinnerFingerprint:冠军 Lyrics(置乱后、经 rankLyricSourceResults 输出)的 sha256 前 16 位。
-	// 时间轴自洽修复改了冠军正文的时间戳会在这里体现。
+
 	WinnerFingerprint string `json:"winner_fingerprint,omitempty"`
 }
 
@@ -174,50 +125,28 @@ type goldenRankedCandidate struct {
 	HasRomanization bool        `json:"has_romanization,omitempty"`
 }
 
-// goldenLabelEvidence 是"这个冠军确实是这首歌、而且是这个版本"的独立判据。每一项都能从样本自己
-// 的数据重算出来(标题/专辑/时长是原样元数据,正文置乱不改时间戳与 3-gram 关系),不依赖采集时
-// 的缓存内容。
-//
-// 为什么不能只信缓存(用户 的要求「不能纯信目前的缓存」):缓存里那份是**上一版规则**
-// 选出来的,采集时就撞到两条错的——《低潮期》缓存是 30 秒 5 行的残片(那轮拿 0 时长打分),
-// 《公园 (Live版)》缓存是另一场演唱会的版本(用户当初报过的错配)。拿它当金标等于把旧错误钉成
-// 新标准。
 type goldenLabelEvidence struct {
-	// ConsensusPeers:有多少个**别的**源的正文与冠军 3-gram 相似度 ≥ lyricConsensusSimThreshold。
-	// ≥1 就说明"至少两个互不相干的平台给出了同一份内容"——冠军不是串了别的歌。
+
 	ConsensusPeers int `json:"consensus_peers"`
-	// TitleAccepted:冠军自报的歌名过 lyricTitleAccepted(归一相等/剥括号/双语,不认子串)。
+
 	TitleAccepted bool `json:"title_accepted"`
-	// VersionTagsOK:冠军与本地的版本限定词集合一致(live/remix/acoustic…,含专辑级 live 声明),
-	// 且不是另一场演出(liveAlbumIdentityConflict 为假)。这是"是这个版本"的判据。
+
 	VersionTagsOK bool `json:"version_tags_ok"`
-	// SourceDurationDeltaPct:冠军自报曲长与本地曲长的偏差百分比;-1 = 该源没自报(amll)。
-	// 同一次录音跨平台只差在取整,≤ 3% 视为同一录音。
+
 	SourceDurationDeltaPct float64 `json:"source_duration_delta_pct"`
-	// LyricsEndSecs / CoveragePct:歌词末句时刻,以及它占本地曲长的比例。末句不能晚于曲长 5s
-	// (物理矛盾),也得覆盖过半(不是残片)。
+
 	LyricsEndSecs float64 `json:"lyrics_end_secs"`
 	CoveragePct   float64 `json:"coverage_pct"`
-	// AlbumScore:冠军自报专辑与本地专辑的亲和(albumScore)。本地是现场专辑时要求 >0(同一场)。
+
 	AlbumScore int `json:"album_score"`
-	// LiveMismatch:一边是现场录音、另一边不是——按 albumHasLiveMarker(拉丁 live/concert 词元
-	// **也算**,比打分层的 recordingVersionTags 宽)看两边专辑,再看两边歌名的 live 声明。打分层刻意
-	// 不认拉丁词元(把握不够),但金标要的是"没有争议",宁可多拒。《爱是怀疑》采集时匹配到的形态:
-	// 本地是国语精选,酷狗冠军挂在《Eason Third Encounter Concert Live 2003》——词是对的、时间轴是
-	// 另一场演出的,不能当金标。
+
 	LiveMismatch bool `json:"live_mismatch"`
-	// CacheAgreement:采集那一刻缓存里生效的那份跟冠军的关系——exact / similar=0.93 / differs=0.12 /
-	// no-cache / manual。**只作旁证**;differs 且不是手选时采集会拒绝,因为那意味着有争议——除非采集人
-	// 用 LYRICS_GOLDEN_CACHE_KNOWN_WRONG 声明缓存那份就是被修的 bug 本身(后缀 "cache known wrong"),
-	// 那是给用户已报错、代码已修的案例采回归样本的唯一通道,其余判据一条不少。
+
 	CacheAgreement string `json:"cache_agreement"`
-	// Instrumental:纯音乐类样本——没有歌词冠军,标记来自哪个源的**明文断言**(lrclib 结构化字段 /
-	// 网易云 pureMusic / QQ 占位正文),与缓存无关。
+
 	Instrumental string `json:"instrumental,omitempty"`
 }
 
-// goldenComputeEvidence 从一轮排好序的候选与本地查询算出独立判据。cacheAgreement 由调用方填
-// (测试里重算时没有缓存,留原值)。
 func goldenComputeEvidence(q goldenQuery, ranked []scoredLyricCandidateResult) goldenLabelEvidence {
 	ev := goldenLabelEvidence{SourceDurationDeltaPct: -1}
 	var winner *scoredLyricCandidateResult
@@ -245,8 +174,7 @@ func goldenComputeEvidence(q goldenQuery, ranked []scoredLyricCandidateResult) g
 		}
 	}
 	ev.TitleAccepted = lyricTitleAccepted(winner.Title, q.Title)
-	// v15:版本限定词判据跟打分层同一口径——先过批级语种判决(applyLanguageVersionVerdicts),冠军
-	// 声明的语种与本地推断一致时,「(粤语)」这类标签不算版本差异;不一致(国语词配粤语音轨)直接不 OK。
+
 	cands := make([]lyricCandidate, len(ranked))
 	for i := range ranked {
 		cands[i] = lyricCandidateFromScored(ranked[i])
@@ -285,12 +213,6 @@ func abs(x float64) float64 {
 	return x
 }
 
-// goldenJudgeEvidence 是"够不够格当金标"的闸。全部要过:
-//   - 有冠军:歌名过闸、版本一致;自报曲长偏差 ≤3%(没自报的放行);末句 ≤ 曲长+5s 且覆盖 ≥50%;
-//     并且**要么**有别的源印证正文(ConsensusPeers ≥1),**要么**(单候选)自报曲长偏差 ≤1% 且覆盖 ≥70%;
-//     本地是现场专辑时专辑亲和 >0;
-//   - 没冠军:必须是纯音乐类(标记来自源的明文断言),不接受"搜不到"当样本;
-//   - 缓存那份跟冠军不是同一份(differs)且不是用户手选 → 有争议,拒绝。
 func goldenJudgeEvidence(q goldenQuery, winner string, ev goldenLabelEvidence) error {
 	if winner == "" {
 		if ev.Instrumental == "" {
@@ -336,11 +258,6 @@ func goldenJudgeEvidence(q goldenQuery, winner string, ev goldenLabelEvidence) e
 	return nil
 }
 
-// ---------- 类别覆盖契约 ----------
-
-// goldenRequiredCategories:每一类至少一个样本。键是 fixture.category 的取值,值是一句"这一类在
-// 守什么"。新增一条打分判据 / 新修一个真实错配,就在这里加一行并采一个样本——没有样本的判据
-// 等于没有回归保护。
 var goldenRequiredCategories = map[string]string{
 	"zh-studio-multisource": "华语录音室版,多源应答,逐字时间轴——最普通的一类,守基线",
 	"latin-title":           "英文歌(歌手/歌名均无汉字),语言闸不许误杀,Musixmatch/LRCLIB 参与",
@@ -356,14 +273,7 @@ var goldenRequiredCategories = map[string]string{
 	"reject-credit-only":    "整份只有署名行的候选被否决",
 	"reject-plain-text":     "无时间戳纯文本候选被否决",
 	"reject-wrong-language": "语言跟这首歌对不上的候选被否决",
-	// ⚠️ 没有 "word-timing-override"(applyWordTimingTitleOverride)这一类:采集时把库里
-	// 全部 20 条真实触发案例过了一遍,没有一条站得住——原始案例(方大同《公园/南音 (Live版)》,酷狗是
-	// 另一场演唱会)如今被 v7 的 liveAlbumConflict 先行接住、逐字加分不再是决胜项,这条规则根本不触发;
-	// 仍会触发的 11 条(林家谦 White Summer Live 系列、《Catch a Dream (Live版)》《爱不来 (Live版)》
-	// 《大风吹 (和声伴奏)》)里被撤销的酷狗候选跟冠军**是同一张专辑、同一自报时长的同一次录音**,只是
-	// 括号写法不同(「(with 宣萱)(White Summer Live)」vs「(White Summer Live) [with 宣萱]」),撤销之后
-	// 用户丢的是逐字、换来的不是版本正确——这更像规则误伤而不是"已确认正确"。有争议的不进金标
-	// (用户 定),这条规则由 match_test.go 的 TestApplyWordTimingTitleOverride_* 钉住。
+
 	"duration-overshoot":        "末句超曲长 5s 的候选吃 -700",
 	"duration-corroborated":     "时长不吻合但跨源末尾印证救回",
 	"line-only-winner":          "没有逐字的冠军赢过带逐字的候选",
@@ -372,8 +282,6 @@ var goldenRequiredCategories = map[string]string{
 	"single-candidate":          "只有一个源应答",
 	"instrumental-marker":       "纯音乐标记搭车透传,没有歌词冠军",
 }
-
-// ---------- 加载 / 转换 ----------
 
 func loadGoldenFixtures(t *testing.T) []*goldenFixture {
 	t.Helper()
@@ -451,7 +359,6 @@ func goldenRawRound(fx *goldenFixture) map[string]lyricSourceResult {
 	return raw
 }
 
-// applyGoldenSettings 把样本里记录的包级状态设上,并登记还原。
 func applyGoldenSettings(t *testing.T, fx *goldenFixture) {
 	t.Helper()
 	savedFeatures := features
@@ -497,7 +404,6 @@ func applyGoldenSettings(t *testing.T, fx *goldenFixture) {
 	artistAliasMu.Unlock()
 }
 
-// runGoldenFixture 跑生产链路,产出可比对的 expect。
 func runGoldenFixture(fx *goldenFixture) goldenExpect {
 	raw := goldenRawRound(fx)
 	ranked := rankLyricSourceResults(fx.Query.Artist, fx.Query.Title, fx.Query.Album, fx.Query.DurationSecs, raw)
@@ -537,11 +443,9 @@ func goldenFingerprint(s string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-// ---------- 比对 ----------
-
 type goldenDiff struct {
-	semantic []string // 冠军 / 判决 / 纯音乐标记
-	snapshot []string // 分项快照
+	semantic []string
+	snapshot []string
 }
 
 func diffGoldenExpect(want, got goldenExpect) goldenDiff {
@@ -582,8 +486,7 @@ func diffGoldenExpect(want, got goldenExpect) goldenDiff {
 	if want.WinnerFingerprint != got.WinnerFingerprint {
 		d.snapshot = append(d.snapshot, fmt.Sprintf("冠军正文指纹: 期望 %s, 实际 %s", want.WinnerFingerprint, got.WinnerFingerprint))
 	}
-	// 名次按整体顺序比一次,分项按**源名**逐一比——按位置比会在名次变动时把 A 的期望跟 B 的实际
-	// 摆在一行里,读起来像 A 的分项被改得面目全非(突变测试里测试就是这个形态)。
+
 	order := func(r []goldenRankedCandidate) string {
 		names := make([]string, 0, len(r))
 		for _, c := range r {
@@ -606,7 +509,7 @@ func diffGoldenExpect(want, got goldenExpect) goldenDiff {
 		w, wok := wm[s]
 		g, gok := gm[s]
 		if !wok || !gok {
-			continue // 有无候选的差异已在上面的判决里报过
+			continue
 		}
 		if wt, gt := goldenTermsString(w.Terms), goldenTermsString(g.Terms); wt != gt {
 			d.snapshot = append(d.snapshot, fmt.Sprintf("%s 分项: 期望 [%s], 实际 [%s]", s, wt, gt))
@@ -621,7 +524,6 @@ func diffGoldenExpect(want, got goldenExpect) goldenDiff {
 	return d
 }
 
-// goldenTermPoints 取排名候选里某一项的分值(没有这一项返回 0),给类别校验用。
 func goldenTermPoints(c goldenRankedCandidate, kind string) int {
 	for _, t := range c.Terms {
 		if t.Kind == kind {
@@ -666,8 +568,6 @@ func writeGoldenFixture(fx *goldenFixture) error {
 	return os.WriteFile(filepath.Join(lyricsGoldenDir, fx.ID+".json"), raw, 0o644)
 }
 
-// ---------- 测试 ----------
-
 func TestLyricsGolden(t *testing.T) {
 	fixtures := loadGoldenFixtures(t)
 	if len(fixtures) == 0 {
@@ -695,7 +595,7 @@ func TestLyricsGolden(t *testing.T) {
 					return
 				}
 				fx.Expect = got
-				// 独立判据也跟着重算(共识数/覆盖率会随正文处理变),缓存旁证保留采集时的值。
+
 				ev := goldenComputeEvidence(fx.Query, rankLyricSourceResults(fx.Query.Artist, fx.Query.Title, fx.Query.Album, fx.Query.DurationSecs, goldenRawRound(fx)))
 				ev.CacheAgreement = fx.LabelEvidence.CacheAgreement
 				fx.LabelEvidence = ev
@@ -719,14 +619,12 @@ func TestLyricsGolden(t *testing.T) {
 	}
 }
 
-// TestLyricsGoldenCategoryCoverage:类别覆盖契约。
 func TestLyricsGoldenCategoryCoverage(t *testing.T) {
 	fixtures := loadGoldenFixtures(t)
 	if len(fixtures) == 0 {
 		t.Fatal("testdata/lyricsgolden 里一个样本都没有——金标集是入库资产,目录被删/被清就是红,不是跳过")
 	}
-	// 一类算"有覆盖",是**有样本真的体现了它**(goldenCategoryCheck 过),不是有样本贴了这个标签——
-	// 一个样本常常同时体现好几类(纯音乐那首里网易云的署名行也被否决了),按标签数就漏了。
+
 	var missing []string
 	for cat := range goldenRequiredCategories {
 		covered := false
@@ -746,11 +644,8 @@ func TestLyricsGoldenCategoryCoverage(t *testing.T) {
 	}
 }
 
-// TestLyricsGoldenFixturesAreScrambled:样本里不许出现明文歌词——置乱后的正文不可能命中任何
-// OpenCC 繁→简词典里的字(置乱池刻意避开了它们),也不可能出现 goldenScrambleForbiddenSample
-// 里这些高频真实汉字。命中就说明有人手工往样本里塞了明文,或者采集时绕过了 scrambleLyricRound。
 func TestLyricsGoldenFixturesAreScrambled(t *testing.T) {
-	// 检索层样本里只有 lrclib 的搜索结果带正文,一并查。
+
 	for _, fx := range loadSearchGoldenFixtures(t) {
 		for _, it := range fx.Items {
 			for _, text := range []string{it.SyncedLyrics, it.PlainLyrics} {
@@ -781,12 +676,6 @@ func TestLyricsGoldenFixturesAreScrambled(t *testing.T) {
 	}
 }
 
-// ---------- 类别语义校验:贴了这个标签的样本,必须真的走到了这一类要守的那条判据 ----------
-
-// goldenCategoryCheck 检查样本的 expect 是否**体现**了它声称的类别——"duration-overshoot"的样本里
-// 必须真有候选吃到 durationOvershoot,"reject-plain-text"里必须真有候选被 rejectPlainTextOnly。
-// 采集时和 TestLyricsGolden 里都跑:防止标签贴错,也防止哪天某条判据被改得永远不触发、而样本仍然
-// "全绿"地放行(那时它守的就是空气)。
 func goldenCategoryCheck(fx *goldenFixture, category string, e goldenExpect) error {
 	hasTerm := func(c goldenRankedCandidate, kind string) bool {
 		for _, t := range c.Terms {
@@ -916,8 +805,7 @@ func goldenCategoryCheck(fx *goldenFixture, category string, e goldenExpect) err
 		if err := needWinner(); err != nil {
 			return err
 		}
-		// 放过的一半:某个源的**原始**歌名带语种标签(声明了语种),排名里它没吃 versionTags、标题档是 120。
-		// 抓住的一半:某个源自报了**另一种**语种,排名里它吃了 versionTags。
+
 		waived, caught := "", false
 		for src, g := range fx.Sources {
 			title := g.Title
@@ -1046,9 +934,6 @@ func goldenCategoryCheck(fx *goldenFixture, category string, e goldenExpect) err
 	return nil
 }
 
-// TestLyricsGoldenWinnersAreIndependentlyJustified:每个样本的冠军都必须用样本自己的数据重新
-// 通过 goldenJudgeEvidence——防止有人手改 expect.winner 钉一个站不住的冠军,也防止"缓存里就是它"
-// 被当成唯一依据。cache_agreement 是采集时的旁证,重算时原样沿用。
 func TestLyricsGoldenWinnersAreIndependentlyJustified(t *testing.T) {
 	fixtures := loadGoldenFixtures(t)
 	for _, fx := range fixtures {
@@ -1072,18 +957,12 @@ func TestLyricsGoldenWinnersAreIndependentlyJustified(t *testing.T) {
 	}
 }
 
-// goldenUncoverableKinds:打分项 / 否决原因里**没有**金标样本、且说得出为什么的那几个。新增一条打分项或
-// 否决原因时,要么采一首样本让它出现在某个 fixture 里,要么在这里写清楚为什么采不到——两个都没有,
-// TestLyricsGoldenCoversEveryScoreTerm 红。
 var goldenUncoverableKinds = map[string]string{
 	scoreTermWordTimingOverride: "库里 20 条真实触发全是同一次录音的括号写法差异(见 goldenRequiredCategories 上方注释),有争议不采;match_test.go 的 TestApplyWordTimingTitleOverride_* 钉住",
 	scoreRejectNotTimed:         "2026-08-30 起 lrclib/musixmatch 的纯文本走 plainOnly → rejectPlainTextOnly,库里历史上的 rejectNotTimed 全是 lrclib 纯文本,如今再也触发不到;两首候选曲(罗伯·强生《Sweet Home Chicago》、米津玄师《Shitodo Seiten Daimeiwaku》)都要靠别名/变体重试轮才有候选,单轮不可回放",
 	scoreRejectNoLastTimestamp:  "过了 isTimedLRC 却提不出末句时间戳,理论上不会发生(scoreLyricCandidateDetailed 里的注释),库里零例",
 }
 
-// TestLyricsGoldenCoversEveryScoreTerm:lyricScoreTermKinds 里的每一项、以及每一种 reject 原因,都要在
-// 至少一个样本里真的出现过——不然那条判据对金标集来说是空气。采不到的必须在 goldenUncoverableKinds 里
-// 说明理由。
 func TestLyricsGoldenCoversEveryScoreTerm(t *testing.T) {
 	fixtures := loadGoldenFixtures(t)
 	if len(fixtures) == 0 {

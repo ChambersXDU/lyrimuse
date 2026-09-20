@@ -1,17 +1,5 @@
 import Foundation
 
-/// 一份 macOS 崩溃报告(`~/Library/Logs/DiagnosticReports/*.ips`)的摘要,诊断导出的「Recent Crash Reports」段用
-/// (2026-09-06,借鉴清单 #31)。
-///
-/// .ips 是两段 JSON 拼在一个文件里:第一行是摘要(app_name / app_version / bug_type / timestamp / bundleID …),
-/// 换行之后是完整正文(procName / procPath / bundleInfo / exception / termination / faultingThread / threads /
-/// usedImages …)。这里只挑排查用得上的字段,**termination 排在帧前面**:本机 7 份真实报告里 6 份是启动期 DYLD
-/// 「Library missing」、1 份是 Launch Constraint Violation,故障线程一帧都没有,能说明问题的只有 termination 的
-/// indicator / reasons / details。帧只在有的时候附,最多 `maxFrames` 帧。
-///
-/// 解析必须宽容:.ips 的结构随 macOS 版本变;两段任一坏了就只用另一段(parseNotes 记下哪段没解出来),两段都坏
-/// 返回 nil(调用方退成一行说明)。纯逻辑、不碰文件系统——目录扫描与读文件在 App 侧 DiagnosticsExporter,这里的
-/// 三种样本(DYLD 缺库 / 签名约束 / 带帧的 EXC_BAD_ACCESS)由 selftest ops-diagnostics 组钉着。
 public struct CrashReportSummary: Equatable {
     public struct Frame: Equatable {
         public var imageName: String?
@@ -30,7 +18,6 @@ public struct CrashReportSummary: Equatable {
         }
     }
 
-    /// 故障线程最多附多少帧。启动期崩溃通常零帧;真正的崩溃前十几帧足够定位到哪个模块。
     public static let maxFrames = 15
 
     public var fileName: String
@@ -51,29 +38,27 @@ public struct CrashReportSummary: Equatable {
     public var faultingThreadIndex: Int?
     public var frames: [Frame] = []
     public var totalFrames = 0
-    /// 哪一段没解出来("header unreadable" / "body unreadable"),写进报告让读的人知道信息不全。
+
     public var parseNotes: [String] = []
 
     public init(fileName: String) {
         self.fileName = fileName
     }
 
-    // MARK: - 解析
-
     public static func parse(fileName: String, data: Data) -> CrashReportSummary? {
         guard !data.isEmpty else { return nil }
-        // 第一行 = 摘要;之后 = 正文。
+
         var header: [String: Any]?
         var body: [String: Any]?
         if let newline = data.firstIndex(of: UInt8(ascii: "\n")) {
             header = parseObject(Data(data[data.startIndex..<newline]))
             body = parseObject(Data(data[data.index(after: newline)...]))
             if header == nil && body == nil {
-                // 也许整份就是一个(多行的)JSON 对象,没有摘要行——结构变了也不至于全丢。
+
                 body = parseObject(data)
             }
         } else if let single = parseObject(data) {
-            // 只有一行:看它长得像正文(有 procName / threads / termination)还是像摘要。
+
             if looksLikeBody(single) { body = single } else { header = single }
         }
         guard header != nil || body != nil else { return nil }
@@ -165,14 +150,6 @@ public struct CrashReportSummary: Equatable {
         return []
     }
 
-    // MARK: - 归属与挑选
-
-    /// 是不是本 App 家族(App 本体或它包里的 collector)的报告。
-    ///
-    /// 文件名前缀只能粗筛(别的 App 也可能有叫 collector 的进程),这里按正文再确认:进程名是 App 可执行名或
-    /// "collector";正文带 bundle id 的(App 本体)必须等于本变体;正文带 procPath 的,路径必须落在
-    /// 「<显示名>.app/Contents/」里 —— 正式版与 Dev 的显示名不同,互不混入(macOS 会把家目录里的路径改写成
-    /// `/Users/USER/*/…`,包名那一段仍然在)。
     public func belongsToApp(executableName: String, bundleIdentifier: String, appDisplayName: String) -> Bool {
         guard let name = processName?.lowercased(),
               name == executableName.lowercased() || name == "collector" else { return false }
@@ -181,9 +158,6 @@ public struct CrashReportSummary: Equatable {
         return true
     }
 
-    /// 每个进程各取最近 N 份:collector 走 KeepAlive 崩溃循环时会刷出一串报告,总共取 N 会把 App 那一份挤掉。
-    /// 同一进程内按时间戳倒序(同格式字符串,字典序即时间序;没有时间戳退到文件名,它也带时间);进程按名字排,
-    /// 结果稳定。
     public static func select(_ reports: [CrashReportSummary], perProcessLimit: Int) -> [CrashReportSummary] {
         var byProcess: [String: [CrashReportSummary]] = [:]
         for report in reports {
@@ -197,9 +171,6 @@ public struct CrashReportSummary: Equatable {
         return out
     }
 
-    // MARK: - 渲染
-
-    /// 报告里的文本行。第一行是文件名,后面缩进两格;帧再缩进两格。
     public func renderLines() -> [String] {
         var out: [String] = []
         out.append("- \(fileName)")

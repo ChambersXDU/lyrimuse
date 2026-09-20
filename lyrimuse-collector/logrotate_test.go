@@ -59,8 +59,6 @@ func TestRotateLogIfNeeded_AboveThreshold_ArchivesAndOpensFresh(t *testing.T) {
 	}
 	defer f.Close()
 
-	// 归档:旧内容原样搬到 .old,一个字节都不能丢——用户排查问题时这是唯一还能看到
-	// "轮转之前发生了什么"的地方。
 	archived, err := os.ReadFile(path + ".old")
 	if err != nil {
 		t.Fatalf("read archived file: %v", err)
@@ -69,7 +67,6 @@ func TestRotateLogIfNeeded_AboveThreshold_ArchivesAndOpensFresh(t *testing.T) {
 		t.Fatalf("archived content mismatch: got %d bytes, want %d bytes", len(archived), len(oldContent))
 	}
 
-	// 新文件:原路径必须存在且是全新的(空的),不能残留旧内容的任何一部分。
 	if _, err := f.WriteString("fresh"); err != nil {
 		t.Fatalf("write to fresh file: %v", err)
 	}
@@ -102,7 +99,6 @@ func TestRotateLogIfNeeded_OverwritesPreviousOldFile(t *testing.T) {
 		defer f.Close()
 	}
 
-	// 覆盖式:.old 只留最近这一份,不该是旧的旧存档跟新存档拼在一起。
 	archived, err := os.ReadFile(oldOldPath)
 	if err != nil {
 		t.Fatalf("read .old after rotation: %v", err)

@@ -5,14 +5,6 @@ import (
 	"time"
 )
 
-// needsPeripheralBackfill 的回归测试。
-//
-// 两条都是 上的:
-//   - canonical_artist 之前不在触发条件里,而它在 backfillPeripheralFields 里本来就有补全
-//     分支 —— 于是那四个字段一旦齐了,缺 canonical 的记录就再也没机会补。测试撞到过:同一张
-//     专辑里一半曲目报 "Leah Dou"、一半报"窦靖童",后者其中两条 canonical 是空的。
-//   - 以前只有 10 分钟节流、没有次数上限,真的补不上的字段会让这条记录只要还在被播放就
-//     每 10 分钟重发一轮网络请求,永远停不下来。
 func TestNeedsPeripheralBackfill(t *testing.T) {
 	long := time.Now().Unix() - int64(enrichPeripheralRetryInterval/time.Second) - 1
 	full := enrichEntry{
@@ -54,9 +46,7 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 			}(),
 			artist: "窦靖童", want: false,
 		},
-		// 以下三条 :QQ 的专辑/歌手 mid 进了触发条件,而"搜索兜底链接"
-		// 以前压根不算缺(判据只有 QQURL == "")—— 本机测试 565 条里 40 条卡在那一档、
-		// 永远不会再被补一次,「前往专辑/前往艺人」对它们也就永远做不了。
+
 		{
 			name: "QQ 链接还是搜索兜底:补(以前永远不补)",
 			e: func() enrichEntry {
@@ -96,8 +86,7 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 			}(),
 			artist: "窦靖童", want: true,
 		},
-		// 以下两条 :仿冒号名单上的艺人(周杰伦)网易云链接是 withholdImpersonatorRiddenIdentity
-		// 故意扣掉的,补多少轮都不会有 —— 以前照样算缺,本机 42 条只缺这一项的条目每条白补 5 轮。
+
 		{
 			name:   "周杰伦只缺网易云链接:不补(那个链接是故意不给的)",
 			e:      func() enrichEntry { e := full; e.NeteaseURL = ""; return e }(),
@@ -116,17 +105,11 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 	}
 }
 
-// 外围补全的节流时间戳必须**跟条目的解析时刻分开**。
-//
-// 拆分之前两者共用 e.TS:backfillPeripheralFields 每跑一次就把它推到当下
-// (最多 5 次、每次隔 10 分钟),而 needsLyricsRetry 的 6 小时起算点正是 e.TS —— 于是
-// 补个封面主色就能把"去别的源再搜一遍歌词"整体往后拖近一小时。两件事本来毫无关系。
 func TestPeripheralThrottleDoesNotDelayLyricsRetry(t *testing.T) {
 	saved := getFeaturesLyricsSources()
 	defer func() { setFeaturesLyricsSources(saved) }()
 	setFeaturesLyricsSources(map[string]bool{"netease": true, "kugou": true})
 
-	// 一条 6 小时前解析出来的记录,当时只有网易云给了候选 —— 酷狗没出现过,该重搜。
 	longAgo := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1
 	e := enrichEntry{
 		Lyrics:            "[00:01.00]hello",
@@ -137,13 +120,12 @@ func TestPeripheralThrottleDoesNotDelayLyricsRetry(t *testing.T) {
 		t.Fatal("间隔已过、又确实缺源,本来就该重搜")
 	}
 
-	// 外围补全刚跑过一次(只推它自己的时间戳)。歌词重搜不该因此被推迟。
 	e.PeripheralTS = time.Now().Unix()
 	e.PeripheralRetryCount++
 	if !needsLyricsRetry(e, false, false, true) {
 		t.Error("补了一次外围字段就把歌词重搜挡掉了 —— 两个节流又耦合回去了")
 	}
-	// 而外围补全自己的节流要照常生效。
+
 	if needsPeripheralBackfill(e, "someone", "") {
 		t.Error("外围补全刚跑过,10 分钟内不该再来")
 	}
