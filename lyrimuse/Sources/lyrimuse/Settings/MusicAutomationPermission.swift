@@ -57,13 +57,15 @@ enum MusicAutomationPermission {
         URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!
     }
 
+    @MainActor
     static func checkForCurrentPlayer(askIfNeeded: Bool) -> Bool {
-        guard PlaybackPlayerPreference.isExclusivelyAppleMusic else { return true }
+        guard MusicPlaybackController.currentControlTargetBundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return true }
         return check(askIfNeeded: askIfNeeded).isAuthorized
     }
 
+    @MainActor
     static func checkForCurrentPlayerSafely(askIfNeeded: Bool) async -> Bool {
-        guard PlaybackPlayerPreference.isExclusivelyAppleMusic else { return true }
+        guard MusicPlaybackController.currentControlTargetBundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return true }
         return await checkAppleMusicSafely(askIfNeeded: askIfNeeded)
     }
 

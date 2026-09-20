@@ -62,6 +62,10 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 3. 借用缓存有三道守卫(`ageCompensatedCachedElapsed`,纯函数):缓存必须是同一首歌(标题+歌手都对上);双方都在播放(暂停不借:冻结的 elapsedTime 本身就精确);缓存值按"读数年龄 × 播放速率"外推到当下后,跟这次的新鲜读数差 ≤2s 才可信(超过说明缓存跨越了 seek/单曲循环重启)。任何一道不过就退回 media-control 自己的读数——精度让位于正确性。
 4. 后台缓存刷新只在**正在播放**时发起(暂停时刷出来的缓存结构上不可能被借用,白 fork osascript)。
 
+### 网页媒体与 Apple Music 并存
+
+自动识别或多选包含 Apple Music 时，若系统媒体焦点被网页占用、未通过音乐识别或无法读取，App 与采集器会直接查询 Music.app。正在播放的 Apple Music 优先于浏览器；没有被接纳的网页音乐时也保留 Apple Music 的暂停状态。已识别的其他原生音乐播放器保持原有优先级；明确排除 Apple Music 时不进行此兜底。网页媒体事件只触发刷新，不冻结 Apple Music 的歌词时钟。
+
 ### 信任列表:自动识别不限死内置 App(2026-08-21)
 
 - **要解决的问题**:`.auto` 原来只认写死的那几个 bundle id,任何别的播放器(Foobar、AlgerMusicPlayer、第三方客户端、以后出现的新 App)在放都被当成"没有可关心的播放"。
@@ -453,7 +457,7 @@ nil 快照(Music.app stopped/退出、播放列表放完、.auto 或 media-contr
 
 ### 播放控制(写路径,MusicPlaybackController)
 
-- playPause/nextTrack/previousTrack/seek 走双后端 `dispatch`:选中集合**恰好**是 `{Apple Music}`(`PlaybackPlayerPreference.isExclusivelyAppleMusic`,2026-09-01 多选后从"设置值 == .appleMusic"改写成这个判据,行为对单选年代逐位不变)→ AppleScript 发给 Music.app;**其它任何组合(含 .auto、含多选)** → media-control 控制指令(作用于系统 Now Playing 焦点,代码注释断言读取路径确认在播时天然作用于该播放器)。seek 有 `preferAppleScript` 覆盖:非排他选择下实际在播 Apple Music 时,读路径是 AppleScript 精确播放头,写路径也走同一条(`LocalPlaybackSource.seek` 按 `lastSnapshot?.bundleIdentifier` 判)。⚠️待核对:playPause/上一首/下一首没有同款覆盖——.auto/多选 + Apple Music 实际在播时它们走 media-control,行为应等效但未见实测记录。
+- playPause/nextTrack/previousTrack/seek 按当前歌词实际对应的播放器路由。Apple Music 和 Spotify 使用各自的 AppleScript 指令，自动识别与多选模式同样生效。其他播放器使用 media-control 前重新核对系统媒体焦点，焦点不匹配则不发送命令；没有已接纳的控制目标时也不发送全局命令。Apple Music 的自动化权限检查按实际控制目标执行。
 - `seek(toMs:)` 除发指令外**立刻**本地重锚三处(trackPosSeconds/posPrevWall/posErrEMA 清零)+ 当场重建 anchor + `pollGeneration += 1` 作废在飞轮询 + 立即 `fastTick()`——不重锚的话小于 2s 的拖动会被 seek 容差永久吞掉。秒数经 `seekArgument` 格式化(固定 3 位小数、en_US_POSIX、负值夹 0、上界故意不夹)。
 - 「喜欢」(favorited/loved 双属性名兜底,macOS 版本间改名)、播放模式(三档:列表/随机/单曲循环)、音量:仅 AppleScript,`supportsExtendedControls` = Apple Music 和 Spotify;Spotify 无单曲循环档(`supportsRepeatOne` 仅 Apple Music,脚本接口只有布尔 repeating);QQ/网易云完全不支持(MediaRemote 只有播放控制)。**Spotify 的随机键还看 `shuffling enabled`**(2026-09-09):模式段读成 `shuffling;shuffling enabled` 两截,后者为 false(这个账号 / 播放上下文不允许随机——用户的 Free 账号实测 `set shuffling` 退出码 0 但值不变、Spotify 自己界面上的随机键也点不动)时 `spotifyPlaybackMode(fromModePart:)` 返回 nil,随机键整颗不显示;第二截读不出来当 true,只在明确说不允许时才隐藏。「不可用」与「读不到」在 Spotify 上是同一个 UI 结局(模式组只有随机这一颗),所以不另开状态位;`extendedControlsState` 与 `playbackMode(for:)` 两条回读共用同一段脚本与同一个解析。详见决策 31。
 - 所有 Spotify 脚本前垫 running 守卫(发任何命令都会启动 Spotify);写指令"发完就不管"不阻塞,读回值的走 `runAppleScriptCapturing`(5s 超时,**不要在主线程调**)。
@@ -638,7 +642,7 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
     - **2026-09-01 补齐最后一处漏的**:同一条理由当时**只改了"已信任"那张卡**,而「发现未知播放器」那张(`unknownPlayerCard`,一键「加入信任列表」的那张)还留着通用的 `questionmark.app.dashed`。用户点名要它也显示真图标 —— 而它恰恰是三张卡里**最需要图标的一张**:另外两张里的 App 用户本来就认识,这张问的是"这个你没见过的 App 要不要信任",图标正是他判断"这是我刚在用的那个浏览器"最快的线索,比 `subtitle` 里 bundle id 那行小字快得多。改动就是给那个 `SettingsRow` 传一个 `iconImage: AppIconResolver.icon(forBundleID: seen.bundleID)`。
     - 取不到图标(理论上不太可能:它此刻正在报播放、必然装着)才退回虚线问号 —— 那个占位本身仍然成立:"这个 App 是谁我们还不确定"。实测确认 `NSWorkspace.urlForApplication(withBundleIdentifier:)` 对截图里那个 `company.thebrowser.Browser` 取得到 32×32 的 Arc.app 图标,不存在的 bundle id 如实返回 nil。
 
-⚠️待核对:设置为「自动识别」且实际在播 Apple Music 时,playPause/上一首/下一首经 `MusicPlaybackController.dispatch` 走 media-control(只有 seek 有 `preferAppleScript` 覆盖)——代码注释断言 media-control 控制指令对系统 Now Playing 焦点生效、应可控制 Music.app,但仓内未见对这一具体组合的实测记录。
+自动识别模式下的播放器竞争与控制路由由 `PlayerIdentityTests.swift` 和 `playbackfallback_test.go` 覆盖，包括网页抢占焦点、Apple Music 暂停、其他原生播放器和显式排除 Apple Music。
 
 16. **YouTube Music 的广告要在 UI 上显示「广告中」,于是 Swift 侧改成"放行并标记"、Go 侧照旧拒**
     (2026-09-03,用户原话「帮我把 chrome 上播放的 youtubemusic 的广告也像是 spotify 那样显示

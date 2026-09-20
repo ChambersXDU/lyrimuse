@@ -1,14 +1,17 @@
 import Foundation
 
 public enum MusicPlaybackController {
+    @MainActor
     public static func playPause() {
         dispatch(appleScript: #"tell application "Music" to playpause"#, mediaControlCommand: "toggle-play-pause")
     }
 
+    @MainActor
     public static func nextTrack() {
         dispatch(appleScript: #"tell application "Music" to next track"#, mediaControlCommand: "next-track")
     }
 
+    @MainActor
     public static func previousTrack() {
         dispatch(appleScript: #"tell application "Music" to previous track"#, mediaControlCommand: "previous-track")
     }
@@ -409,6 +412,7 @@ public enum MusicPlaybackController {
         }
     }
 
+    @MainActor
     public static func seek(toSeconds seconds: Double, preferAppleScript: Bool = false) {
         let value = seekArgument(forSeconds: seconds)
         let script = #"tell application "Music" to set player position to "# + value
@@ -424,11 +428,46 @@ public enum MusicPlaybackController {
         return String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), clamped)
     }
 
+    public static func controlTargetBundleID(
+        players: Set<PlaybackPlayer>, resolvedBundleID: String?, trusted: [String: String]
+    ) -> String? {
+        if players == [.appleMusic] { return PlaybackPlayer.appleMusic.bundleIdentifier }
+        if let id = resolvedBundleID, !id.isEmpty {
+            let known = PlaybackPlayer.allCases.contains { $0 != .auto && $0.bundleIdentifier == id }
+            if (players.contains(.auto) && known)
+                || players.contains(where: { $0 != .auto && $0.bundleIdentifier == id })
+                || TrustedPlayers.isTrusted(id, trusted: trusted) { return id }
+        }
+        return players.contains(.auto) ? nil : players.soleExplicitPlayer?.bundleIdentifier
+    }
+
+    @MainActor
+    public static var currentControlTargetBundleID: String? {
+        controlTargetBundleID(players: PlaybackPlayerPreference.selected,
+            resolvedBundleID: LocalPlaybackSource.shared.lastResolvedBundleID, trusted: TrustedPlayers.current)
+    }
+
+    @MainActor
     private static func dispatch(appleScript: String, mediaControlCommand: String, mediaControlArguments: [String] = []) {
-        if PlaybackPlayerPreference.isExclusivelyAppleMusic {
+        guard let target = currentControlTargetBundleID else { return }
+        if target == PlaybackPlayer.appleMusic.bundleIdentifier {
             runAppleScript(appleScript)
+        } else if target == PlaybackPlayer.spotify.bundleIdentifier {
+            let command: String
+            switch mediaControlCommand {
+            case "toggle-play-pause": command = "playpause"
+            case "next-track": command = "next track"
+            case "previous-track": command = "previous track"
+            case "seek": command = "set player position to " + (mediaControlArguments.first ?? "0")
+            default: return
+            }
+            runAppleScript(spotifyRunningGuard + "tell application \"Spotify\" to " + command)
         } else {
-            runMediaControl(mediaControlCommand, arguments: mediaControlArguments)
+            // The helper only supports global commands. Refuse them after a focus change.
+            Task.detached {
+                guard MediaControlClient.systemPlaybackBundleID() == target else { return }
+                runMediaControl(mediaControlCommand, arguments: mediaControlArguments)
+            }
         }
     }
 

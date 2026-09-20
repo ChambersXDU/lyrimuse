@@ -10,10 +10,28 @@ public enum MediaControlClient {
     static let artworkTimeout: TimeInterval = 10
 
     public static func fetchSnapshot(players: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected) -> MediaControlSnapshot? {
-        if players.contains(.auto) { return fetchAutoDetectedSnapshot() }
         if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }
         guard !players.isEmpty else { return nil }
-        return fetchMultiSelectedSnapshot(players)
+        let system = players.contains(.auto) ? fetchAutoDetectedSnapshot() : fetchMultiSelectedSnapshot(players)
+        return selectMusicSnapshot(system: system, players: players, fetchAppleMusic: radioAwareAppleMusicSnapshot)
+    }
+
+    // A browser owning Now Playing must not hide Music.app's independent playback state.
+    public static func selectMusicSnapshot(
+        system: MediaControlSnapshot?, players: Set<PlaybackPlayer>,
+        fetchAppleMusic: () -> MediaControlSnapshot?
+    ) -> MediaControlSnapshot? {
+        guard players.contains(.auto) || players.contains(.appleMusic) else { return system }
+        if let id = system?.bundleIdentifier,
+           PlaybackPlayer.allCases.contains(where: { $0 != .auto && $0.bundleIdentifier == id }) {
+            return system
+        }
+        guard let music = fetchAppleMusic() else { return system }
+        return system == nil || music.playing == true ? music : system
+    }
+
+    public static func systemPlaybackBundleID() -> String? {
+        fetchRawMediaControlSnapshot()?.1
     }
 
     private static let script = """

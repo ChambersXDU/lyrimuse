@@ -32,7 +32,7 @@ public final class MediaControlStreamWatcher {
     private static let minRestartDelay: TimeInterval = 1
     private static let maxRestartDelay: TimeInterval = 30
 
-    private let onEvent: () -> Void
+    private let onEvent: (String?) -> Void
     private var process: Process?
     private var restartWork: DispatchWorkItem?
     private var restartDelay: TimeInterval = MediaControlStreamWatcher.minRestartDelay
@@ -40,7 +40,7 @@ public final class MediaControlStreamWatcher {
 
     private var buffer = Data()
 
-    public init(onEvent: @escaping () -> Void) {
+    public init(onEvent: @escaping (String?) -> Void) {
         self.onEvent = onEvent
     }
 
@@ -134,7 +134,7 @@ public final class MediaControlStreamWatcher {
         if fired {
 
             restartDelay = Self.minRestartDelay
-            onEvent()
+            onEvent(mergedPayload["bundleIdentifier"] as? String)
         }
     }
 
@@ -145,7 +145,7 @@ public final class MediaControlStreamWatcher {
         else { return MediaControlAnchorDigest(merged: merged, anchorKey: nil, tight: false, anchorAge: nil) }
         let isDiff = object["diff"] as? Bool ?? false
         var next: [String: Any] = isDiff ? merged : [:]
-        for key in ["artist", "title", "elapsedTime", "timestamp"] where payload.keys.contains(key) {
+        for key in ["artist", "title", "elapsedTime", "timestamp", "bundleIdentifier"] where payload.keys.contains(key) {
             if payload[key] is NSNull {
                 next.removeValue(forKey: key)
             } else {

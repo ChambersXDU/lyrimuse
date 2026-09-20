@@ -3,6 +3,57 @@ import Foundation
 
 @MainActor
 func runPlayerIdentityTests() {
+    do {
+        func snapshot(_ bundle: String, playing: Bool) -> MediaControlSnapshot {
+            let data = try! JSONSerialization.data(withJSONObject: [
+                "bundleIdentifier": bundle, "title": "Song", "artist": "Artist", "playing": playing])
+            return try! JSONDecoder().decode(MediaControlSnapshot.self, from: data)
+        }
+        let music = snapshot("com.apple.Music", playing: true)
+        let paused = snapshot("com.apple.Music", playing: false)
+        let browser = snapshot("com.google.Chrome", playing: true)
+        let spotify = snapshot("com.spotify.client", playing: true)
+        let select = MediaControlClient.selectMusicSnapshot
+        let full = MediaControlStreamWatcher.digest(
+            line: Data(#"{"type":"data","diff":false,"payload":{"bundleIdentifier":"com.google.Chrome"}}"#.utf8),
+            merged: [:], arrivedAt: Date())
+        let diff = MediaControlStreamWatcher.digest(
+            line: Data(#"{"type":"data","diff":true,"payload":{"playing":false}}"#.utf8),
+            merged: full.merged, arrivedAt: Date())
+        expectEqual(diff.merged["bundleIdentifier"] as? String, "com.google.Chrome",
+                    "视频暂停的增量事件保留来源，不能误冻 Apple Music")
+        let cleared = MediaControlStreamWatcher.digest(
+            line: Data(#"{"type":"data","diff":false,"payload":{}}"#.utf8),
+            merged: diff.merged, arrivedAt: Date())
+        expectEqual(cleared.merged["bundleIdentifier"] as? String, nil, "清空系统媒体状态时不沿用旧事件来源")
+        expectEqual(select(nil, [.auto], { music })?.bundleIdentifier, "com.apple.Music",
+                    "视频抢占系统焦点但不被接纳时，自动识别仍读取 Apple Music")
+        expectEqual(select(nil, [.auto], { paused })?.playing, false,
+                    "看完视频后仍保留暂停的 Apple Music，允许继续播放")
+        expectEqual(select(browser, [.auto], { music })?.bundleIdentifier, "com.apple.Music",
+                    "Apple Music 正在播放时优先于浏览器媒体")
+        expectEqual(select(browser, [.auto], { paused })?.bundleIdentifier, "com.google.Chrome",
+                    "Apple Music 暂停时仍支持已接纳的网页音乐")
+        var queried = false
+        expectEqual(select(spotify, [.auto], { queried = true; return music })?.bundleIdentifier,
+                    "com.spotify.client", "已识别的其他原生播放器不被 Apple Music 抢走")
+        expectEqual(queried, false, "原生播放器无需额外查询 Apple Music")
+        expectEqual(select(nil, [.spotify], { queried = true; return music }) == nil, true,
+                    "未选择 Apple Music 时不启用兜底")
+        expectEqual(queried, false, "显式排除 Apple Music 时不发 AppleEvent")
+        let target = MusicPlaybackController.controlTargetBundleID
+        expectEqual(target([.auto], "com.apple.Music", [:]), "com.apple.Music", "自动模式按钮精确控制显示中的 Apple Music")
+        expectEqual(target([.appleMusic, .spotify], "com.apple.Music", [:]), "com.apple.Music", "多选模式同样按实际播放器控制")
+        expectEqual(target([.appleMusic], "com.google.Chrome", [:]), "com.apple.Music", "Apple Music 单选不受网页残留焦点影响")
+        expectEqual(target([.auto], "com.google.Chrome", [:]), nil, "未接纳的视频绝不成为控制目标")
+        expectEqual(target([.auto], nil, [:]), nil, "无播放对象时不发系统全局命令")
+        expectEqual(target([.auto], "com.spotify.client", [:]), "com.spotify.client", "Spotify 使用自己的控制目标")
+        expectEqual(LocalPlaybackSource.shouldFreezeForPlayerEvent(currentBundleID: "com.apple.Music",
+            eventBundleID: "com.google.Chrome"), false, "网页开始或暂停不能冻结 Apple Music 歌词时钟")
+        expectEqual(LocalPlaybackSource.shouldFreezeForPlayerEvent(currentBundleID: "com.apple.Music",
+            eventBundleID: "com.apple.Music"), true, "Apple Music 自己的暂停仍立即冻结时钟")
+    }
+
 
     do {
         typealias L = LocalPlaybackSource

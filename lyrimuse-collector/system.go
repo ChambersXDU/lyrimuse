@@ -55,13 +55,36 @@ const getStateScript = `(() => {
 })()`
 
 func getState(ctx context.Context) (map[string]any, bool) {
-	if features.Players[playerAuto] {
-		return getAutoDetectedState(ctx)
-	}
 	if len(features.Players) == 1 && features.Players[playerAppleMusic] {
 		return getAppleMusicOnlyState(ctx)
 	}
-	return getMultiSelectedState(ctx)
+	var state map[string]any
+	var ok bool
+	if features.Players[playerAuto] {
+		state, ok = getAutoDetectedState(ctx)
+	} else {
+		state, ok = getMultiSelectedState(ctx)
+	}
+	return selectAppleMusicFallback(state, ok, features.Players[playerAuto] || features.Players[playerAppleMusic], func() (map[string]any, bool) {
+		return getAppleMusicOnlyState(ctx)
+	})
+}
+
+// Keep accepted native players; a browser's global focus must not obscure Music.app.
+func selectAppleMusicFallback(state map[string]any, ok, allowed bool, fetch func() (map[string]any, bool)) (map[string]any, bool) {
+	bundle, _ := state["bundleIdentifier"].(string)
+	if !allowed || isKnownPlayerBundleID(bundle) {
+		return state, ok
+	}
+	music, musicOK := fetch()
+	if !musicOK || len(music) == 0 {
+		return state, ok
+	}
+	playing, _ := music["playing"].(bool)
+	if len(state) == 0 || playing {
+		return music, true
+	}
+	return state, ok
 }
 
 func getAppleMusicOnlyState(ctx context.Context) (map[string]any, bool) {

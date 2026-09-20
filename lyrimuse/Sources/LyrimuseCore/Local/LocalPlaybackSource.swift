@@ -591,7 +591,7 @@ public final class LocalPlaybackSource: ObservableObject {
         guard playerInfoObserver == nil else { return }
         let center = DistributedNotificationCenter.default()
         let handler: (Notification) -> Void = { [weak self] _ in
-            MainActor.assumeIsolated { self?.handlePlayerInfoChanged() }
+            MainActor.assumeIsolated { self?.handlePlayerInfoChanged(from: PlaybackPlayer.appleMusic.bundleIdentifier) }
         }
         playerInfoObserver = center.addObserver(
             forName: NSNotification.Name("com.apple.Music.playerInfo"),
@@ -603,22 +603,29 @@ public final class LocalPlaybackSource: ObservableObject {
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     if let hint, self.spotifyNotificationHint != hint { self.spotifyNotificationHint = hint }
-                    self.handlePlayerInfoChanged()
+                    self.handlePlayerInfoChanged(from: PlaybackPlayer.spotify.bundleIdentifier)
                 }
             }
     }
 
     private func startStreamWatcher() {
         guard streamWatcher == nil else { return }
-        let watcher = MediaControlStreamWatcher { [weak self] in
-            MainActor.assumeIsolated { self?.handlePlayerInfoChanged() }
+        let watcher = MediaControlStreamWatcher { [weak self] bundleID in
+            MainActor.assumeIsolated { self?.handlePlayerInfoChanged(from: bundleID) }
         }
         streamWatcher = watcher
         watcher.start()
     }
 
-    private func handlePlayerInfoChanged() {
-        freezeExtrapolationUntilNextPoll()
+    public nonisolated static func shouldFreezeForPlayerEvent(currentBundleID: String?, eventBundleID: String?) -> Bool {
+        guard let currentBundleID, !currentBundleID.isEmpty else { return false }
+        return currentBundleID == eventBundleID
+    }
+
+    private func handlePlayerInfoChanged(from bundleID: String?) {
+        if Self.shouldFreezeForPlayerEvent(currentBundleID: lastResolvedBundleID, eventBundleID: bundleID) {
+            freezeExtrapolationUntilNextPoll()
+        }
         pendingNotificationPoll?.cancel()
         pendingNotificationPoll = Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.playerInfoDebounce)
