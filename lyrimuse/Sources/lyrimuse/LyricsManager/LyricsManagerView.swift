@@ -1875,7 +1875,7 @@ struct LyricsManagerView: View {
                       let plain = update.candidates.first(where: { $0.isPlainTextOnly }) {
 
                 await store.savePlainTextEdit(key: key, plainLyrics: plain.lyrics, source: plain.source)
-                done(.empty, L10n.t("没有找到带时间戳的版本，已自动采纳一份纯文本兜底（可在「歌词窗口」里查看）"))
+                done(.empty, L10n.t("没有找到带时间戳的版本，已自动采纳一份纯文本兜底"))
             } else if update.networkLooksDown {
                 done(.empty, L10n.t("网络似乎不通，这一轮没搜到任何候选"))
             } else {

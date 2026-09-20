@@ -15,14 +15,13 @@ description         Word-synced desktop lyrics for Apple Music, Spotify and \
                     browser web players
 
 long_description    Lyrimuse shows word-by-word synced lyrics as a floating \
-                    overlay, a Dynamic-Island-style capsule, an \
-                    Apple-Music-style lyrics window or right in the menu bar, \
+                    overlay or right in the menu bar, \
                     for Apple Music, Spotify and YouTube Music / Spotify Web \
                     playing in a browser. Lyrics are fetched from nine \
                     sources and every candidate is scored on one scale so the \
                     best match wins. Translation, per-line romanization \
                     (pinyin, Cantonese Jyutping, Japanese furigana) and \
-                    Last.fm / ListenBrainz scrobbling are built in.
+                    ListenBrainz submissions are built in.
 
 checksums           ${distname}${extract.suffix} \
                         rmd160  e045cf933adb38abfad31781a3f9ed2c4fb26ccd \
@@ -46,19 +45,6 @@ patchfiles          patch-build-env-hooks.diff
 patch.pre_args-append -p1
 
 post-patch {
-    reinplace {/sparkle-project\/Sparkle/d} ${worksrcpath}/lyrimuse/Package.swift
-    reinplace {s|"LyrimuseCore", "KeyboardShortcuts", "Sparkle"|"LyrimuseCore", "KeyboardShortcuts"|} \
-        ${worksrcpath}/lyrimuse/Package.swift
-    copy -force ${filespath}/SparkleUpdaterManager.swift \
-        ${worksrcpath}/lyrimuse/Sources/lyrimuse/Settings/SparkleUpdaterManager.swift
-
-    reinplace {s|let sparkle = SparkleUpdaterManager.shared.controller.updater|let sparkle = SparkleUpdaterManager.shared|} \
-        ${worksrcpath}/lyrimuse/Sources/lyrimuse/Settings/DiagnosticsExporter.swift
-
-    reinplace {/^            updateCard$/d} \
-        ${worksrcpath}/lyrimuse/Sources/lyrimuse/SettingsView.swift
-    reinplace {/menu.addItem(action(L10n.t("检查更新…"), symbol: "arrow.triangle.2.circlepath",/,+1d} \
-        ${worksrcpath}/lyrimuse/Sources/lyrimuse/MenuBar/MenuBarStatusMenu.swift
 }
 
 use_configure       no

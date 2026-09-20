@@ -39,8 +39,8 @@ const (
 	playerNetease    = "netease_music"
 	playerSpotify    = "spotify"
 
-	playerKugou      = "kugou_music"
-	playerAuto       = "auto"
+	playerKugou = "kugou_music"
+	playerAuto  = "auto"
 )
 
 var lyricsSourceDefaultOrder = []string{
@@ -49,23 +49,13 @@ var lyricsSourceDefaultOrder = []string{
 }
 
 type featureFlagsFile struct {
-
 	Player string `json:"player,omitempty"`
 
 	Players       []string `json:"players,omitempty"`
 	AlbumPrefetch *bool    `json:"album_prefetch,omitempty"`
 
-	LyricsAutoUpgrade    *bool `json:"lyrics_auto_upgrade,omitempty"`
-	LastfmMirrorScrobble *bool `json:"lastfm_mirror_scrobble,omitempty"`
-
-	LastfmScrobbleArtistMode string `json:"lastfm_scrobble_artist_mode,omitempty"`
-
-	LastfmScrobbleFirstArtistOnly *bool `json:"lastfm_scrobble_first_artist_only,omitempty"`
-
-	ScrobbleShortTracks *bool `json:"scrobble_short_tracks,omitempty"`
-
-	LastfmScrobblePoint string `json:"lastfm_scrobble_point,omitempty"`
-	WeeklyDigest        *bool  `json:"weekly_digest,omitempty"`
+	LyricsAutoUpgrade *bool `json:"lyrics_auto_upgrade,omitempty"`
+	WeeklyDigest      *bool `json:"weekly_digest,omitempty"`
 
 	DailyDigest *bool `json:"daily_digest,omitempty"`
 
@@ -100,28 +90,18 @@ type featureFlagsFile struct {
 
 	TrustedPlayers map[string]string `json:"trusted_players,omitempty"`
 
-	LastfmExcludedBundles []string `json:"lastfm_excluded_bundles,omitempty"`
-
 	LyricsDecisionTrace *bool `json:"lyrics_decision_trace,omitempty"`
 }
 
 type featureFlags struct {
-
 	Players       map[string]bool
 	AlbumPrefetch bool
 
-	LyricsAutoUpgrade    bool
-	LastfmMirrorScrobble bool
-
-	LastfmScrobbleArtistMode string
-
-	ScrobbleShortTracks bool
-
-	LastfmScrobblePoint string
-	WeeklyDigest        bool
-	DailyDigest         bool
-	WeeklyDigestSource  string
-	DailyDigestSource   string
+	LyricsAutoUpgrade  bool
+	WeeklyDigest       bool
+	DailyDigest        bool
+	WeeklyDigestSource string
+	DailyDigestSource  string
 
 	LyricsSources     map[string]bool
 	LyricsSourceMode  string
@@ -140,8 +120,6 @@ type featureFlags struct {
 	LyricsDecisionTrace bool
 
 	TrustedPlayers map[string]string
-
-	LastfmExcludedBundles map[string]bool
 }
 
 var (
@@ -183,16 +161,9 @@ func loadFeatureFlags(path string) featureFlags {
 		Players:        resolvePlayers(f.Players, f.Player),
 		TrustedPlayers: resolveTrustedPlayers(f.TrustedPlayers),
 
-		LastfmExcludedBundles: resolveLastfmExcludedBundles(f.LastfmExcludedBundles),
-		AlbumPrefetch:         boolOr(f.AlbumPrefetch, true),
+		AlbumPrefetch: boolOr(f.AlbumPrefetch, true),
 
-		LyricsAutoUpgrade:    boolOr(f.LyricsAutoUpgrade, true),
-		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, false),
-
-		LastfmScrobbleArtistMode: resolveScrobbleArtistMode(f.LastfmScrobbleArtistMode, f.LastfmScrobbleFirstArtistOnly),
-
-		ScrobbleShortTracks:       boolOr(f.ScrobbleShortTracks, false),
-		LastfmScrobblePoint:       resolveScrobblePoint(f.LastfmScrobblePoint),
+		LyricsAutoUpgrade:         boolOr(f.LyricsAutoUpgrade, true),
 		WeeklyDigest:              boolOr(f.WeeklyDigest, false),
 		DailyDigest:               boolOr(f.DailyDigest, false),
 		WeeklyDigestSource:        f.WeeklyDigestSource,
@@ -207,50 +178,6 @@ func loadFeatureFlags(path string) featureFlags {
 		LaunchLyrimuseOnPlayers:   resolveLaunchLyrimuseOnPlayers(f.LaunchLyrimuseOnPlayers),
 		LyricsDecisionTrace:       boolOr(f.LyricsDecisionTrace, false),
 	}
-}
-
-const (
-
-	scrobbleArtistAll = "all"
-
-	scrobbleArtistFirst = "first"
-
-	scrobbleArtistSmart = "smart"
-)
-
-func resolveScrobbleArtistMode(raw string, legacyFirstOnly *bool) string {
-	switch raw {
-	case scrobbleArtistAll, scrobbleArtistFirst, scrobbleArtistSmart:
-		return raw
-	case "":
-	default:
-		log.Printf("feature flags: unknown lastfm_scrobble_artist_mode %q (falling back)", raw)
-	}
-	if legacyFirstOnly != nil && *legacyFirstOnly {
-		return scrobbleArtistFirst
-	}
-	return scrobbleArtistAll
-}
-
-const (
-
-	scrobblePointHalf = "50"
-
-	scrobblePoint75 = "75"
-	scrobblePoint90 = "90"
-
-	scrobblePointEnd = "end"
-)
-
-func resolveScrobblePoint(raw string) string {
-	switch raw {
-	case scrobblePointHalf, scrobblePoint75, scrobblePoint90, scrobblePointEnd:
-		return raw
-	case "":
-	default:
-		log.Printf("feature flags: unknown lastfm_scrobble_point %q (falling back)", raw)
-	}
-	return scrobblePointHalf
 }
 
 func isValidPlayerValue(p string) bool {

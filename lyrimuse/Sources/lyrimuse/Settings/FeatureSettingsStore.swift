@@ -100,31 +100,6 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-public enum LastfmScrobbleArtistMode: String, CaseIterable, Identifiable, Codable {
-    case all, first, smart
-    public var id: Self { self }
-    public var displayName: String {
-        switch self {
-        case .all: return L10n.t("全部")
-        case .first: return L10n.t("只发第一位")
-        case .smart: return L10n.t("智能")
-        }
-    }
-}
-
-public enum LastfmScrobblePoint: String, CaseIterable, Identifiable, Codable {
-    case half = "50", threeQuarters = "75", ninety = "90", end
-    public var id: Self { self }
-    public var displayName: String {
-        switch self {
-        case .half: return "50%"
-        case .threeQuarters: return "75%"
-        case .ninety: return "90%"
-        case .end: return L10n.t("曲终")
-        }
-    }
-}
-
 struct FeatureFlagsFile: Codable, Equatable {
 
     var player: String?
@@ -134,15 +109,6 @@ struct FeatureFlagsFile: Codable, Equatable {
 
     var lyricsAutoUpgrade: Bool?
     var lyricsMachineTranslation: Bool?
-    var lastfmMirrorScrobble: Bool?
-
-    var lastfmScrobbleArtistMode: String?
-
-    var lastfmScrobbleFirstArtistOnly: Bool?
-
-    var scrobbleShortTracks: Bool?
-
-    var lastfmScrobblePoint: String?
     var weeklyDigest: Bool?
 
     var dailyDigest: Bool?
@@ -172,19 +138,12 @@ struct FeatureFlagsFile: Codable, Equatable {
 
     var trustedPlayers: [String: String]?
 
-    var lastfmExcludedBundles: [String]?
-
     enum CodingKeys: String, CodingKey, CaseIterable {
         case player
         case players
         case albumPrefetch = "album_prefetch"
         case lyricsAutoUpgrade = "lyrics_auto_upgrade"
         case lyricsMachineTranslation = "lyrics_machine_translation"
-        case lastfmMirrorScrobble = "lastfm_mirror_scrobble"
-        case lastfmScrobbleArtistMode = "lastfm_scrobble_artist_mode"
-        case lastfmScrobbleFirstArtistOnly = "lastfm_scrobble_first_artist_only"
-        case scrobbleShortTracks = "scrobble_short_tracks"
-        case lastfmScrobblePoint = "lastfm_scrobble_point"
         case weeklyDigest = "weekly_digest"
         case dailyDigest = "daily_digest"
         case weeklyDigestSource = "weekly_digest_source"
@@ -202,7 +161,6 @@ struct FeatureFlagsFile: Codable, Equatable {
         case launchLyrimuseOnMusicOpen = "launch_lyrimuse_on_music_open"
         case launchLyrimuseOnPlayers = "launch_lyrimuse_on_players"
         case trustedPlayers = "trusted_players"
-        case lastfmExcludedBundles = "lastfm_excluded_bundles"
     }
 
     static let knownFileKeys: Set<String> = Set(CodingKeys.allCases.map(\.rawValue))
@@ -230,13 +188,6 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var lyricsAutoUpgrade = true
 
     @Published public var lyricsMachineTranslation = false
-    @Published public var lastfmMirrorScrobble = false
-
-    @Published public var lastfmScrobbleArtistMode: LastfmScrobbleArtistMode = .all
-
-    @Published public var scrobbleShortTracks = false
-
-    @Published public var lastfmScrobblePoint: LastfmScrobblePoint = .half
     @Published public var weeklyDigest = false
     @Published public var dailyDigest = false
 
@@ -255,8 +206,6 @@ public final class FeatureSettingsStore: ObservableObject {
 
     @Published public private(set) var trustedPlayers: [String: String] = [:]
 
-    @Published public private(set) var lastfmExcludedBundles: Set<String> = []
-
     @Published public private(set) var lastError: String?
 
     @Published public private(set) var pendingUntilServiceEnabled = false
@@ -273,11 +222,6 @@ public final class FeatureSettingsStore: ObservableObject {
             albumPrefetch: albumPrefetch,
             lyricsAutoUpgrade: lyricsAutoUpgrade,
             lyricsMachineTranslation: lyricsMachineTranslation,
-            lastfmMirrorScrobble: lastfmMirrorScrobble,
-
-            lastfmScrobbleArtistMode: lastfmScrobbleArtistMode.rawValue,
-            scrobbleShortTracks: scrobbleShortTracks,
-            lastfmScrobblePoint: lastfmScrobblePoint.rawValue,
             weeklyDigest: weeklyDigest, dailyDigest: dailyDigest,
             weeklyDigestSource: weeklyDigestSource.isEmpty ? nil : weeklyDigestSource,
             dailyDigestSource: dailyDigestSource.isEmpty ? nil : dailyDigestSource,
@@ -298,8 +242,7 @@ public final class FeatureSettingsStore: ObservableObject {
             lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue,
             launchLyrimuseOnMusicOpen: !launchLyrimuseOnPlayers.isEmpty,
             launchLyrimuseOnPlayers: launchLyrimuseOnPlayers.map(\.rawValue).sorted(),
-            trustedPlayers: trustedPlayers.isEmpty ? nil : trustedPlayers,
-            lastfmExcludedBundles: lastfmExcludedBundles.isEmpty ? nil : lastfmExcludedBundles.sorted()
+            trustedPlayers: trustedPlayers.isEmpty ? nil : trustedPlayers
         )
     }
 
@@ -314,15 +257,6 @@ public final class FeatureSettingsStore: ObservableObject {
 
     public func untrust(bundleID: String) async {
         guard trustedPlayers.removeValue(forKey: bundleID) != nil else { return }
-        _ = await save()
-    }
-
-    public func updateLastfmExclusion(scrobbled: [String], excluded: [String]) async {
-        var next = lastfmExcludedBundles
-        next.subtract(scrobbled)
-        next.formUnion(excluded.filter { !$0.isEmpty })
-        guard next != lastfmExcludedBundles else { return }
-        lastfmExcludedBundles = next
         _ = await save()
     }
 
@@ -401,17 +335,10 @@ public final class FeatureSettingsStore: ObservableObject {
         albumPrefetch = f.albumPrefetch ?? true
         lyricsAutoUpgrade = f.lyricsAutoUpgrade ?? true
         lyricsMachineTranslation = f.lyricsMachineTranslation ?? false
-        lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false
-
-        lastfmScrobbleArtistMode = f.lastfmScrobbleArtistMode.flatMap(LastfmScrobbleArtistMode.init(rawValue:))
-            ?? ((f.lastfmScrobbleFirstArtistOnly ?? false) ? .first : .all)
-        scrobbleShortTracks = f.scrobbleShortTracks ?? false
-
-        lastfmScrobblePoint = f.lastfmScrobblePoint.flatMap(LastfmScrobblePoint.init(rawValue:)) ?? .half
         weeklyDigest = f.weeklyDigest ?? false
         dailyDigest = f.dailyDigest ?? false
-        weeklyDigestSource = f.weeklyDigestSource ?? ""
-        dailyDigestSource = f.dailyDigestSource ?? ""
+        weeklyDigestSource = f.weeklyDigestSource == "listenbrainz" ? "listenbrainz" : ""
+        dailyDigestSource = f.dailyDigestSource == "listenbrainz" ? "listenbrainz" : ""
 
         let decodedSources = (f.lyricsSources ?? []).compactMap(LyricsSource.init(rawValue:))
         var enabled = Set(decodedSources)
@@ -446,8 +373,6 @@ public final class FeatureSettingsStore: ObservableObject {
         let decodedOrder = (f.lyricsSourceOrder ?? []).compactMap(LyricsSource.init(rawValue:))
         lyricsSourceOrder = decodedOrder.count == LyricsSource.allCases.count ? decodedOrder : LyricsSource.allCases
         trustedPlayers = f.trustedPlayers ?? [:]
-        lastfmExcludedBundles = Set((f.lastfmExcludedBundles ?? [])
-            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
         if let raw = f.launchLyrimuseOnPlayers {

@@ -6,7 +6,6 @@
 
 ## 定位
 
-Lyrimuse 是一个 macOS 菜单栏歌词软件:悬浮窗/灵动岛/歌词窗口实时显示当前播放曲目的逐字歌词,可选把收听历史提交到 ListenBrainz/Last.fm,并驱动一个公开的"正在播放"网页和飞书链接预览卡片。本章讲整个系统由哪些进程/部件组成、彼此怎么通信、数据落在哪里——改任何功能前先在这里确认它属于哪个部件、跨了哪条进程边界。
 
 ## 入口与展示面
 
@@ -27,7 +26,6 @@ Lyrimuse 是一个 macOS 菜单栏歌词软件:悬浮窗/灵动岛/歌词窗口�
 
 SwiftUI + AppKit,菜单栏 App。Swift Package 含四个 target:
 
-- `Sources/lyrimuse/`:App 本体。子目录按窗口/职责分:`UI/`(悬浮窗 `LyricsOverlayView`、灵动岛 `NotchLyricsView`、歌词窗口 `LyricsWindowView` 等)、`MenuBar/`(状态栏图标/菜单/跑马灯)、`Settings/`(设置页、配置读写、launchd 服务管理、账号授权)、`LyricsManager/`(歌词管理窗口及其对 collector 的控制)。
 - `Sources/LyrimuseCore/`:纯逻辑层,**零 SwiftUI import**(刻意边界,详见下文"跨切约定")。子目录:`Lyrics/`(LRC/YRC 解析、同步引擎、卡拉OK填色、换行数学)、`Local/`(播放状态读取、enrich 缓存读取、launchd 状态解析)、`Playback/`、`Networking/`、`Util/`、`Diagnostics/`。
 - `Sources/lyrimuse-selftest/`:手写断言的测试可执行文件(本机无完整 Xcode,XCTest 不可用),`swift run lyrimuse-selftest` 全量跑。
 - `Sources/lyrics-translate/`:独立小可执行文件,见下面第 3 条。
@@ -40,8 +38,6 @@ App 自己**直接**读播放状态(不经 collector):`MediaControlClient.fetchS
 
 - 每 5 秒轮询播放状态(`poller.go run()`;读取路径与 App 侧同构:Apple Music 走 JXA,其余走 media-control,见 `system.go`);
 - 解析歌词/封面/取色/各平台链接:十个歌词源(网易云/QQ/酷狗/Musixmatch/LRCLIB/AMLL/LyricFind/酷我/咪咕/Deezer)全查+统一打分(`enrich.go`/`match.go`),结果写 enrich 缓存和 `lyrics/` 文件夹——**这是悬浮歌词的唯一数据生产者**,没有它 App 什么都显示不出来;
-- 可选:提交 playing_now/listen 到 ListenBrainz(`lb.go`)、镜像 scrobble 到 Last.fm(`lastfm.go`)、把 iPhone 的 Last.fm 播放桥接进 LB、推送当前状态到自建状态中继 `/push`(`relay.go`/`poller.go`)、周报/日报推送(`weekly.go`/`daily.go`)、Top 歌手统计(`topartists.go`);
-- 一次性子命令(`main.go` 在 flag 解析前分流):`search-lyrics`(歌词管理的手动搜索)、`artist-avatars`、`backfill-lastfm`、`delete-listen`、`healthcheck`(诊断"歌词为什么不出来")、`top-artists`、`dedupe-entries`、`recheck-cover`(对指定条目重新解析一次封面，见第 09 章 §7)、`recheck-instrumental`(给缺「纯音乐」标记的条目补上这个结论，见第 09 章 §8)。子命令不进常驻循环；只有会改缓存的那几个(`dedupe-entries -apply` / `recheck-cover -apply` / `recheck-instrumental -apply`)反过来**要求**常驻实例已停，fail-closed。
 - 常驻路径有单实例 flock 锁(`singleinstance.go`,锁文件 `collector.lock`):拿不到锁退出码 0,交给 launchd 稍后重试——两个实例并存曾把 204 条歌词缓存磨到 10 条。
 - **没有任何监听端口/HTTP 服务**,也没有文件监听:`config.json`/`lyrimuse-features.json` 只在启动时读一次,改了配置要重启才生效。
 - 配置加载是逐字段容错的(`config.go loadConfig`):单个字段格式坏只跳过该字段并打日志,绝不因内容问题打死进程(KeepAlive 下 Fatal = 崩溃循环,而核心功能不需要任何配置字段;`listenbrainz_token` 留空也照常跑,只是不提交 LB)。
@@ -72,12 +68,9 @@ Cloudflare Worker + KV 的状态中继(state-worker):collector 推 `/push`(带 t
 
 1. **共享文件**(`~/.config/lyrimuse/`,详见"数据与文件"):
    - Swift → Go:`ConfigStore` 写 `config.json`(凭据/中继地址等),`FeatureSettingsStore` 写 `lyrimuse-features.json`(播放器选择/功能开关/歌词源配置)。**collector 只读不写**这两个文件。
-   - Go → Swift:collector 写 enrich 缓存(`lyrimuse-enrich-cache.json`)、`lyrics/` 文件夹、状态文件(`lyrimuse-collector-status.json`、`lyrimuse-lastfm-status.json`),Swift 侧 `EnrichCacheReader`/`CollectorStatus` 等读。
    - 双向的一个例外:歌词管理窗口的 `EnrichCacheStore`(Swift)会直接**改写** enrich 缓存 JSON 和 `lyrics/` 文件——见下条。
 2. **launchctl kickstart 当作"重载配置"信号**:collector 不监听文件,所以 Swift 侧改完共享文件后,靠 `CollectorControl.kickstart`(`launchctl kickstart -k gui/<uid>/com.lyrimuse.collector`)重启 collector,让它下次启动读到新内容。歌词管理的每次保存/删除都走这条路(先落盘、立刻踢重启,否则 collector 内存里的旧 map 随时可能整份覆盖回磁盘,悄悄撤销刚做的修改——`EnrichCacheStore.swift` 顶部注释)。
-3. **一次性子进程调用**:App 调 `collector search-lyrics`(`LyricsSearchService`)、`collector artist-avatars`、`collector backfill-lastfm`、`collector delete-listen`;collector 调 `media-control` 和 `lyrics-translate`;App 调 `media-control` 和 `osascript`(JXA)。
 
-跨机器(出网)的通信全是 HTTP 客户端行为:collector → ListenBrainz/Last.fm/十个歌词源/MusicBrainz/状态中继 `/push`;网页 → 中继/ListenBrainz;feishu-bot → 飞书长连接 + 中继/ListenBrainz。
 
 ### 生命周期与启动顺序
 
@@ -100,7 +93,6 @@ lyrimuse.app(Swift) ─────┤
 collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
   ├─ 十源歌词解析 ──▶ 写 enrich 缓存 + lyrics/ 文件夹
   ├─ 子进程:lyrics-translate(端上翻译)/ media-control
-  ├─ HTTP ▶ ListenBrainz(playing_now/listen)、Last.fm(镜像/桥接)
   └─ HTTP ▶ state-worker /push(nowplaying-workers, 外部仓)
                     ▲                       ▲
         web/index.html 读 /now /history     feishu-bot 读 /now(或直连 LB)
@@ -108,7 +100,6 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 
 ### 许可、版权与对外请求(2026-09-03)
 
-- **许可**:Lyrimuse 本身 GPL-3.0(仓库根 `LICENSE`);随包分发的第三方组件与数据(media-control、Sparkle、KeyboardShortcuts、OpenCC 词典、rime-cantonese 词典)在仓库根 `THIRD_PARTY_LICENSES` 逐条列出并附许可证全文,`build.sh` 把它拷进 `Contents/Resources/`(BSD/MIT 分发条款要求随附),设置「关于 → 第三方许可」用 TextEdit 打开包里这份(开发态或没有 TextEdit 退到 GitHub 同一文件)。`scripts/check_third_party_licenses.py`(CI 也跑)机械核对 `Package.resolved` / `build.sh` 的 `brew install` / `go.mod` 的每个依赖都在文件里出现过。
 - **版权立场**:歌词、封面、曲目信息归权利人;本项目只检索、缓存、展示,不托管、不转发、不再分发;与各播放器 / 歌词平台无隶属关系。对用户的完整表述只维护在 README 中英版「许可与版权说明」一节——App 里的「版权说明」入口(关于页)和引导欢迎页那句都只是链接过去,**不在 xcstrings 里抄第二份**(这段话改的频率远高于发版)。**刻意不做阻断式首启接受页**:引导原则是介绍性内容不锁下一步,GPL 个人工具也没有需要「接受」的条款。
 - **对外请求全景**:README 那一节向用户承诺「会离开你 Mac 的只有这些」——**加一处对外请求就要同步这张表和那一节**;实际发生的每一条都进审计日志(第 14 章 §7、第 15 章「网络观察」)。
 
@@ -119,9 +110,6 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 | `itunes.apple.com` | collector、App | 歌手 + 歌名(+ 地区) | collector 封面 / 署名锚点;App 高清封面替代与空闲页链接(第 03 章) |
 | `api.mymemory.translated.net` | collector | **歌词正文**分块 + 随机生成的邮箱参数 | 「系统兜底翻译」开着且端上 Apple 翻译不可用(第 10 章) |
 | `1.1.1.1` / `8.8.8.8`(DoH) | collector | 域名 | 只有 `*.musixmatch.com` 走 DoH(`doh.go dohHostSuffixes`) |
-| `api.github.com` | App | 无用户数据 | 关于页 star 数,最多每 6 小时一次;打开「测试版更新」后最多每小时查一次 Release 列表(挑版本最高的 appcast,2026-09-05) |
-| `github.com`(Releases appcast) | App(Sparkle) | 无系统信息(未开 `SUEnableSystemProfiling`) | 更新检查 |
-| `ws.audioscrobbler.com`、`api.listenbrainz.org` | collector、App | 播放记录(带账号凭据鉴权) | 用户主动连接后 |
 | 推送平台(Bark、钉钉、企业微信、Discord、飞书、Server酱)、状态中继(自建 Worker)、`api.deezer.com`(网页 Top10 歌手头像) | collector | 周报文本 / 当前播放状态 / 歌手名 | 用户主动配置后 |
 
 ## 设置项
@@ -132,7 +120,6 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 
 本章是所有功能章节的骨架,这里只列**跨切约定**——几乎每个功能都踩在这几条上:
 
-- **"Swift 写共享文件 → kickstart 重启 collector"约定**:功能开关、播放器切换、歌词源配置、歌词管理编辑,全走这个模式。任何"改了设置 collector 却没反应"的问题先查是不是漏了 kickstart。**两类例外,都是按 mtime 热重读、不重启**:①几行大小的专用小文件(歌词时间轴 pin `lyricspins.go`、位置偏置 `positionbias.go`),它们变得太频繁,每变一次重启一遍不可接受;②`features.json` 里进了白名单的键(目前只有 `lastfm_excluded_bundles`,见 `CollectorRestartPolicy.hotReloadedKeys` 与 12 章决策 11)——重启一次实测 37~68 秒才重新开始服务,为一个 bundle id 列表付这笔钱不值。白名单之外的键仍然只在启动时读一次。
 - **enrich 缓存 key 的双侧镜像**:key 由 Go 侧 `enrichKey()`(`enrichkey.go`)构造,Swift 侧镜像在 `EnrichCacheKeys.swift`,**两边必须同步改**。不同步的后果是同一首歌两条缓存+两份歌词文件。
 - **lyrics/ 文件夹是歌词 6 字段(lyrics/lyrics_tr/lyrics_roma/lyrics_yrc/lyrics_source/manual_lyrics)的权威源**,enrich 缓存 JSON 只是存档;启动调和时文件永远赢。删除文件=删条目。
 - **歌词源 id 是全项目唯一一套字符串**(`netease`/`qq`/`kugou`/`musixmatch`/`lrclib`,`features.go` 常量 ↔ Swift `LyricsSource` rawValue ↔ 歌词管理窗口 `sourceDisplayName`),加源要三处同步。
@@ -146,7 +133,6 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 
 | 文件 | 写入方 | 读取方 | 内容 |
 |---|---|---|---|
-| `config.json` | Swift `ConfigStore` | collector(启动时) | LB token、Last.fm 凭据、状态中继地址/token、通知 webhook 等。目录 `~/.config/lyrimuse`(Swift `LyrimusePaths` / Go `configDir()`,collector 经环境变量 `LYRIMUSE_CONFIG_DIR` 得知) |
 | `lyrimuse-features.json` | Swift `FeatureSettingsStore` | collector(启动时) | 播放器选择、功能开关(*bool,缺省=沿用现有行为)、歌词源集合/模式/顺序、`lyrics_dir` |
 | `lyrimuse-app-settings.json` | Swift `AppSettingsMirror` | Swift(仅 `restoreIfPristine()` 全新装机时读回) | UserDefaults 的单向镜像(外观/快捷键等),让"拷走整个文件夹=拷走整份配置"成立 |
 | `lyrimuse-enrich-cache.json` | collector(整 map 覆盖写);歌词管理 `EnrichCacheStore` 按 key 字典级增删改 | 双方 | 曲目元信息+歌词+封面+取色+链接缓存,key=`歌手\|歌名\|专辑`(经 `enrichKey()` 归一) |
@@ -154,14 +140,9 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 | `lyrimuse-listens.jsonl` | collector | collector、App(本地收听清单) | 账号无关的本地收听日志(刻意不带账号前缀) |
 | `lyrimuse-artist-alias-cache.json` | collector | collector | MusicBrainz 按歌手的中文别名查询缓存 |
 | `lyrimuse-artist-identity-cache.json` | collector | collector | MusicBrainz 歌手身份缓存(mbid+中文名),Top 歌手榜归并第三信号 |
-| `lyrimuse-artist-avatar-cache.json` | `collector artist-avatars` 子命令 | App(Last.fm 信息页) | 歌手头像 URL 缓存 |
-| `lyrimuse-lastfm-forwarded.json` / `-mirrored.json` / `-collapse.json` | collector | collector | Last.fm 桥接/镜像的去重与折叠状态 |
-| `lyrimuse-lastfm-weekly.json` / `lyrimuse-lb-daily.json` / `lyrimuse-lastfm-top-artists.json` | collector | collector | 周报/日报/Top 歌手的节流与状态 |
-| `lyrimuse-lastfm-stats-cache.json` | Swift `LastfmStatsService` | Swift | Last.fm 统计页缓存 |
 | `lyrimuse-musixmatch-token.json` | collector | collector | Musixmatch 匿名 token 缓存 |
 | `lyrimuse-collector-status.json` | collector(启动时先清掉旧文件) | Swift `CollectorStatus` | collector→App 状态通道(目前只报"网络不通") |
 | `lyrimuse-lyrics-pins.json` | Swift `LyricsPinStore` | collector(`lyricspins.go`,按 mtime 重读) | App→collector 唯一的反向通道:已校准过时间轴的曲目名单,一票否决自动重选歌词源 |
-| `lyrimuse-lastfm-status.json` | collector(`lastfm.go`) | Swift `LastfmMirrorStatus` | Last.fm 镜像凭据致命错误 |
 | `collector.lock` | collector flock | — | 单实例锁,随进程消亡自动释放 |
 | `*.bak` / `backup-*` | 一次性迁移(如 `enrichkey.go` 写 `.pre-keynorm.bak`)或手工备份 | — | 残留备份,无代码读取 |
 

@@ -74,7 +74,7 @@ final class PlayerQuitWatcher {
     private static var userIsUsingLyrimuseWindows: Bool {
         NSApp.windows.contains { window in
             window.isVisible && window.canBecomeKey
-                && !(window is LyricsOverlayWindow) && !(window is NotchLyricsWindow)
+                && !(window is LyricsOverlayWindow)
         }
     }
 }

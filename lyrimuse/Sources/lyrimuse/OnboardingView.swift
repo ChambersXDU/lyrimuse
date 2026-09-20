@@ -7,7 +7,6 @@ struct OnboardingView: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.dismissWindow) private var dismissWindow
-    @Environment(\.openSettings) private var openSettings
     @State private var step = 0
     @State private var automationStatus: MusicAutomationPermissionStatus = .notDetermined
 
@@ -30,7 +29,7 @@ struct OnboardingView: View {
 
     private enum Step: Equatable {
         case welcome, playerChoice, automation, browserPairing, background,
-             displayMode, lyricsExtras, lastfm, done
+             displayMode, lyricsExtras, done
     }
 
     @State private var wantsBrowserYouTubeMusic = false
@@ -51,7 +50,7 @@ struct OnboardingView: View {
             s.append(.browserPairing)
         }
 
-        s.append(contentsOf: [.background, .displayMode, .lyricsExtras, .lastfm, .done])
+        s.append(contentsOf: [.background, .displayMode, .lyricsExtras, .done])
         return s
     }
 
@@ -77,7 +76,6 @@ struct OnboardingView: View {
                     case .background: backgroundStep
                     case .displayMode: displayModeStep
                     case .lyricsExtras: lyricsExtrasStep
-                    case .lastfm: lastfmStep
                     case .done: doneStep
                     }
                 }
@@ -359,7 +357,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("让它一直待命"))
                 .font(.title2.bold())
-            Text(L10n.t("Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛无法显示任何内容"))
+            Text(L10n.t("Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词无法显示任何内容"))
                 .foregroundStyle(.secondary)
             HStack {
                 Image(systemName: collectorRunning ? "checkmark.circle.fill" : "xmark.circle.fill")
@@ -409,7 +407,7 @@ struct OnboardingView: View {
                     subtitle: L10n.t("日文、韩文、中文拼音、粤拼默认都会注音，可以在设置里单独关掉"),
                     isOn: $settings.showRomanization)
             }
-            Text(L10n.t("这两项只在「桌面悬浮歌词」和「歌词窗口」里显示——灵动岛受限于胶囊空间放不下，菜单栏歌词只能显示一行纯文字"))
+            Text(L10n.t("这两项会显示在桌面悬浮歌词里；菜单栏歌词只能显示一行纯文字"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -432,15 +430,6 @@ struct OnboardingView: View {
                         get: { settings.classicOverlayEnabled },
                         set: { LyricsOverlayWindowController.shared.setVisible($0) }))
                 displayModeRow(
-                    kind: .notch,
-                    title: L10n.t("灵动岛歌词"),
-                    subtitle: hasNotchedScreen
-                        ? L10n.t("紧凑地贴着屏幕顶部的刘海")
-                        : L10n.t("这台 Mac 没有刘海，会显示在屏幕顶部正中"),
-                    isOn: Binding(
-                        get: { settings.notchOverlayEnabled },
-                        set: { NotchLyricsWindowController.shared.setVisible($0) }))
-                displayModeRow(
                     kind: .menuBar,
                     title: L10n.t("菜单栏歌词"),
                     subtitle: L10n.t("菜单栏里的一行字"),
@@ -451,12 +440,12 @@ struct OnboardingView: View {
                 displayModeNote(
                     icon: "exclamationmark.triangle.fill",
                     tint: .orange,
-                    text: L10n.t("三种方式都关掉了，播放时屏幕上不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开"))
+                    text: L10n.t("两种方式都关掉了，播放时屏幕上不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开"))
             } else if !isPlayingNow {
                 displayModeNote(
                     icon: "info.circle.fill",
                     tint: .secondary,
-                    text: L10n.t("现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛和菜单栏歌词要等开始播放才看得到"))
+                    text: L10n.t("现在没有在播放——桌面悬浮歌词会立刻出现，菜单栏歌词要等开始播放才看得到"))
             }
         }
     }
@@ -525,28 +514,9 @@ struct OnboardingView: View {
         .foregroundStyle(.secondary)
     }
 
-    private var hasNotchedScreen: Bool { ScreenIdentity.notched != nil }
-
     private var noDisplayModeEnabled: Bool {
         !settings.classicOverlayEnabled
-            && !settings.notchOverlayEnabled
             && !settings.showLyricsInMenuBar
-    }
-
-    private var lastfmStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-
-            lastfmBadge(size: 44)
-            Text(L10n.t("同步收听到 Last.fm（可选）"))
-                .font(.title.bold())
-            Text(L10n.t("连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm，还能在这里看到你专属的听歌档案"))
-                .foregroundStyle(.secondary)
-            Button(L10n.t("现在去设置里连接")) {
-                AppActions.shared.requestSettings(.account(.lastfm))
-                NSApp.activate(ignoringOtherApps: true)
-                openSettings()
-            }
-        }
     }
 
     private struct ReadinessItem: Identifiable {
@@ -605,7 +575,7 @@ struct OnboardingView: View {
                     }
                 }
             }
-            Text(L10n.t("Lyrimuse 住在屏幕右上角的菜单栏里，点它就能打开设置、歌词管理和歌词窗口；按住 ⌘ 拖动可以把图标挪个位置。常用操作还能在设置的「快捷键」里配上全局热键"))
+            Text(L10n.t("Lyrimuse 住在屏幕右上角的菜单栏里，点它就能打开设置和歌词管理；按住 ⌘ 拖动可以把图标挪个位置。常用操作还能在设置的「快捷键」里配上全局热键"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -793,7 +763,7 @@ struct OnboardingView: View {
 }
 
 private struct DisplayModeThumbnail: View {
-    enum Kind { case classic, notch, menuBar }
+    enum Kind { case classic, menuBar }
 
     let kind: Kind
 
@@ -829,18 +799,6 @@ private struct DisplayModeThumbnail: View {
             }
             .frame(width: Self.width, height: Self.height, alignment: .center)
             .offset(y: 5)
-        case .notch:
-
-            HStack(spacing: 3) {
-                UnevenRoundedRectangle(bottomLeadingRadius: 2, bottomTrailingRadius: 2, style: .continuous)
-                    .fill(Color.primary.opacity(0.85))
-                    .frame(width: 18, height: Self.menuBarHeight + 2)
-                Capsule()
-                    .fill(Color.accentColor)
-                    .frame(width: 15, height: 4)
-                    .padding(.top, 1)
-            }
-            .frame(width: Self.width, alignment: .center)
         case .menuBar:
 
             HStack(spacing: 0) {

@@ -284,7 +284,7 @@ final class MenuBarStatusItem: NSObject {
 
     private var slotFloor = MenuBarSlotFloor()
     private struct SongWidthKey: Equatable {
-        let lines: [LyricsWindowLine]
+        let lines: [MenuBarLyricLine]
         let fontWeight: OverlayFontWeight
         let fontSize: CGFloat
         let secondary: LyricSecondaryLine

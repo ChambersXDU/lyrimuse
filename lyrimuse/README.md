@@ -1,9 +1,9 @@
 # Lyrimuse
 
-原生 macOS 菜单栏 + 悬浮歌词窗口，跟着 Apple Music、QQ 音乐、网易云音乐或 Spotify 播放实时
+原生 macOS 菜单栏 + 桌面悬浮歌词，跟着 Apple Music、QQ 音乐、网易云音乐或 Spotify 播放实时
 显示逐字同步歌词（也可以选"自动识别"，跟随 macOS 当前系统级 Now Playing 焦点），显示成一个
-常驻置顶、跨 Space 的小悬浮窗、灵动岛胶囊，或者一个正经的可缩放"歌词窗口"——类似网易云/
-QQ音乐桌面客户端的"桌面歌词"。另外还有一个"歌词管理"窗口，可以查看/手改/删除/重新搜索每
+常驻置顶、跨 Space 的小悬浮窗，或者直接显示在菜单栏——类似网易云/QQ音乐桌面客户端的
+"桌面歌词"。另外还有一个"歌词管理"窗口，可以查看/手改/删除/重新搜索每
 首歌的歌词候选。
 
 数据完全本地读取，零网络：直接读这台 Mac 上播放器的当前状态（Apple Music 走 AppleScript，
@@ -79,12 +79,7 @@ LYRIMUSE_VERSION=1.2.1 ./package.sh
 或多带一份都拦),以及 `codesign --deep --strict` 必须通过。v1.0.0~v1.2.0 三个版本都在没人
 察觉的情况下发成了 arm64-only,这两道闸门就是为此加的。
 
-⚠️ appcast 里主包那条 item 必须带子元素 `<sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>`
-——**是 `<item>` 的子元素,不是 `<enclosure>` 的属性**(写成属性解析不报错但匹配不到任何东西)。
-少了它,Intel 用户会被自动更新推一个 arm64-only 的包、装上打不开。这一步现在由
-`.github/workflows/release.yml` 在 tag push 时自动做;`package.sh` 只出资产、不签名不上传
-(Sparkle 的私钥和 GitHub 凭据不该经过打包脚本),它结尾打印的手工步骤是给"不走 CI、在本机
-手动发一版"时用的。
+发布流程只上传对应架构的 zip、sha256 和 dmg 资产。
 
 ## 开机启动
 

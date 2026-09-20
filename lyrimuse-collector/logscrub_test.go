@@ -15,19 +15,19 @@ func resetSecretsForTest(t *testing.T) {
 	secretReplace.Store(nil)
 }
 
-const lastfmErrLine = `2026/08/17 01:50:05 lastfmRecent: request failed: Get ` +
-	`"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=someone` +
+const listenBrainzErrLine = `2026/08/17 01:50:05 listenBrainz: request failed: Get ` +
+	`"https://api.listenbrainz.org/1/submit-listens?user=someone` +
 	`&api_key=0123456789abcdef0123456789abcdef&format=json&limit=50": context canceled`
 
 func TestScrubSecretsRedactsAPIKeyByParamName(t *testing.T) {
 	resetSecretsForTest(t)
 
-	got := scrubSecrets(lastfmErrLine)
+	got := scrubSecrets(listenBrainzErrLine)
 	if strings.Contains(got, "0123456789abcdef0123456789abcdef") {
 		t.Fatalf("api_key 仍是明文: %s", got)
 	}
 	for _, keep := range []string{
-		"user.getrecenttracks", "user=someone", "format=json", "limit=50", "context canceled",
+		"submit-listens", "user=someone", "format=json", "limit=50", "context canceled",
 	} {
 		if !strings.Contains(got, keep) {
 			t.Errorf("脱敏把有用信息也删了,缺 %q: %s", keep, got)
@@ -84,10 +84,8 @@ func TestRegisterSecretsLongestFirst(t *testing.T) {
 
 func TestRememberConfigSecretsCoversBarkPathToken(t *testing.T) {
 	resetSecretsForTest(t)
-	cfg := &config{
-		LastfmScrobbleAPIKey:   "0123456789abcdef0123456789abcdef",
-		NotificationWebhookURL: "https://api.day.app/wsrCZ35QuZxaC9zJj3MJVe",
-	}
+	cfg := &config{Token: "0123456789abcdef0123456789abcdef",
+		NotificationWebhookURL: "https://api.day.app/wsrCZ35QuZxaC9zJj3MJVe"}
 	rememberConfigSecrets(cfg)
 	got := scrubSecrets(`Post "https://api.day.app/wsrCZ35QuZxaC9zJj3MJVe": timeout`)
 	if strings.Contains(got, "wsrCZ35QuZxaC9zJj3MJVe") {
@@ -130,8 +128,8 @@ func TestInstalledScrubberFiltersLogPrintf(t *testing.T) {
 	log.SetOutput(secretScrubber{w: &buf})
 	defer log.SetOutput(old)
 
-	log.Printf("lastfmRecent: request failed: Get %q: context canceled",
-		"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&api_key=0123456789abcdef0123456789abcdef")
+	log.Printf("listenBrainz: request failed: Get %q: context canceled",
+		"https://api.listenbrainz.org/1/submit-listens?api_key=0123456789abcdef0123456789abcdef")
 	out := buf.String()
 	if strings.Contains(out, "0123456789abcdef0123456789abcdef") {
 		t.Fatalf("log.Printf 仍然写出了明文凭据: %s", out)

@@ -10,17 +10,17 @@ func runOpsDiagnosticsTests() {
 
         let apiKey = "0123456789abcdef0123456789abcdef"
         let relayToken = "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
-        let secrets = ["lastfmScrobbleAPIKey": apiKey, "stateRelayToken": relayToken]
+        let secrets = ["listenBrainzToken": apiKey, "stateRelayToken": relayToken]
 
-        let leaky = "2026/08/13 10:00:05 lastfmRecent: request failed: Get "
-            + "\"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=someone&api_key=\(apiKey)\""
+        let leaky = "2026/08/13 10:00:05 listenBrainz: request failed: Get "
+            + "\"https://api.listenbrainz.org/1/submit-listens?user=someone&token=\(apiKey)\""
         let cleaned = R.redactAll(leaky, secrets: secrets)
         expectEqual(cleaned.contains(apiKey), false)
-        expectEqual(cleaned.contains("<redacted:lastfmScrobbleAPIKey>"), true)
+        expectEqual(cleaned.contains("<redacted:listenBrainzToken>"), true)
         expectEqual(cleaned.contains("user=someone"), true)
-        expectEqual(cleaned.contains("audioscrobbler.com"), true)
+        expectEqual(cleaned.contains("api.listenbrainz.org"), true)
 
-        let rotated = "Get \"https://ws.audioscrobbler.com/2.0/?api_key=deadbeefdeadbeefdeadbeefdeadbeef\""
+        let rotated = "Get \"https://api.listenbrainz.org/1/submit-listens?token=deadbeefdeadbeefdeadbeefdeadbeef\""
         expectEqual(R.redactAll(rotated, secrets: [:]).contains("deadbeef"), false)
 
         let bark = "notify push failed (platform=bark): Post \"https://api.day.app/SECRETDEVICEKEY123/t/b\": timeout"
@@ -256,9 +256,7 @@ func runOpsDiagnosticsTests() {
         let window = logText.split(separator: "\n", omittingEmptySubsequences: false)
             .map(String.init).suffix(200).joined(separator: "\n")
 
-        let credentialFields = ["listenbrainz_token", "state_relay_token", "lastfm_api_key",
-                                "lastfm_scrobble_api_key", "lastfm_scrobble_secret",
-                                "lastfm_scrobble_session_key", "bark_url",
+        let credentialFields = ["listenbrainz_token", "state_relay_token", "bark_url",
                                 "dingtalk_sign_secret", "feishu_sign_secret"]
         var secrets: [String: String] = [:]
         for f in credentialFields {
@@ -407,7 +405,7 @@ func runOpsDiagnosticsTests() {
         let gotSlog = CollectorLogLine.timestamp(of: "time=2026-09-05T01:02:03.456Z level=INFO msg=\"api call summary\" count=12")
         expectEqual(gotSlog.map { abs($0.timeIntervalSince(expectedSlog)) < 0.001 } ?? false, true)
         comps.day = 4; comps.hour = 15; comps.minute = 49; comps.second = 15
-        expectEqual(CollectorLogLine.timestamp(of: "2026/09/04 15:49:15 api call: GET ws.audioscrobbler.com/2.0/ -> 200 (315ms)"),
+        expectEqual(CollectorLogLine.timestamp(of: "2026/09/04 15:49:15 api call: GET api.listenbrainz.org/1/submit-listens -> 200 (315ms)"),
                     cal.date(from: comps))
         expectEqual(CollectorLogLine.timestamp(of: "Bootstrap failed: 5: Input/output error") == nil, true)
         expectEqual(CollectorLogLine.timestamp(of: "time=garbage level=INFO msg=x") == nil, true)
@@ -429,7 +427,7 @@ func runOpsDiagnosticsTests() {
         {"app_name":"lyrimuse","timestamp":"2026-08-30 18:33:01.00 +0800","app_version":"1.4.0","build_version":"1.4.0","bug_type":"309","os_version":"macOS 27.0 (26A5416b)","bundleID":"\(prod.bundleIdentifier)","incident_id":"AAAA"}
         """
         let dyldBody = """
-        {"procName":"lyrimuse","procPath":"/Applications/\(prod.displayName).app/Contents/MacOS/lyrimuse","bundleInfo":{"CFBundleShortVersionString":"1.4.0","CFBundleVersion":"1.4.0","CFBundleIdentifier":"\(prod.bundleIdentifier)"},"captureTime":"2026-08-30 18:33:01.5 +0800","exception":{"type":"EXC_CRASH","signal":"SIGABRT","codes":"0x0, 0x0"},"termination":{"code":1,"flags":518,"namespace":"DYLD","indicator":"Library missing","details":["(terminated at launch; ignore backtrace)"],"reasons":["Library not loaded: @rpath/Sparkle.framework/Versions/B/Sparkle","Referenced from: <UUID> /Applications/\(prod.displayName).app/Contents/MacOS/lyrimuse"]},"faultingThread":0,"threads":[{"id":1,"triggered":true,"frames":[]}],"usedImages":[]}
+        {"procName":"lyrimuse","procPath":"/Applications/\(prod.displayName).app/Contents/MacOS/lyrimuse","bundleInfo":{"CFBundleShortVersionString":"1.4.0","CFBundleVersion":"1.4.0","CFBundleIdentifier":"\(prod.bundleIdentifier)"},"captureTime":"2026-08-30 18:33:01.5 +0800","exception":{"type":"EXC_CRASH","signal":"SIGABRT","codes":"0x0, 0x0"},"termination":{"code":1,"flags":518,"namespace":"DYLD","indicator":"Library missing","details":["(terminated at launch; ignore backtrace)"],"reasons":["Library not loaded: @rpath/Example.framework/Versions/A/Example","Referenced from: <UUID> /Applications/\(prod.displayName).app/Contents/MacOS/lyrimuse"]},"faultingThread":0,"threads":[{"id":1,"triggered":true,"frames":[]}],"usedImages":[]}
         """
         let dyld = CrashReportSummary.parse(fileName: "lyrimuse-2026-08-30-183301.ips", data: ips(dyldHeader, dyldBody))
         expectEqual(dyld != nil, true)
@@ -450,7 +448,7 @@ func runOpsDiagnosticsTests() {
             expectEqual(text.contains("- lyrimuse-2026-08-30-183301.ips"), true)
             expectEqual(text.contains("process: lyrimuse 1.4.0 ·"), true)
             expectEqual(text.contains("termination: DYLD · Library missing"), true)
-            expectEqual(text.contains("reason: Library not loaded: @rpath/Sparkle.framework/Versions/B/Sparkle"), true)
+            expectEqual(text.contains("reason: Library not loaded: @rpath/Example.framework/Versions/A/Example"), true)
             expectEqual(text.contains("faulting thread 0: no frames recorded"), true)
             expectEqual(dyld.belongsToApp(executableName: "lyrimuse", bundleIdentifier: prod.bundleIdentifier, appDisplayName: prod.displayName), true)
             expectEqual(dyld.belongsToApp(executableName: "lyrimuse", bundleIdentifier: otherID, appDisplayName: otherName), false)

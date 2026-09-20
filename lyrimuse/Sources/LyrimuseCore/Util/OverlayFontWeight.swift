@@ -35,5 +35,4 @@ public enum OverlayFontWeight: String, CaseIterable, Sendable {
 
     public static let nextLinePreviewSteps = 2
 
-    public static let notchSecondarySteps = 1
 }

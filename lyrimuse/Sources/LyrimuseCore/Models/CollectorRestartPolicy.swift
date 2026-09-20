@@ -2,11 +2,11 @@ import Foundation
 
 public enum CollectorRestartPolicy {
 
-    public static let hotReloadedKeys: Set<String> = ["lastfm_excluded_bundles"]
+    public static let hotReloadedKeys: Set<String> = []
 
     public static func needsRestart(changedKeys: Set<String>) -> Bool {
         guard !changedKeys.isEmpty else { return true }
-        return !changedKeys.isSubset(of: hotReloadedKeys)
+        return true
     }
 
     public static func changedKeys(from old: [String: Any], to new: [String: Any]) -> Set<String> {

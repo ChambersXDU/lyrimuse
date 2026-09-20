@@ -123,8 +123,6 @@ enum SettingsIconTint {
 enum SettingsSidebarItem: Hashable {
     case tab(SettingsTab)
     case account(AccountDestination)
-
-    case softwareUpdate
 }
 
 struct SettingsView: View {
@@ -135,8 +133,6 @@ struct SettingsView: View {
     @AppStorage(SettingsTab.lastTabStorageKey) private var lastTabRaw = SettingsTab.lyrics.rawValue
 
     @StateObject private var playerHealth = PlayerHealthMonitor()
-
-    @ObservedObject private var updater = SparkleUpdaterManager.shared
 
     @State private var isAdditionalFeaturesExpanded = false
 
@@ -180,14 +176,9 @@ struct SettingsView: View {
         switch entry.destination {
         case .tab(let raw):
             if let tab = SettingsTab(rawValue: raw) { selection = .tab(tab) }
-        case .softwareUpdate:
-            selection = .softwareUpdate
         case .account(let name):
             if let destination = AccountDestination.allCases.first(where: { String(describing: $0) == name }) {
-
-                if destination != .lastfm {
-                    withAnimation { isAdditionalFeaturesExpanded = true }
-                }
+                withAnimation { isAdditionalFeaturesExpanded = true }
                 selection = .account(destination)
             }
         }
@@ -201,16 +192,6 @@ struct SettingsView: View {
 
     @ViewBuilder private var sidebarSections: some View {
         Section {
-            LastfmIdentityRow()
-                .tag(SettingsSidebarItem.account(.lastfm))
-            if updater.shownItem != nil {
-
-                SoftwareUpdateSidebarRow()
-                    .tag(SettingsSidebarItem.softwareUpdate)
-            }
-        }
-
-        Section {
             sidebarLabel(.lyrics)
             sidebarLabel(.player)
             sidebarLabel(.appearance)
@@ -220,7 +201,7 @@ struct SettingsView: View {
         }
 
         Section(isExpanded: $isAdditionalFeaturesExpanded) {
-            ForEach(AccountDestination.allCases.filter { $0 != .lastfm }) { destination in
+            ForEach(AccountDestination.allCases) { destination in
                 AccountSidebarRow(destination: destination)
                     .tag(SettingsSidebarItem.account(destination))
             }
@@ -265,13 +246,9 @@ struct SettingsView: View {
                 case .tab(.shortcuts): ShortcutsSettingsTab()
                 case .tab(.general): GeneralSettingsTab()
                 case .tab(.about): AboutSettingsTab()
-                case .softwareUpdate: SoftwareUpdatePage()
                 case .account(let destination):
                     AccountLinkingTab(destination: destination, onJumpToAccount: { target in
-
-                        if target != .lastfm {
-                            withAnimation { isAdditionalFeaturesExpanded = true }
-                        }
+                        withAnimation { isAdditionalFeaturesExpanded = true }
                         selection = .account(target)
                     })
                 case nil: ContentUnavailableView(L10n.t("选择左侧的设置分类"), systemImage: "gearshape")
@@ -308,11 +285,6 @@ struct SettingsView: View {
         .onChange(of: selection) { previous, item in
             if case .tab(let tab)? = item { lastTabRaw = tab.rawValue }
 
-            if item == nil, previous == .softwareUpdate {
-                selection = .softwareUpdate
-                return
-            }
-
             settingsSearchFocused = false
         }
 
@@ -320,13 +292,11 @@ struct SettingsView: View {
             AuxiliaryWindowActivation.windowDidAppear()
             playerHealth.start()
 
-            LastfmAvatarStore.shared.refreshFromConfig()
         }
         .onDisappear {
             AuxiliaryWindowActivation.windowDidDisappear()
             playerHealth.stop()
 
-            SparkleUpdaterManager.shared.settingsWindowClosed()
         }
     }
 
@@ -351,7 +321,6 @@ struct SettingsView: View {
         switch selection {
         case .tab(let tab): return tab.title
         case .account(let destination): return destination.title
-        case .softwareUpdate: return L10n.t("软件更新")
         case nil: return L10n.t("设置")
         }
     }
@@ -956,7 +925,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "text.bubble",
                 title: L10n.t("显示译文"),
-                help: L10n.t("只影响桌面悬浮歌词和歌词窗口；灵动岛受空间所限不支持，菜单栏只能显示一行。")
+                help: L10n.t("只影响桌面悬浮歌词；菜单栏受空间所限只能显示一行。")
             ) {
                 Toggle("", isOn: $settings.showTranslation)
             }
@@ -1025,7 +994,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "textformat.alt",
                 title: L10n.t("显示罗马音"),
-                help: L10n.t("只影响桌面悬浮歌词和歌词窗口；灵动岛受空间所限不支持，菜单栏只能显示一行。")
+                help: L10n.t("只影响桌面悬浮歌词；菜单栏受空间所限只能显示一行。")
             ) {
                 Toggle("", isOn: $settings.showRomanization)
             }
@@ -1312,8 +1281,6 @@ private struct AppearanceSettingsTab: View {
                 switch section {
 
                 case .overlay: EmptyView()
-                case .notch: EmptyView()
-
                 case .menuBar: EmptyView()
                 }
             }
@@ -1335,12 +1302,11 @@ private struct AppearanceSettingsTab: View {
     }
 
     private enum Section: String, CaseIterable, Identifiable {
-        case overlay, notch, menuBar
+        case overlay, menuBar
         var id: Self { self }
         var title: String {
             switch self {
             case .overlay: return L10n.t("悬浮歌词")
-            case .notch: return L10n.t("灵动岛")
             case .menuBar: return L10n.t("菜单栏")
             }
         }
@@ -1384,19 +1350,6 @@ private struct AppearanceSettingsTab: View {
                     set: { LyricsOverlayWindowController.shared.setVisible($0) }))
 
             OverlayAllSettingsDrawer()
-        case .notch:
-
-            NotchEditorStage()
-
-            modeToggleCard(
-                icon: "rectangle.topthird.inset.filled",
-                title: L10n.t("灵动岛歌词"),
-                subtitle: L10n.t("紧凑地贴着屏幕顶部的刘海显示"),
-                isOn: Binding(
-                    get: { settings.notchOverlayEnabled },
-                    set: { NotchLyricsWindowController.shared.setVisible($0) }))
-
-            NotchAllSettingsDrawer()
         case .menuBar:
 
             MenuBarEditorStage()
@@ -1424,480 +1377,6 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
-}
-
-enum NotchBehaviorItem: String, CaseIterable, Identifiable {
-    case showLyrics
-
-    case karaoke
-    case collapseWhenPaused
-    case lyricRowArtwork
-    case expandedNextLine
-    case expandedShowsControls
-    case expandedShowsLyricsOffset
-
-    case expandedShowsQuickActions
-    case expandedShowsArtwork
-    case expandedShowsTrackTitle
-    case expandedShowsArtist
-    case expandedShowsAlbum
-
-    var id: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .showLyrics: return "text.alignleft"
-        case .karaoke: return "sparkles"
-        case .collapseWhenPaused: return "arrow.down.right.and.arrow.up.left"
-        case .lyricRowArtwork: return "photo"
-        case .expandedNextLine: return "text.bubble"
-        case .expandedShowsControls: return "playpause.fill"
-        case .expandedShowsLyricsOffset: return "timer"
-        case .expandedShowsQuickActions: return "ellipsis.circle"
-        case .expandedShowsArtwork: return "photo"
-        case .expandedShowsTrackTitle: return "textformat"
-        case .expandedShowsArtist: return "music.mic"
-        case .expandedShowsAlbum: return "opticaldisc"
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .showLyrics: return L10n.t("显示歌词")
-        case .karaoke: return L10n.t("卡拉OK效果")
-        case .collapseWhenPaused: return L10n.t("暂停缩回")
-        case .lyricRowArtwork: return L10n.t("显示封面")
-
-        case .expandedNextLine: return L10n.t("展开时预览下一句")
-        case .expandedShowsControls: return L10n.t("显示播放控制")
-        case .expandedShowsLyricsOffset: return L10n.t("显示歌词校准")
-        case .expandedShowsQuickActions: return L10n.t("快捷操作")
-
-        case .expandedShowsArtwork: return NotchEarModule.artwork.displayName
-        case .expandedShowsTrackTitle: return NotchEarModule.title.displayName
-        case .expandedShowsArtist: return NotchEarModule.artist.displayName
-        case .expandedShowsAlbum: return NotchEarModule.album.displayName
-        }
-    }
-
-    var help: String? {
-        switch self {
-        case .expandedNextLine: return L10n.t("展开时在进度条上方显示下一句要唱的歌词。")
-        case .karaoke: return L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
-        case .expandedShowsQuickActions:
-            return L10n.t("展开时在曲目信息右侧显示四颗按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。")
-        default: return nil
-        }
-    }
-
-    @MainActor
-    var binding: Binding<Bool> {
-        let settings = AppSettings.shared
-        switch self {
-        case .showLyrics:
-            return Binding(get: { settings.notchShowLyrics }, set: { settings.notchShowLyrics = $0 })
-        case .karaoke:
-            return Binding(get: { settings.notchLyricsKaraoke }, set: { settings.notchLyricsKaraoke = $0 })
-        case .collapseWhenPaused:
-            return Binding(get: { settings.notchCollapsesWhenPaused },
-                            set: { settings.notchCollapsesWhenPaused = $0 })
-        case .lyricRowArtwork:
-            return Binding(get: { settings.notchLyricRowShowsArtwork },
-                            set: { settings.notchLyricRowShowsArtwork = $0 })
-        case .expandedNextLine:
-            return Binding(get: { settings.notchExpandedShowsNextLine },
-                            set: { settings.notchExpandedShowsNextLine = $0 })
-        case .expandedShowsControls:
-            return Binding(get: { settings.notchExpandedShowsControls },
-                            set: { settings.notchExpandedShowsControls = $0 })
-        case .expandedShowsLyricsOffset:
-            return Binding(get: { settings.notchExpandedShowsLyricsOffset },
-                            set: { settings.notchExpandedShowsLyricsOffset = $0 })
-        case .expandedShowsQuickActions:
-            return Binding(get: { settings.notchExpandedShowsQuickActions },
-                            set: { settings.notchExpandedShowsQuickActions = $0 })
-        case .expandedShowsArtwork:
-            return Binding(get: { settings.notchExpandedShowsArtwork },
-                            set: { settings.notchExpandedShowsArtwork = $0 })
-        case .expandedShowsTrackTitle:
-            return Binding(get: { settings.notchExpandedShowsTrackTitle },
-                            set: { settings.notchExpandedShowsTrackTitle = $0 })
-        case .expandedShowsArtist:
-            return Binding(get: { settings.notchExpandedShowsArtist },
-                            set: { settings.notchExpandedShowsArtist = $0 })
-        case .expandedShowsAlbum:
-            return Binding(get: { settings.notchExpandedShowsAlbum },
-                            set: { settings.notchExpandedShowsAlbum = $0 })
-        }
-    }
-}
-
-@MainActor
-private struct NotchBehaviorToggleRow: View {
-    let item: NotchBehaviorItem
-
-    var body: some View {
-        SettingsRow(icon: item.icon, title: item.title, help: item.help) {
-            Toggle("", isOn: item.binding)
-        }
-    }
-}
-
-@MainActor
-private struct NotchBehaviorToggleSubRow: View {
-    let item: NotchBehaviorItem
-
-    var body: some View {
-        SettingsSubRow(title: item.title, help: item.help) {
-            Toggle("", isOn: item.binding)
-        }
-    }
-}
-
-@MainActor
-private struct NotchLyricRowArtworkPositionRow: View {
-    @ObservedObject private var settings = AppSettings.shared
-
-    var body: some View {
-        SettingsSubRow(title: L10n.t("封面位置")) {
-            Picker("", selection: $settings.notchLyricRowArtworkPosition) {
-                ForEach(NotchLyricRowArtworkPosition.allCases, id: \.self) { position in
-                    Text(position.displayName).tag(position)
-                }
-            }
-            .pickerStyle(.segmented)
-            .fixedSize()
-        }
-    }
-}
-
-@MainActor
-private struct NotchLyricsAlignmentRow: View {
-    @ObservedObject private var settings = AppSettings.shared
-
-    var body: some View {
-        SettingsRow(
-            icon: "text.alignleft",
-            title: L10n.t("对齐方式"),
-
-            help: L10n.t("只影响装得下的短句：它在歌词行里靠哪边。「自动」按对唱声部走：谁唱靠谁那边、合唱居中，没有对唱信息就靠左。放不下的句子会横向滚动，没有多余空间，对齐不起作用")
-        ) {
-            LyricsAlignmentSegmentedControl(selection: $settings.notchLyricsAlignment,
-                                            options: LyricsRestingAlignment.notchOptions)
-        }
-    }
-}
-
-@MainActor
-private struct LyricSecondaryLineRow: View {
-    @ObservedObject private var settings = AppSettings.shared
-
-    var body: some View {
-        SettingsRow(
-            icon: "text.append",
-            title: L10n.t("副行"),
-            help: L10n.t("主歌词下方多显示一行，行高不变。译文和罗马音显示的是当前句，下一句显示接下来那句；选「下一句」时展开区不再重复显示下一句预览")
-        ) {
-            Picker("", selection: $settings.notchSecondaryLine) {
-                ForEach(LyricSecondaryLine.allCases, id: \.self) { option in
-                    Text(option.displayName).tag(option)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
-        }
-    }
-}
-
-@MainActor
-struct NotchLyricRowSettingsRows: View {
-    @ObservedObject private var settings = AppSettings.shared
-
-    var body: some View {
-        VStack(spacing: 0) {
-            NotchBehaviorToggleRow(item: .showLyrics)
-            if settings.notchShowLyrics {
-                CardDivider()
-                NotchLyricsAlignmentRow()
-                CardDivider()
-                LyricSecondaryLineRow()
-                if !settings.notchSecondaryLine.hidesExpandedNextLinePreview {
-                    CardDivider()
-                    NotchBehaviorToggleSubRow(item: .expandedNextLine)
-                }
-                CardDivider()
-                NotchBehaviorToggleRow(item: .karaoke)
-                CardDivider()
-                NotchBehaviorToggleRow(item: .lyricRowArtwork)
-                if settings.notchLyricRowShowsArtwork {
-                    CardDivider()
-                    NotchLyricRowArtworkPositionRow()
-                }
-            } else if !settings.notchSecondaryLine.hidesExpandedNextLinePreview {
-                CardDivider()
-                NotchBehaviorToggleRow(item: .expandedNextLine)
-            }
-        }
-    }
-}
-
-@MainActor
-struct NotchFontSettingsRows: View {
-    @ObservedObject private var settings = AppSettings.shared
-
-    private var sizeRange: ClosedRange<Double> {
-        Double(NotchLyricRowMetrics.mainFontSizeRange.lowerBound)...Double(NotchLyricRowMetrics.mainFontSizeRange.upperBound)
-    }
-
-    private var sizeHelp: String {
-        String(format: L10n.t("只调主行，%@～%@pt，歌词行高度不变；副行和展开时的下一句预览固定 %@pt，只跟随字体与粗细"),
-               "\(Int(NotchLyricRowMetrics.mainFontSizeRange.lowerBound))",
-               "\(Int(NotchLyricRowMetrics.mainFontSizeRange.upperBound))",
-               "\(Int(NotchLyricRowMetrics.secondaryFontSize))")
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            SettingsRow(icon: "character", title: L10n.t("字体")) {
-                FontFamilyPicker(selection: $settings.notchFontFamilyName)
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "bold",
-                title: L10n.t("粗细"),
-                help: L10n.t("主行的笔画粗细；副行和展开时的下一句预览比它细一档")
-            ) {
-                Picker("", selection: $settings.notchFontWeight) {
-                    ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
-                        Text(weight.displayName).tag(weight)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .fixedSize()
-            }
-            CardDivider()
-            SettingsRow(icon: "textformat.size", title: L10n.t("字号"), help: sizeHelp) {
-                HStack(spacing: 8) {
-                    SteppedSlider(value: Binding(
-                        get: { settings.notchFontSize },
-                        set: { newValue in
-
-                            guard newValue != settings.notchFontSize else { return }
-                            settings.notchFontSize = newValue
-                        }
-                    ), in: sizeRange, step: 1)
-                        .frame(width: 150)
-                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.notchFontSize))"))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 46, alignment: .trailing)
-                }
-            }
-        }
-    }
-}
-
-@MainActor
-struct NotchExpandedSettingsRows: View {
-    var body: some View {
-        VStack(spacing: 0) {
-            NotchBehaviorToggleRow(item: .expandedShowsControls)
-            CardDivider()
-            NotchBehaviorToggleRow(item: .expandedShowsLyricsOffset)
-            CardDivider()
-            NotchBehaviorToggleRow(item: .expandedShowsQuickActions)
-            CardDivider()
-            SettingsRow(
-                icon: "person.text.rectangle",
-                title: L10n.t("曲目信息"),
-                help: L10n.t("展开时在歌词行上方多一块曲目信息，四项各自独立；全关则这一块不占位置。")
-            )
-            CardDivider()
-            NotchBehaviorToggleSubRow(item: .expandedShowsArtwork)
-            CardDivider()
-            NotchBehaviorToggleSubRow(item: .expandedShowsTrackTitle)
-            CardDivider()
-            NotchBehaviorToggleSubRow(item: .expandedShowsArtist)
-            CardDivider()
-            NotchBehaviorToggleSubRow(item: .expandedShowsAlbum)
-        }
-    }
-}
-
-@MainActor
-struct NotchBehaviorSettingsRows: View {
-    var body: some View {
-        VStack(spacing: 0) {
-            NotchBehaviorToggleRow(item: .collapseWhenPaused)
-
-            CardDivider()
-            AutoHideSettingsRows(surface: .notch)
-        }
-    }
-}
-
-struct NotchLyricRowPopover: View {
-    var body: some View {
-        SettingsPopoverShell(title: L10n.t("歌词行"), width: 470) {
-            NotchLyricRowSettingsRows()
-        }
-    }
-}
-
-struct NotchFontPopover: View {
-    var body: some View {
-        SettingsPopoverShell(title: L10n.t("字体")) {
-            NotchFontSettingsRows()
-        }
-    }
-}
-
-struct NotchExpandedPopover: View {
-    var body: some View {
-        SettingsPopoverShell(title: L10n.t("展开态"), width: 340) {
-            NotchExpandedSettingsRows()
-        }
-    }
-}
-
-struct NotchBehaviorPopover: View {
-    var body: some View {
-        SettingsPopoverShell(title: L10n.t("行为"), width: 420) {
-            NotchBehaviorSettingsRows()
-        }
-    }
-}
-
-private struct NotchAllSettingsDrawer: View {
-    @ObservedObject private var settings = AppSettings.shared
-
-    @State private var isExpanded = false
-
-    @Environment(\.settingsSearchPendingDrawer) private var pendingSearchDrawer
-
-    var body: some View {
-        SettingsCard {
-            disclosureHeader
-            if isExpanded {
-                CardDivider()
-                group(L10n.t("风格")) { NotchStyleSettingsRows() }
-                CardDivider()
-                group(L10n.t("屏幕")) { NotchScreenSettingsRows(onScreenChange: {}) }
-                CardDivider()
-                group(L10n.t("左耳")) { NotchEarSettingsRows(side: .left) }
-                CardDivider()
-                group(L10n.t("右耳")) { NotchEarSettingsRows(side: .right) }
-                CardDivider()
-                widthRow
-                CardDivider()
-                expandedWidthRow
-                CardDivider()
-                group(L10n.t("歌词行")) { NotchLyricRowSettingsRows() }
-                CardDivider()
-                group(L10n.t("字体")) { NotchFontSettingsRows() }
-                CardDivider()
-                group(L10n.t("展开态")) { NotchExpandedSettingsRows() }
-                CardDivider()
-                group(L10n.t("行为")) { NotchBehaviorSettingsRows() }
-                CardDivider()
-                resetRow
-            }
-        }
-        .onAppear { expandForSearchIfNeeded() }
-        .onChange(of: pendingSearchDrawer) { _, _ in expandForSearchIfNeeded() }
-
-    }
-
-    private func expandForSearchIfNeeded() {
-        guard pendingSearchDrawer == .notch else { return }
-        if !isExpanded {
-            withAnimation(.settingsCardReveal) { isExpanded = true }
-        }
-        SettingsSearchRouter.shared.consumeDrawer(.notch)
-    }
-
-    private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        Group {
-            SettingsCardHeader(title: title)
-            CardDivider()
-            content()
-        }
-    }
-
-    private var resetRow: some View {
-        SettingsRow(
-            icon: "arrow.uturn.backward",
-            title: L10n.t("恢复默认"),
-            subtitle: L10n.t("不含宽度和总开关")
-        ) {
-            Button(L10n.t("恢复")) { NotchStyleDefaults.restoreDefaults() }
-        }
-    }
-
-    private var widthRow: some View {
-        SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
-            HStack(spacing: 8) {
-
-                SteppedSlider(value: Binding(
-                    get: { NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth) },
-                    set: { NotchEditorStage.commitWidths(steady: $0) }
-                ), in: NotchEditorStage.usableWidthRangeOnCurrentScreen, step: 10)
-                .frame(width: 150)
-                Text(String(format: L10n.t("%@pt"),
-                            "\(Int(NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth)))"))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(width: 46, alignment: .trailing)
-            }
-        }
-    }
-
-    private var expandedWidthRow: some View {
-        SettingsRow(icon: "arrow.left.and.right.square", title: L10n.t("展开宽度")) {
-            HStack(spacing: 8) {
-                SteppedSlider(value: Binding(
-                    get: {
-                        NotchEditorStage.effectiveExpandedWidth(
-                            steadyBase: settings.notchContentWidth,
-                            expandedBase: settings.notchExpandedContentWidth)
-                    },
-                    set: { NotchEditorStage.commitWidths(expanded: $0) }
-                ), in: NotchEditorStage.usableExpandedWidthRangeOnCurrentScreen, step: 10)
-                .frame(width: 150)
-                Text(String(format: L10n.t("%@pt"),
-                            "\(Int(NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth, expandedBase: settings.notchExpandedContentWidth)))"))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(width: 46, alignment: .trailing)
-            }
-        }
-    }
-
-    private var disclosureHeader: some View {
-        Button {
-            withAnimation(.settingsCardReveal) { isExpanded.toggle() }
-        } label: {
-            HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
-                Text(L10n.t("全部设置"))
-                    .font(.system(size: 13))
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-            .padding(.vertical, SettingsRowMetrics.verticalPadding)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.t("全部设置"))
-        .accessibilityAddTraits(isExpanded ? .isSelected : [])
-        .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
-    }
 }
 
 @MainActor
@@ -2748,7 +2227,7 @@ private struct PlayerSettingsTab: View {
             PlayerLinkageRow(
                 icon: "power",
                 title: L10n.t("跟随播放器退出"),
-                help: L10n.t("勾选的播放器全部退出后，等 5 秒再退出 Lyrimuse；期间任一个重新打开就取消。设置、歌词管理或歌词窗口开着时不退"),
+                    help: L10n.t("勾选的播放器全部退出后，等 5 秒再退出 Lyrimuse；期间任一个重新打开就取消。设置或歌词管理开着时不退"),
                 candidates: linkageCandidates,
                 chosen: stores.quitWithPlayers
             ) { AppSettings.shared.quitWithPlayers = $0 }
@@ -3188,7 +2667,7 @@ private struct GeneralSettingsTab: View {
                 SettingsRow(
                     icon: "photo.badge.arrow.down",
                     title: L10n.t("动态封面"),
-                    help: L10n.t("歌词窗口的封面卡：部分专辑在 Apple Music 上有会动的封面，没有的照旧静态显示。低电量或开了「减弱动态效果」时自动暂停")
+                    help: L10n.t("歌词显示中的封面：部分专辑在 Apple Music 上有会动的封面，没有的照旧静态显示。低电量或开了「减弱动态效果」时自动暂停")
                 ) {
                     Toggle("", isOn: $settings.motionCoverEnabled)
                 }
@@ -3362,10 +2841,6 @@ private struct ShortcutsSettingsTab: View {
                     ShortcutRecorderControl(name: .toggleOverlay)
                 }
                 CardDivider()
-                SettingsRow(icon: "inset.filled.topthird.square", title: L10n.t("显示/隐藏灵动岛歌词")) {
-                    ShortcutRecorderControl(name: .toggleNotchOverlayHotkey)
-                }
-                CardDivider()
                 SettingsRow(icon: "menubar.rectangle", title: L10n.t("显示/隐藏菜单栏歌词")) {
                     ShortcutRecorderControl(name: .toggleMenuBarLyricsHotkey)
                 }
@@ -3390,10 +2865,6 @@ private struct ShortcutsSettingsTab: View {
             SettingsCard {
                 SettingsRow(icon: "list.bullet.rectangle", title: L10n.t("打开歌词管理")) {
                     ShortcutRecorderControl(name: .openLyricsManagerHotkey)
-                }
-                CardDivider()
-                SettingsRow(icon: "text.quote", title: L10n.t("打开歌词窗口")) {
-                    ShortcutRecorderControl(name: .openLyricsWindowHotkey)
                 }
                 CardDivider()
                 SettingsRow(
@@ -3487,22 +2958,20 @@ private struct GitHubStarsBadge: View {
 
 private struct AboutSettingsTab: View {
 
-    @ObservedObject private var updater = SparkleUpdaterManager.shared
     @ObservedObject private var githubStars = GitHubStarsService.shared
-
-    @ObservedObject private var settings = AppSettings.shared
 
     @State private var versionCopied = false
 
     private var appIcon: NSImage { NSApplication.shared.applicationIconImage }
-    private var versionString: String { SparkleUpdaterManager.appVersionString }
+    private var versionString: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
+    }
 
     var body: some View {
 
         SettingsPageCustomHeader {
             hero
         } content: {
-            updateCard
             communityCard
             legalCard
             diagnosticsCard
@@ -3617,34 +3086,6 @@ private struct AboutSettingsTab: View {
             try? await Task.sleep(nanoseconds: 1_600_000_000)
             versionCopied = false
         }
-    }
-
-    private var updateCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("更新"))
-            CardDivider()
-            SettingsRow(icon: "arrow.triangle.2.circlepath", title: L10n.t("软件更新"), subtitle: updateSubtitle) {
-                Button(L10n.t("打开")) {
-                    AppActions.shared.requestSettings(.softwareUpdate)
-                }
-            }
-        }
-    }
-
-    private var updateSubtitle: String {
-        if let update = updater.shownItem {
-
-            return String(format: update.downloaded ? L10n.t("%@ 已下载，点击安装") : L10n.t("有新版本 %@"),
-                          update.version)
-        }
-        guard let date = updater.lastUpdateCheckDate else { return L10n.t("还没有检查过更新") }
-        let formatter = DateFormatter()
-
-        formatter.locale = L10n.locale
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        formatter.doesRelativeDateFormatting = true
-        return String(format: L10n.t("上次检查：%@"), formatter.string(from: date))
     }
 
     private var communityCard: some View {

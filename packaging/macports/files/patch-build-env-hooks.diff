@@ -77,7 +77,7 @@ index 802494c..3f663f8 100755
 +  MC_FW_SRC="$MEDIA_CONTROL_PREFIX/Frameworks/MediaRemoteAdapter.framework"
 +  [ -d "$MC_FW_SRC" ] || MC_FW_SRC="$MEDIA_CONTROL_PREFIX/Library/Frameworks/MediaRemoteAdapter.framework"
 +  # ditto 而不是 cp -R:framework 内部有 Versions/Current 这类符号链接,cp -R 会把它们
-+  # 拆成实体拷贝、进而破坏代码签名(跟下面 Sparkle 那处同一个理由)。
++  # 拆成实体拷贝、进而破坏代码签名(跟下面 framework 拷贝那处同一个理由)。
 +  ditto "$MC_FW_SRC" "$APP_DIR/Contents/Resources/media-control/Frameworks/MediaRemoteAdapter.framework"
    chmod -R u+w "$APP_DIR/Contents/Resources/media-control"
 +  # 启动脚本按相对路径找 framework。包内布局固定是 ../Frameworks/,而发行版可能把它装在
@@ -88,36 +88,3 @@ index 802494c..3f663f8 100755
    # media-control 这个可执行文件本身完全没签名(实测 `codesign -dv` 报 "code object is
    # not signed at all")——跟 collector(go build 的产物自带签名)不一样,这里需要主动
    # 补签,不然可能被 Gatekeeper 拦下来。MediaRemoteAdapter.framework 内部那个 Mach-O
-@@ -414,11 +447,21 @@ fi
- #
- # 用 find 动态定位 xcframework 里的 slice 路径(而不是硬编码 macos-arm64_x86_64
- # 这个字符串)——SPM/Sparkle 版本更新时这层目录名可能变,find 对这类改动更稳。
--SPARKLE_FW_SRC=$(find .build/artifacts/sparkle -type d -name "Sparkle.framework" -path "*/Sparkle.xcframework/*" 2>/dev/null | head -1)
--if [ -z "$SPARKLE_FW_SRC" ]; then
--  echo "!! Sparkle.framework not found under .build/artifacts — did 'swift package resolve' run?" >&2
-+# artifacts 落在 SwiftPM 的 scratch 目录下,默认是 ./.build,被上面那组路径参数重定向过
-+# 就跟着走(包管理器构建会这么做)。
-+SPM_SCRATCH="${LYRIMUSE_SPM_SCRATCH_PATH:-.build}"
-+SPARKLE_FW_SRC="$(find "$SPM_SCRATCH/artifacts" -type d -name "Sparkle.framework" -path "*/Sparkle.xcframework/*" 2>/dev/null | head -1)"
-+# Sparkle 不在依赖里就整段跳过:包管理器(MacPorts)装的应用不该自更新,那边的 Portfile
-+# 会把这个依赖摘掉——此时没有 framework 可嵌,不是错误。
-+if [ -z "$SPARKLE_FW_SRC" ] && ! grep -q 'sparkle-project/Sparkle' Package.swift; then
-+  echo "    Sparkle not a dependency — skipping framework embed (no in-app updater)"
-+  SPARKLE_SKIPPED=1
-+fi
-+if [ "${SPARKLE_SKIPPED:-0}" = 0 ] && [ ! -d "$SPARKLE_FW_SRC" ]; then
-+  echo "!! Sparkle.framework not found under $SPM_SCRATCH/artifacts — did 'swift package resolve' run?" >&2
-   exit 1
- fi
-+if [ "${SPARKLE_SKIPPED:-0}" = 0 ]; then
- mkdir -p "$APP_DIR/Contents/Frameworks"
- rm -rf "$APP_DIR/Contents/Frameworks/Sparkle.framework"
- ditto "$SPARKLE_FW_SRC" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
-@@ -445,6 +488,7 @@ find "$APP_DIR/Contents/Frameworks/Sparkle.framework" \
-     -exec codesign --force --sign - {} \;
- codesign --force --sign - "$APP_DIR/Contents/Frameworks/Sparkle.framework"
- echo "    Sparkle.framework embedded + signed"
-+fi  # SPARKLE_SKIPPED
- # 2026-07-21:本地化文案 + 状态栏图标直接从源码拷进 Contents/Resources/，不再依赖
- # SwiftPM 的 Bundle.module 访问器——原因见下面这段注释和 L10n.swift/MenuBarMenu.swift
- # 顶部注释。AppIcon.icns 已经证明 Contents/Resources/ 这个位置对 codesign 完全安全。

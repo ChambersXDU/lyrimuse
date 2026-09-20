@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""把双语（英中对照）发布日志拆成单语言的 HTML，喂给 Sparkle。
+"""把双语（英中对照）发布日志拆成单语言的 HTML，供发布工具校验和展示。
 
 用法：split_release_notes.py NOTES.md OUT_DIR
 产出：OUT_DIR/notes.{en,zh-Hans}.html

@@ -120,15 +120,6 @@ func runHealthcheckCLI(args []string) {
 	} else {
 		add("ListenBrainz", healthOK, "已配置 token,api_root=%s", cfg.APIRoot)
 	}
-	switch {
-	case cfg.LastfmScrobbleSessionKey != "":
-		add("Last.fm", healthOK, "已授权,会镜像写入")
-	case cfg.LastfmUser != "" && cfg.lastfmBridgeAPIKey() != "":
-		add("Last.fm", healthOK, "已配置读取(iPhone 播放桥接可用),未授权写入")
-	default:
-		add("Last.fm", healthWarn, "未配置(不影响歌词显示)")
-	}
-
 	if !*skipNetwork {
 		type probeTrack struct{ artist, title, album string }
 

@@ -3,7 +3,6 @@
 
 ## 定位
 
-贴在桌面上的无边框悬浮歌词窗(代码里叫"经典悬浮窗"/classic overlay):常驻置顶、跨 Space(含全屏 App 上方)、默认点击穿透,只显示当前一句(可选罗马音/译文/下一句预览),逐字歌词做卡拉OK渐变填色。它是三种悬浮展示形态(桌面悬浮/灵动岛/菜单栏)中可定制度最高的一种,也是字体/字重/字号/配色这组设置的唯一消费者。
 
 ## 入口与展示面
 
@@ -14,7 +13,6 @@
 | 全局快捷键 | `toggleOverlay`(显示/隐藏)、`toggleLockPosition`(锁定/解锁);默认不预置按键,须用户在设置里自己录制 |
 | 首次启动引导 | 显示形态那一步可以直接开启(OnboardingView) |
 
-三个入口最终都走 `LyricsOverlayWindowController.setVisible(_:)` 这个唯一入口,真值持久化在 `AppSettings.classicOverlayEnabled`。悬浮窗与灵动岛是两个独立开关、互不排斥,可同开同关。
 
 ## 行为规格
 
@@ -27,7 +25,6 @@
 
 1. 有逐字数据(`currentLine.words`)→ 逐字卡拉OK渐变;
 2. 只有整行文本(`currentLine.mainText`)→ 整行按前景色高亮显示(即"整行高亮退化");
-3. **没有任何曲目**(`OverlayPlayback.hasTrack` 为 false:title 与 artist 都空且不在广告插播,判据照抄灵动岛 `NotchLyricsWindowController.hasTrack`;停播 / 播放器没开 / 刚装好还没放过歌)→ 品牌标记「♪ Lyrimuse」(2026-09-07,决策 22);
 4. Spotify 广告插播 → 「广告中」;
 5. 联网确认过是纯音乐 → 「纯音乐」;
 6. 搜完了确实没有 → 「暂无歌词」;
@@ -53,7 +50,6 @@
 ### 自动换行与跑马灯
 
 - 逐字行用自定义 `WrapLayout`(SwiftUI Layout 协议):一行装不下下一个字就另起一行,行内按对唱声部对齐(默认居中);单个字比整行还宽时独占一行原样保留、绝不压缩成省略号。几何计算在 `WrapLayoutMath`(可被 selftest 覆盖),子视图尺寸有缓存,只在子视图集合变化时重测。
-- **悬浮窗不使用跑马灯**:长行靠换行+窗口动态增高消化。`MarqueeText` 只用于灵动岛/歌词窗口/菜单栏,与本章无关。
 
 ### 对唱分声部
 
@@ -61,9 +57,7 @@
 - 认得的标记不止「男/女/合」:**人名/艺名**(周杰伦/Jay/CT/巨炮/杭盖…)也算,但要过一道整份闸(≥2 个不同标签、合计 ≥3 处、至少一个重复出现),外加形状闸(不含代词/动词、不含乐器职能词根、不是角色词)。已知声部词直通、不用过闸。
 - **独占一行的标记整行丢掉** —— 它不是歌词,不该占着自己的时间戳在屏幕上显示。
 - 同一位歌手的不同写法(男/男声/男合)归并成同一个身份,保证始终同侧。
-- 悬浮窗对 `side == nil`(整首无标记,绝大多数歌)兜底为**居中**(歌词窗口兜底靠左)——nil 与 .leading 是刻意区分的两个值。
 - 声部影响**五**处:卡片内 VStack 对齐、多行文本对齐、WrapLayout 行内对齐、**两侧内缩**(`LyricDuetLayout`,见下),以及**卡片上方那排控制按钮的横向落点**(2026-09-03 补,见下)。
-- **两侧内缩**:光靠对齐不够 —— 顶满整宽的行左对齐和右对齐渲染完全相同。左声部行远侧(右)留白多、近侧(左)留白少,右声部反过来,合唱两侧都按远侧的量留;远侧比例 15% 且以 4 个字宽封顶,`side == nil` 的行一律 0(普通歌排版逐像素不变)。这是 Apple Music 的实际做法。⚠️ **近侧留白**(2026-08-26 加,`LyricDuetLayout.nearInsetRatio` = 远侧的一半,以 2 个字宽封顶):在此之前近侧恒为 0,短句会直接贴着卡片的物理边缘(悬浮窗)/正文列边缘(歌词窗口),用户反馈"左右两块太分开、顶到边了"。近侧留白把整块内容往中间拉一截,同时保持"远侧 > 近侧"这条不变式——分栏的方向感(偏左/偏右)还在,只是不再顶边。`LyricDuetLayout.insets` 两个窗口共用,但**悬浮窗只取它的远侧那一份**(`OverlayPlayback.duetInsetUnit` = `.leading` 的 `trailing`),近侧的呼吸空间由卡片自己的 20pt 水平内边距提供(`OverlayCardGeometry.cardInsets` 的注释;2026-09-10 核对代码时纠正,此前这里写成"一起生效"不准确);歌词窗口(第 07 章)两侧都用。
 - **对唱舞台**(2026-09-10,用户:「如果歌词已经拉得很宽,这时候遇上对唱类歌词,左右两句就会分得很开……哪怕宽度拉得很宽,也尽量还是居中显示;剩余的宽度留给很长的歌词做冗余」):左右声部不再贴**卡片**两边,只在卡片正中一条固定宽度的带里分栏 —— 舞台宽 = `max(448, 12 × 字号)` 再被可用宽度封顶,448 = 默认窗宽 488 − 两侧 20pt 内边距(对唱分栏的观感本来就是按默认窗宽调出来的)。实现只是多一份**近侧**内缩:`OverlayCardGeometry.duetStageInset(availableWidth:fontSize:)` = (可用宽 − 舞台宽)/2,进 `cardInsets` 的 `stageInset` 参数(左声部 `(stage, unit)`、右声部 `(unit, stage)`、合唱本来就居中仍是 `(unit, unit)`、nil 恒 0),`OverlayPlayback.duetStageInset` 跟 `duetInsetUnit` 一样由窗宽+字号预组合。远侧内缩不变,所以**换行点跟改动前一样**:长句从舞台边缘起笔、越过舞台往外长(左声部往右、右声部往左),到远侧内缩处才换行 —— 拉宽多出来的宽度全是长句冗余,短句不再被推到两端。窗口不比默认宽时 `stageInset = 0`,逐像素不变。下一句预览的 `nextLineInsetsDelta`、控制排的 `controlsInsets` 都从 `duetInsets(for:)` 派生,跟着一起收进舞台(1400pt 窗 / 31pt 字号:左声部从 x=476 起、右声部到 x=924 止,两栏隔 448 而不是 1360;控制排随之只在这 448 里换边,`OverlayControlsSidePin` 要挡的"从指针底下抽走"幅度也小了)。selftest `overlay` 组钉住这些数。见决策 24。
 - 逐字数据里标记的切分形态**不固定**:可能跟第一个字粘成一个词(`男：周`)、可能独立成词(`男`+`：`)、人名还会被逐字拆开(`周`+`杰`+`伦`+`：`)。所以判定必须在**整行拼起来**的文本上做,剥离按**字符数**从词序列前端剥(剥到一半的词改文本、保留时间戳)。
 - **声部指示圆点+细竖线**(2026-08-27 加,`withSpeakerIndicator`):光靠左右对齐不够直观——尤其当前行和下一句预览可能贴在不同边(见下一句预览独立分栏那条),一眼扫过去容易看错是谁在唱。`.leading`/`.trailing` 各配一个 6pt 圆点 + 2pt 细竖线,贴在文字所在的那一侧(不是固定贴左边,跟着文字换边)。`side == nil`(没有对唱信息)和真正的合唱(`.center`)都不显示指示——前者是普通歌,排版必须逐像素不变;后者不属于任何一侧,硬塞一个标记反而暗示"这是某个人在唱"。当前行(`mainLine`)和下一句预览各自独立套这层指示,用的是各自的 side(`duetSide`/`nextLineDuetSide`)和各自的颜色,跟两侧内缩/分栏是同一个"各自独立算"的原则。⚠️ 只在词级(`WrapLayout`)行上会有一个可感知的副作用:`withSpeakerIndicator` 把圆点+竖线跟内容一起塞进一个 `HStack`,WrapLayout 拿到的可用宽度会因此变窄约 20pt(圆点 6pt + 竖线 2pt + 两段 7pt 间距)——影响很小,量级跟两侧内缩本身相近,没有必要为了避免它去改用更复杂的 overlay 定位方案。
@@ -71,14 +65,12 @@
   - **颜色**(2026-08-27 二次修改,用户实测反馈):初版用固定的蓝/粉两色跟"身份"绑定,理由是跟主题脱钩才能在任何封面下分得清两个声部——但实测这套颜色跟用户自己选的配色主题不搭。改成调用方直接传这一行文字实际在用的颜色(`playback.displayForegroundColor`,下一句预览额外带它自己那份 0.4 不透明度),圆点/竖线跟贴着的文字同色同淡,"谁在唱"改成纯靠**位置**识别(先出现的贴左、第二位贴右,跟 `LyricDuet.sides` 的定边顺序一致),不再靠色相区分。
   - **竖线长度**(2026-08-27 二次修改,用户反馈"线太长了,占视野"):初版 `.frame(maxHeight: .infinity)` 跟着这一行的完整高度撑满,主行字号越大越显眼;改成固定 `speakerBarHeight = 12`,不管主行还是更小号的下一句预览,视觉分量都一样克制,只当一个不起眼的边角标记。
 - **控制排跟着歌词块换边**(2026-09-03,用户实机反馈:「在对唱模式下,这个悬浮菜单不是显示对应歌词上面的,看起来是在整个窗口的居中位置」)。歌词卡片一直是 `.frame(maxWidth:.infinity, alignment: duetFrameAlignment)` 按声部靠边,而卡片上方那排播放控制按钮(以及锁定态那颗解锁按钮)只吃外层 `VStack(spacing: 0)` 默认的 `.center` —— 对唱歌把歌词甩到右半边时,按钮排还钉在整扇窗正中。**普通歌看不出来纯属巧合**:`duetSide` 兜底就是 `.center`,两条推导算出同一个位置,所以这个偏差从 2026-08-14 对唱分声部落地起一直藏到现在。
-  - **修法**:按钮排套上 `.padding(controlsInsets)` + `.frame(maxWidth:.infinity, alignment: controlsFrameAlignment)`;`controlsInsets` = 卡片两侧内缩 + 卡片水平内边距,算法搬进 core 的 `OverlayCardGeometry`,**跟卡片共用同一份出处**而不是各算各的 —— 本仓已经为"同一个视觉属性两条渲染路径"付过三次账(预览条对齐写死 `leading`、灵动岛手搓预览、编辑台简化复刻件),这次直接把它钉进 selftest。
   - **实测**(离屏 `NSHostingView` 复刻同一条修饰符链,1016pt 窗宽 / 31pt 字号 / `unit = 124`):左声部 `pill.minX = 歌词块.minX = 20.0`;右声部 `pill.maxX = 歌词块.maxX = 996.0`;居中仍是 `401.0…615.0`(= 改动前 VStack 居中的落点,`214` 宽的胶囊在 1016 里居中)。同一首普通歌改动前后各截一张悬浮窗,PNG **sha256 完全一致**。
   - 对齐的是**歌词块**的边缘,不是文字本身的边缘 —— 对唱行的声部指示圆点(22pt)算在块里,所以左声部时按钮排左边缘跟那颗圆点对齐、比文字左边缘再往外 22pt。刻意如此:圆点是这一行的一部分。
   - ⚠️ **指针压在按钮排上时把落点冻住**(`OverlayControlsSidePin`)。换边的幅度就是大半个窗宽(上面那组实测两个落点差 759pt),而对唱歌几秒换一次行 —— 用户瞄准某颗按钮的那零点几秒里赶上换行,整条按钮排会从指针底下抽走:轻则点空(事件照旧穿透到桌面),重则点到挪过来的**另一颗**按钮上,而这排里有「关闭悬浮窗」和「锁定位置」两颗点错了要费事收拾的。判据是"指针压在按钮排上"(新增 `OverlayChromeSource.isHoveringControlPill`;控制器侧未锁定时用胶囊热区 `controlsHotZoneLocal`,锁定态那条热区不上报、退回按钮矩形),**不是**"控制排显示着"(`isHoveringForControls` 是整窗判定)—— 后者会让指针只是停在窗口里、根本没在瞄按钮的时候也一起冻住,那正好又变回用户这次反馈的现象。指针一离开,下一行立刻回到跟着歌词走。
   - 冻结存的是**原始声部**(`line?.side`)而不是算完的对齐方向:落点由"对齐方向"和"两侧内缩"两条推导合成,这两条在非自动的「对齐方式」覆盖下会分叉(见下一条),只冻其中一半等于白冻。
   - 换边**不加动画**:歌词换行本身是纯属性跳变,按钮排硬切才对得上;而且动画途中 `ControlRectsPreferenceKey` 会逐帧上报中间位置,控制器按矩形分发的点击会落在"飞到一半"的按钮上。
   - 控制器侧顺带把四处"这套手势整个用不上了"的悬停清零(锁定 / 窗口隐藏 / 卸监听器 / 关掉划过让开)收成一个 `clearControlsHoverState()` —— 这次加第三个悬停量时就得挨个改四处,漏一处会留下一份陈旧的 `true`。视图侧另有一道兜底:`isHoveringForControls` 一转 false 就解冻,不依赖那四处都写全。
-- **对齐方式覆盖**(2026-08-29,采纳 [GitHub issue #2](https://github.com/Yudaotor/lyrimuse/issues/2);2026-08-31 起归到「排版」组,见「编辑台改造」第十三步):设置页新增「对齐方式」四选一(自动/居中/左对齐/右对齐)——issue 原话「歌词位置来回变化会影响阅读体验」,想要固定悬浮窗位置的用户可以放弃自动分声部。**只作用于悬浮窗**(`LyricsOverlayView`),不影响歌词窗口(第 07 章)——歌词窗口对无声部信息的兜底本来就是靠左(悬浮窗是居中),两者默认已经不一致,这次按 issue 与用户原话的范围不去动它。
   - **只改对齐方向不够**:如果非自动选项只改 VStack/文本的对齐方向,留着两侧内缩(见上)和声部指示圆点继续按真实声部算,文字块仍会因为留白量随声部切换而轻微漂移——issue 要的"始终保持在同一个位置"没有真正做到。所以非自动选项的语义是**当成一首没有对唱信息的普通歌来排版**(两侧内缩归零、指示圆点不出现,跟 `side == nil` 的既有行为逐像素一致),只是「排版居中」换成「排版靠选定的这一侧」;这对完全没有对唱标记的普通歌同样生效(issue 原文"所有歌词强制左对齐",不是"仅对唱歌"),等价于把旧的"永远居中"兜底换成"永远靠用户选的那一边"。
   - **两套 side 值分开算**,新增 `OverlayDuetAlignmentOverride`(`LyrimuseCore/Lyrics/OverlayDuetAlignmentOverride.swift`,纯函数、有 selftest)拆出两个语义:`effectiveAlignmentSide`(决定 `duetSide`/`nextLineDuetSide`——喂给 VStack 对齐/frame 锚点/文本对齐,自动模式原样 `?? .center` 兜底,非自动模式恒等于选定方向,不管真实声部是什么)和 `effectiveDecorationSide`(决定新增的 `duetDecorationSide`/`nextLineDecorationSide`——喂给两侧内缩 `duetInsets(for:)` 和声部指示圆点 `withSpeakerIndicator`/`speakerIndicatorInset`,自动模式原样传回真实声部,非自动模式恒为 `nil`)。⚠️ 不能只留一套值:非自动模式下把 `effectiveAlignmentSide` 的结果(`.leading`/`.trailing`)直接喂给指示圆点,会让完全没有对唱标记的普通歌也冒出一个圆点(圆点只按"是不是 `.center`"判断要不要显示,而非自动模式下每一行都被强制成非 `.center`)。`nextLinePreviewFont`(下一句预览是否放大字号提前"预告")也一并加了 `duetAlignmentOverride == .automatic` 前提——覆盖生效时位置已经锁死不会跳,原本"提前预告双重跳变"的理由不再成立,统一退回小字号。
   - (⚠️ 以下是 2026-08-31 之前的钉条 `OverlayPreviewBar` 的行为,该钉条已删除;现在这一段的预览是编辑台、画的是真视图,对唱声部按真实数据走。)悬浮窗设置页预览条(`OverlayPreviewBar`)不模拟对唱声部,所以"自动/居中/左对齐/右对齐"这四个选项本身在预览条上不会因为对唱切换而有差异;但**非自动的三个选项对预览条一样生效**(2026-08-29 用户反馈补上)——`OverlayPreviewBar` 新增 `previewAlignmentSide`(直接调 `OverlayDuetAlignmentOverride.effectiveAlignmentSide(realSide: nil)`,跟悬浮窗真实渲染路径同一个函数)算出方向,套在 `Group{ karaokeContent / 静态 Text }` 外层的 `.frame(maxWidth: .infinity, alignment:)` 上,让内容撑满预览条整宽再贴向选定的一边——此前这层 `.frame` 没有,内容只按自身宽度居中于 ZStack,选哪个选项预览条都看不出变化。
@@ -86,7 +78,6 @@
   - ⚠️⚠️ **这个 Picker 的宽度本身又是一个独立的、分三轮才修对的 bug(2026-08-29,用户反馈"这些配置的按钮点了之后会变大"),跟上面的渐变/裁切系列问题完全不相关,记录在这里防止以后又当成同一类问题去查。**
     - **第一轮误判**:以为是"选中的段文字更长,分段控件按当前选中段重新量宽度"——给每个选项的 `Text` 加 `.frame(minWidth:)`,截图坐实**完全没用**:macOS 的 `.pickerStyle(.segmented)` 桥接的是 `NSSegmentedControl`,它自己按当前选中段的文字重新量宽度,不读 SwiftUI 加在子视图上的 `.frame`。
     - **第二轮**:改成直接把整个 `Picker` 的宽度钉死——去掉制造"会变的理想宽度"的 `.fixedSize()`,换成 `.frame(minWidth: 300)`。这一步确实治好了"选中哪个选项决定宽度"(300 只要 ≥ 四个选项里最宽的那个状态,布局位置就不再跳),但用户随后指出真正在意的症状是另一件事:**首次进入这个页面时四个按钮比较小,一旦点击就会变大**,跟选中的是哪个选项无关——`frame(minWidth:)` 只保证外层布局这一格位置不跳,治不了控件自己内部渲染尺寸的这次跳变,方向完全找错了。
-    - **真根因**(第三轮,跟本章"设计决策"另一处已修 bug 同源——`AccountLinkingTab.swift` 的 `lastfmSectionPicker`):这个 Picker 挂在"歌词显示"页里"悬浮歌词/灵动岛/菜单栏/其它"四个子页之间那个 `sectionPicker` 切出来的内容树上,而那个切换动作**包着 `withAnimation`**。分段控件是 AppKit 桥接过来的原生控件,这类控件在淡入过渡"还没拿到最终尺寸"的那一帧就先合成定型——之后任何交互(点击)逼着它重新走一次布局才会跳到真实尺寸,现象就是"刚进页面时小、点一下就变大"。`AccountLinkingTab` 那次是把整个切换动作从 `withAnimation` 里摘出来修的,但这里**不能照搬**——那样会连带改掉"悬浮歌词/灵动岛/菜单栏/其它"四个子页共用的切换动画手感,牵连太广,只为修一个分段控件的尺寸问题去动它不值得。改成只让这一个控件自己不参与外层过渡:`.transaction { $0.disablesAnimations = true }` 只对这一棵子树生效,不管外面的子 tab 是硬切还是带动画切换,它自己永远直接定型到最终尺寸。
     - 教训跟 `OverlayPreviewBar` 那次一样:**症状"看起来像什么"和"真根因在哪一层"可能完全对不上**——"点了才变大"第一眼最像"选中段决定宽度",实际是"页面切换动画截了一帧未定型的尺寸,点击只是恰好触发了一次重新布局"。
 
 ### 日文逐词注音(罗马音标在词底下)
@@ -97,7 +88,6 @@
 
 ### 罗马音/译文/下一句预览三行
 
-- 顺序固定:主行 → 罗马音(0.65x 字号、前景色 60%)→ 译文(0.7x、75%)→ 下一句预览(0.7x、40%)。罗马音 2026-08-17 起在主行**下面**(音译惯例,与歌词窗口一致)。
 - 罗马音来源:服务端 `lyrics_roma` 优先;整首都没有时客户端 Romanizer 现算兜底(按行缓存)。`romanizationScripts`(日/韩/中分语言开关,中文默认关)在服务端字段之前把关。
 - 译文来自歌词源的中文翻译(700ms 容差最近邻贴行),默认开关跟随"用户读不读中文"。
 - 下一句预览:引擎 `upcomingLineText`;播放位置还没到第一句时直接提前露出第一句真歌词。
@@ -116,7 +106,6 @@
   - 落点在编辑台工具栏「文字」浮层(和抽屉「文字」组),排在字体和字号**之间**——字重是"这个字体族的哪一个粗细",跟字体是同一件事的两半。菜单栏快捷面板**没有**这一项:那一栏是「各形态自己的旋钮」,只放连续量的滑杆(字号 / 宽度),字体本来也不在那儿。
 - 前景色:`PlaybackCoordinator.displayForegroundColor`——「跟随封面」(`followsCoverArt`)开着且已算出封面强调色时用动态色,否则用手选固定色。动态色从封面均值色派生:描边开着且描边色 alpha≥0.5 时按"与描边色够对比"算,否则按"够亮"提升;封面过小时用 collector 缓存里的高清替代图均值。**只接管文字颜色**,背景色/描边色始终生效。
 - 背景色:alpha > 0.02 才画(圆角 16 固定值);默认全透明,此时垫一层 `Color.black.opacity(0.001)` 保证拖拽手势能命中。
-- **毛玻璃背景**(`overlayBackgroundGlass`,2026-09-02 加,默认关):开着时卡片底下垫一层系统材质 `.regularMaterial`(跟灵动岛「磨砂玻璃」同一种材质语言,但更薄一档——厚材质会把壁纸盖成灰板),用户的背景色叠在上面当**着色**:背景色全透明就是纯玻璃,alpha 越高越接近纯色卡片。关着时透明/纯色两种既有用法逐像素不变。「背景可见」的判定(`AppSettings.backgroundVisible`)变成「alpha > 0.02 **或**玻璃开着」,窗口阴影、拖拽捕获层、编辑台虚线边界三处联动自动跟上。材质在 `isOpaque=false` 的 NSPanel 里直接渲染,不需要 NSVisualEffectView;系统「减少透明度」开着时材质自动退成近乎不透明。编辑台预览渲染的就是真 `LyricsOverlayView`,底下铺着真实壁纸,所以预览里看到的模糊是真的。设置入口:「背景颜色」下的从属开关(`SettingsSubRow`,它改变的是背景颜色的含义,不是独立维度)。前景色的「跟随封面」取色管线未改:玻璃底下是模糊后的混合色,浅色壁纸配浅字可能不够清楚,先靠手选前景色或描边兜底。
 - 文字描边:开关+颜色可调,粗细固定 1.2pt。实现是 blur+alphaThreshold 剪影垫底(`OptionalTextStroke`),整行套一次、开销不随描边粗细变化。逐字行的剪影 mask 用**静态副本**当 Canvas symbol(2026-08-19:`lyricsTextStroke(maskSource:)`,同排版纯色版 `karaokeLineContent(atMs: nil)`)——原来 symbol 是内容本身,填色渐变每 tick 一变整行就重跑 blur+threshold,而剪影只由文字/字体/换行决定,一行存续期内不变。历史上的 `.compositingGroup()` 已删除:它是给早已移除的每字阴影合并用的,当前树里只剩离屏渲染开销。⚠️ **剪影必须跟 content 吃同一道 `.padding(width*2)`**(2026-08-23 修):Canvas 是**居中**绘制剪影的,只有两者在 canvas 里占同一块矩形才逐点对齐。普通 Text 按自然宽度收缩、居中能补回来;但逐字行的 `WrapLayout` **撑满被提议的宽度** —— content 撑满 padding 内的宽度、剪影撑满 canvas 整宽,差正好一圈 padding。居中排版时两边各差一半抵消掉(所以非对唱歌看不出),一旦按 leading/trailing 靠边(对唱左右声部)就偏 2.4pt,而描边本身才 1.2pt,整圈甩到一侧。源码守卫在 collector 的 `strokemaskpadding_test.go`(纯 SwiftUI 布局行为,selftest 覆盖不了)。
 - 配色主题:内置预设 + 用户自存主题(只打包文字/背景/描边四字段,不含字体字号);「恢复默认」重置九个字段(2026-09-02 加入毛玻璃开关)。
   ⚠️ **2026-09-03 改名 + 改副标题**(三形态设置审计发现):老那两句合起来**在说谎** —— 标题「恢复默认文字与配色」+ 副标题「不含宽度和锁定位置」会让人理解成"除这两样之外都恢复",而它实际只写 9 个字段,「排版」「行为」两个浮层里的 6 项(双行显示 / 对齐方式 / 长按拖动 / 悬浮淡化 / 截屏录屏时隐藏 / 暂停无播放时隐藏)一个都不碰。现在标题念**真正覆盖的那三个浮层**、副标题念**没覆盖的**(2026-09-03 是「不含排版、行为和宽度」;2026-09-11 「位置」单开一个浮层后改成「不含排版、行为、位置和宽度」,两个入口仍一字不差),两句合起来才是完整准确的作用范围声明。**功能本身没改** —— 排版和行为该不该纳入是产品取舍,不在那次修复范围里。两个入口(工具栏「重置 ▾」和抽屉里的 `resetRow`)必须一字不差。内置预设(`ColorTheme.builtInPresets`)现在是六款:经典白字/白字描边/经典黑字/黑字描边/深色卡片/浅色卡片——2026-08-26 去掉了"暖黄"/"赛博青"，换成"白字描边"/"黑字描边"(经典白字/黑字各自的加描边版本,前景/背景色不变,只是把描边开关打开,描边色沿用各自"手动打开描边时"本来就带的那个默认值,不是新配的颜色)。
@@ -151,7 +140,6 @@
 - **歌词命中判定**(2026-08-23):「划过让开」原来复用 `isHoveringForControls`,那是 `window.frame.contains(鼠标)` —— **整个窗口矩形**。窗口比文字大得多(上下有卡片内边距和播放控制槽位、左右是 `WrapLayout` 撑满留下的空白),于是指针在歌词**附近**就触发淡出。改成独立的 `isHoveringLyrics`:窗口内 **且** 落在歌词文字矩形上才算。
   - 文字矩形由 `LyricsTextRectPreferenceKey` 收集主歌词/罗马音/译文/下一句预览各自的 frame 取并集,经 `updateLyricsHotZone` 换算成屏幕坐标(同 `updateControlsHotZone` 那套换算)。
   - 逐字行特殊:`WrapLayout` **撑满整宽**(对唱左右对齐要靠它),直接拿 frame 会把左右空白算进去。改由布局阶段把"文字实际矩形"写进 `WrapContentRectSink`(纯引用旁路,**不经过 SwiftUI 渲染循环** —— 给每个字挂 GeometryReader 会把几何依赖拖进 60fps 填色热路径,那个坑踩过),几何本体是 `WrapLayoutMath.contentBounds`(有 selftest)。
-  - **控制排的显示判定 2026-09-13 也收紧了**(用户:「只有当鼠标悬浮到歌词实际范围内,才会出现下面这个菜单栏;而不是鼠标放在整个悬浮歌词窗口内,就展示下面的菜单栏」)。此前它一直是整窗判定 —— 2026-08-23 那次只收了「划过让开」这一半,留下的理由是"想点按钮时指针常先落在窗口边缘,收紧成必须压在字上反而不好点"。真正的解法不是放宽到整扇窗,而是**把按钮自己也算进命中区**:
     - 区域 = 歌词文字矩形 ∪ 控制排胶囊热区 ∪ 各按钮矩形,取**包围盒**(`OverlayControlHitTest.chromeHoverZone`,有 selftest),在 `recomputeHitRegions` 里跟三份热区一起合成成 `chromeHoverZoneLocal`,`.mouseMoved` 每次只做一次 `contains`。
     - **必须并上按钮**:按钮在歌词**外面**(卡片内边距 + 槽位那 4+4pt),只认歌词矩形的话指针一往按钮挪就离开了区域,控制排在指针抵达之前先消失,整排按钮从此点不到 —— 这是这次收紧唯一会致命的地方。
     - **必须取包围盒**、而不是"命中其中任一个矩形":那道缝里两边都不命中,指针穿过时控制排会闪一下再回来。
@@ -170,11 +158,9 @@
   - **开(旧行为)**:按住窗口区域 0.35s(期间移动 ≤4pt)才武装,期间点哪儿都能穿透;移动超容差判为"想操作下层 App 的普通手势",取消长按。
   - 长按这道门原本是**必须**的 —— 窗口常年点击穿透,"按下就拖"会让整个窗口区域吃掉点击。2026-08-23 精准歌词热区落地后这个前提变了:有了更准的判据,不必再用时长去区分"想拖窗口"和"想点桌面"。
 - 首次解锁时窗口上短暂弹一句提示 4 秒,一台机器只弹一次(`np:hasShownOverlayDragHint`);文案跟着「拖动前先长按」变(开=「长按即可拖动位置」/关=「按住歌词即可拖动位置」)。
-- 悬停控制排:解锁+悬停在窗口范围内时,歌词卡片**上方**露出深色胶囊——上一首/播放暂停/下一首、「喜欢」心形(仅实际在播 Apple Music 且有自动化权限时出现;悬停露出时会回读一次真实状态)、竖线、**展开到歌词窗口/设置/锁定/关闭**(2026-08-29 后三项旁边新加的两个,见下;⚠️ 2026-08-31 用户要求把**锁定和设置对调**,原来是「展开/锁定/设置/关闭」照抄 QQ 音乐参考图的顺序。新顺序也更站得住:锁定是这一排里唯一**点完整排就消失**的按钮——`lockPosition` 一变真,`controlsShown` 的条件不再成立,整条胶囊换成 unlockPill——把它挪到紧挨关闭键的位置,两个「用完这排就没了」的操作凑在一起,而设置(弹菜单)和展开(开新窗)这两个「点完排还在」的留在前面。命中区不用跟着改:每个按钮用 `GeometryReader` 按自己的 `OverlayControlID` 上报矩形,换渲染顺序会自动跟随,没有第二处硬编码的顺序表)。播放控制按钮点击时才校验自动化权限,被拒 `NSSound.beep()`。按钮槽位常驻(隐藏时透明)以保证悬停时歌词不跳动。
 - **按钮悬停高亮(2026-09-11,用户:「悬浮歌词这上面的按钮帮我开一个鼠标移上去有交互的动效视觉 ux 效果」)**:指针移到哪颗按钮,那颗底下浮起一圈白色圆形高亮(18% 白,从 0.55 倍弹出到 1),图标同时放大到 1.16,离开收回;弹簧 `response 0.24 / damping 0.72`,`reduceMotion` 下不补间但**高亮照画**(它回答"指针现在在哪颗按钮上",是功能反馈不是装饰)。补的**不是 `.onHover`** —— 窗口常年 `ignoresMouseEvents=true`,SwiftUI 收不到任何鼠标事件(这也是这排按钮的点击要由控制器按矩形分发的原因),补的是控制器把它 `.mouseMoved` 分支里**本来就要算的那一次**命中测试的结果发布出来(`OverlayChromeSource.hoveredControl`,只在值真变时赋值 —— 每次鼠标移动都写一遍 @Published 会让整扇窗按鼠标移动频率重算 body)。可见性判据下沉到 Core 的 `OverlayControlHitTest.hoveredControl(at:in:insideWindow:positionLocked:)`,两道闸:指针不在窗口里不亮(全局监听器照样送事件进来,否则边上那颗会一直亮着)、锁定态只认 `unlockPill`(那一格此刻只画得出解锁一颗,别的矩形是上一轮布局的残留)。selftest `overlay` 组 7 条。这条填的是 `iconButton` 头注里 2026-08-18 记下的那笔账("代价:没有按下变暗、没有 hover 高亮")的前半截,**按下反馈仍然没有**,理由见决策 25。
 - **控制胶囊材质:液态玻璃 + 纯色兜底(2026-08-29)**:先出了简约/液态玻璃/磨砂材质/分组胶囊四套视觉方案给用户选,拍板"2+1"——有液态玻璃的系统(macOS 26+)用液态玻璃,没有就退回方案一(打磨过的纯色深底胶囊)。新增 `View.overlayCapsuleBackground()`(`LyricsOverlayView.swift` 底部的 extension),`playbackControls`/`unlockPill` 共用同一份实现,跟 `SettingsDesignSystem.swift` 的 `settingsCardBackground` 同一个 `#available(macOS 26.0, *)` 取舍。液态玻璃用 `.glassEffect(.regular.tint(.black.opacity(0.32)), in: Capsule())`——调深色调是因为胶囊里的图标固定白色,不像设置页卡片那样可以让系统默认的浅色玻璃质感决定明暗,不调深亮壁纸背景下图标会读不清;不用 `.interactive()`,这扇窗口常年 `ignoresMouseEvents`,交互态玻璃的悬停/按压响应永远没有真实指针事件可以触发。两个分支都补一条发丝描边(理由同 `settingsCardBackground`,而且更必要——这个胶囊背后是任意桌面壁纸,比设置页卡片背后固定的系统背景变化大得多)。纯色兜底分支顺带打磨:胶囊变窄(左右内边距 18→15、图标间距 18→15)、分隔线更柔和(不透明度 0.25→0.18)。
   - **进一步收到最小(2026-08-29 同一天用户反馈"整体按钮太大,挡桌面")**:图标从 26/30pt(非主/主按钮)收到 19/22pt,字号 13/15→10.5/12;`playbackControls` 的 `HStack` 间距 15→5,水平内边距 15→9,竖向 7→4;分隔线高度 16→12;`unlockPill` 同步收(图标 12→10、文字 13→11、内边距对齐)。鼠标操作不需要触摸尺寸的容错,19pt 的点击矩形仍然点得准,这排常驻按钮"露出来就占桌面视觉"是它的天然代价,尽量小是这一排的设计前提。
-- **参考 QQ 音乐悬浮歌词补的三个按钮(2026-08-29)**:「展开到歌词窗口」(⤢,直接调 `AppActions.shared.openLyricsWindow?()`,跟 Dock 菜单/菜单栏/全局快捷键同一个入口)、「设置」(⚙,弹出 `OverlayQuickSettingsMenu`,见下)、「关闭」(✕,调 `LyricsOverlayWindowController.setVisible(false)`——等同于设置页把"桌面悬浮歌词"整个关掉,不是"这次先隐藏一下",要从设置页/菜单栏/全局快捷键重新打开)。刻意**没有**加 QQ 音乐那颗🌐翻译切换按钮(用户没选)。
 - **锁定态解锁提示(2026-08-29)**:此前锁定后 hover 整排按钮(包括锁定按钮本身)直接消失,想解锁必须记得去设置页找那个开关,悬浮窗本身没有出路。改成锁定时 hover 会露出一个解锁提示(复用控制胶囊同款半透明黑底样式),点它直接解锁。**提示跟播放控制排共用同一个槙位**(body 的 `VStack` 顶部那一格,不叠在歌词上面——第一版做成叠在歌词中间的居中 overlay,用户反馈"不要显示在歌词中间,也放在上面"改成跟播放控制排位置一致):锁定时这个槙位渲染 `unlockPill`、未锁定时渲染 `playbackControls`,竖向内边距特意跟 `playbackControls` 对齐,锁定/解锁切换时下面的歌词不会跳。矩形上报走跟播放按钮完全同一条 `ControlRectsPreferenceKey` 管线,不新增 PreferenceKey——`LyricsOverlayWindowController.handleMouseEvent` 顶部"锁定时整套手势停用"那道守卫单独放行"`.leftMouseDown` 命中这个提示"的情形,其它锁定行为(拖动、播放控制)不受影响。
   - **2026-08-31 从"🔒+「解锁」文字的胶囊"改成纯图标**(用户实机反馈"直接把这个解锁按钮
     搞小一点,和正常没锁定的那些放在同一个位置、同一个大小")。之前手写 `HStack` + `Text`
@@ -198,11 +184,9 @@
     留白,锁定态下"🔒 解锁"这颗孤立的小胶囊尤其明显。修法:在 `Group`(两个分支的
     **外面**,不是只加给 `unlockPill` 自己)上补一句 `.padding(.top, 4)`——两个状态
     都一起往下挪 4pt,不会重新破坏刚修好的"两态高度相等"这条不变量。
-- **⚙ 弹出的快捷设置菜单(`OverlayQuickSettingsMenu.swift`,2026-08-29)**:真正的 `NSMenu`,不是自绘圆角气泡——这扇窗口点击穿透+自定义矩形分发的架构不支持弹出能接收自己事件的浮层,`NSMenu` 完全独立于父窗口的 `ignoresMouseEvents`,弹出/子菜单/勾选态全部是 AppKit 免费给的。写法照抄仓库里已有的两处 `NSMenu` 范本(`MenuBar/DockMenu.swift`、`MenuBar/MenuBarStatusMenu.swift`):纯 target/action、每次弹出前 `menuNeedsUpdate` 整棵重建、`autoenablesItems = false`。内容六项:简繁转换(三态子菜单,不是参考图看起来的单行——lyrimuse 是三态,放不进一个可勾选行)、双行歌词(勾选行)、更改配色(子菜单:跟随封面 + 6 个内置主题 + 自定义主题,内容跟设置页那个 Menu 一致,套用逻辑提到 `ColorTheme.apply(to:)` 两处共用)、歌词进度(子菜单:提前/延后/重置,跟 `MenuBarStatusMenu` 的"歌词时间轴"子菜单同一套 `PlaybackCoordinator.nudgeLyricsOffset(by:)`/`.resetLyricsOffset()` 动作,标题直接带当前校准值)、**搜索歌词…**(2026-08-30,用户要求"点击即唤出歌词搜索页面,可以快速手动搜索";用户特意确认过"只需要弹出搜索歌词页面,不需要把歌词窗口也拉起"——第一版做成了"叫出歌词窗口再让它自己弹面板",被这句话纠正,见下面「搜索歌词…独立小窗」)、更多设置(跳到设置页"悬浮歌词"子段,照抄 `MenuBarPanelQuickSettings.swift`「全部设置…」那三行:写 `LyricsSurface.appearanceSectionStorageKey` → `AppActions.requestSettings(.tab(.appearance))` → `openSettings?()`)。`NSMenu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)` 直接在鼠标当前位置弹出,不用做 SwiftUI→AppKit 坐标转换。
 
   ⚠️ **「简繁转换」不是恒定项(2026-08-31)**:按 `LocalPlaybackSource.currentLyricsSupportsChineseVariant` 逐曲显隐,判据是共享的 `ChineseVariant.affects`——**跟 `converted(_:)` 自己的早退是同一个函数**,所以「菜单显示 ⟺ 转换真的会发生」。刻意**没有**用 `Romanizer.songScript` 判「是不是中文歌」:它把「含谚文」排在「含汉字」之前,韩文歌里的汉字会被判成 `.korean`,而 `converted(_:)` 并没有谚文守卫、照转不误——按 songScript 藏菜单就成了「正在转换、开关却不见了」,正是 `SettingsView` 那条「只要它还在起作用,就一定看得见」要防的最坏状态(selftest 有一条用韩文+简体汉字的用例钉住)。反方向也不行:`looksJapaneseSong` 按行占比判、`converted` 按有无假名判,只有 3/75 行带假名的中文歌会出现「菜单在、点了没反应」。设置页那一项**不受影响**,仍按粘性的 `sawChineseLyrics` 露出——一个持久设置列表里的项不该因为换首歌就消失(见 `LocalPlaybackSource` 该字段注释)。
 
-  ⚠️ **2026-09-02 收紧:译文那一支要乘上「译文正在显示」**。老判据是无条件的 `affects(正文) || affects(译文)`,当时的理由写的是"译文同样过 `variant.converted`,所以日文歌配中文译文也必须让开关留在那儿"——那句话本身没错,漏的是一层:**译文没在屏幕上时,把它转成繁体是一次看不见的改动**,菜单项就成了点了没有任何视觉反馈的死项。用户报的真实一首是米津玄师《Petrichor》:正文纯日文(带假名,`affects` 正确地判 false),但 enrich 缓存里带一份中文机翻 `lyrics_tr`(`lyrics_tr_source: machine`),译文那一支把菜单点亮了 ——「播日文歌为什么也显示简繁转换」。所以不变量升级成 **「菜单显示 ⟺ 转换真的会发生、而且看得见」**,判据抽成纯函数 `LocalPlaybackSource.supportsChineseVariant(lyrics:translation:translationVisible:)` 让 selftest 直接钉住(11 条,含"判据为真 ⟺ 屏幕上真的有东西会变"的兜底对拍)。配套:Core 新增 `LocalPlaybackSource.showsTranslation` 镜像 `AppSettings.showTranslation`,由 `AppDelegate` **订阅**(不是像 `chineseVariant`/`romanizationScripts` 那样启动时赋一次)——这个开关有三个写入点(设置页、歌词窗口「⋯」菜单、全局快捷键),双写漏掉任何一个都会让判据停在旧值;`@Published` 订阅时先发一次当前值,启动那一次也一并覆盖。它**不进** `LyricsReloadSnapshot`:译文转不转由 `chineseVariant` 决定、跟它无关,所以翻转时正好只更新标志、被内容等值闸挡在整段解析之外。
 
   ⚠️ **「更改配色」子菜单:跟随封面开着时主题照常列出,但一个都不打勾(2026-09-02,跟设置页取齐)**。这一档来回改过三次,三次的取舍都记在这里,免得被转回去:
 
@@ -211,18 +195,12 @@
   3. **2026-09-02(现状)**:用户原话「勾选了跟随封面之后依然可以选择主题,但是你去选了主题之后跟随封面就自动取消勾选」。列表回来了,**第 1 条那个矛盾靠「不打勾」消除** —— 矛盾的来源是给一个「没在生效」的主题**打勾**,不是把它**列出来**。跟随封面开着时整段列表无勾选 = 「现在生效的只有跟随封面」,点任意一个主题会走 `ColorTheme.apply(to:)` 把跟随封面关掉、那套主题当场生效并打上勾,一步到位。⚠️ 不打勾**只在跟随封面开着时**;关着时照常按颜色字段打勾——那才是「现在生效的是哪套」。
 
   `ColorTheme.apply(to:)` 里那句 `followsCoverArt = false` 是这三档共同的地基 —— 它一直都在,正是它让「选了主题就自动取消跟随封面」这条成立,第 3 档只是把界面对齐到这个既有行为上。
-- **搜索歌词…独立小窗(2026-08-30)**:没曲目在播时不给这一项(条件跟 `LyricsWindowView` 的「⋯」菜单同一条 `!playback.title.isEmpty`)。点击**不**走「展开到歌词窗口」那个入口,也不复用 `LyricsWindowView.openLyricsSearch()` 那套"歌词窗口开着才挂得上"的 `.sheet(item:)`——用户明确要求点了只弹搜索页面本身。改成 `LyricsSearchSheet` 直接当一扇独立 `Window(id: "lyrics-quick-search")` 的根内容(`LyricsQuickSearchWindow.swift`,见 07 章「搜索歌词…」),不套 `.sheet()`:`LyricsSearchSheet` 内部"关闭"/"采用此候选"两个按钮走的 `@Environment(\.dismiss)`,对 `Window` 场景的根内容一样能把整扇窗口关掉,不需要额外接一层。窗口的开法跟 `openLyricsManager`/`openLyricsWindow`/`openOnboarding` 同一个模子:新增 `AppActions.openLyricsQuickSearch`,在 `MenuBarSceneActions.swift` 的锚点视图里捕获 `openWindow(id:)` 这个 SwiftUI 环境 action。曲目快照(resolvedKey 精确→宽松两级,缺条目退 normalizedKey)在窗口自己的 `.task` 里现查一次,直接跑在 MainActor(不像 `LyricsWindowView` 那边特意 `Task.detached`——那扇窗口有 60fps 逐字填色,这扇只在打开这一瞬间读一次缓存,没必要多绕一层线程切换)。⚠️ **2026-08-31 真实bug修复**:`.task` 只在这扇窗口**首次挂载**时跑一遍——窗口没被真的关掉(切到后台/被挡住)时再点一次「搜索歌词…」,只是把已存在的视图带到前台,`.task` 不重跑,曲目快照停在第一次打开时那首歌,用户报"已经切歌了,点开搜索页面看到的还是上一首"。补了 `AppActions.quickSearchRefreshRequests`(`PassthroughSubject<Void, Never>`,跟设置窗口那个 `selectionRequests` 同一个套路),`openLyricsQuickSearch` 每次调用都往里 send,`LyricsQuickSearchWindow` 额外 `.onReceive` 它重新现查一次——`.task` 管"窗口还没建出来",`.onReceive` 管"窗口已经开着",两条路合起来才是"点这个按钮一定看到当前这首歌"。⚠️ **2026-09-02 第二次真实bug修复(由上一条引出)**:`.onReceive` 只替换了 `context`,而 `if let context { LyricsSearchSheet(...) }` 从 Optional(A) 到 Optional(B) 是同一个 SwiftUI 视图身份——面板的查询词 `@State` 与只跑首次的 `.task` 都不重置,界面仍是上一首的查询词与候选(「恢复原信息」凭空出现是可见征兆),但 `onApply` 捕获的已是新 `context.key`,采纳会把上一首的歌词写进当前这首的条目(lyrics/ 文件族随之落盘,开了「采纳即锁定」还会冻结)。修在 `LyricsSearchSheet` 内部:三个原始字段拼成 `searchSubject`,`.task(id: searchSubject)` 重搜、`.onChange(of: searchSubject)` 把查询词重置回原始值;另外两个入口的原始字段在面板存活期间不变,行为等同原来的 `.task {}`。**刻意不用**宿主层 `.id(context.key)` 整棵重建:离屏 `NSHostingView` 探针实测重建时新面板的 `.task` 先起、旧面板的任务取消与 `onDisappear` 后到,两者都调全局 `LyricsSearchService.cancelRunning()`(杀「当前在跑的那个」),新起的 collector 子进程 3/3 被旧面板收尾杀掉;`.task(id:)` 由 SwiftUI 保证先取消旧任务再起新任务,同一探针下新搜索每次都跑完。
-- **小窗采纳后不关窗(2026-09-04)**:`LyricsSearchSheet` 新增 `keepsOpenAfterApply`,三个入口里只有这扇小窗传 true。它是"边听边换词"的入口:换一个源听两句不对再换,原来要关窗→重开→再等九个源重搜一遍(最坏 20 秒);现在同一批候选留在原地,点即切,「当前使用」徽标跟着挪(面板内 `appliedSource ?? currentSource`——`currentSource` 只是打开时的快照),标题栏给一条「已采用 X 的歌词」的回声(2.5 秒自动消失;失败则说「未能保存」)。配套把 `onApply` 改成可等待、回报落盘成败(`EnrichCacheStore.saveEdit` / `savePlainTextEdit` 现在返回 `persist()` 的结果,`@discardableResult`),按钮在飞时禁用并写「正在采用…」防重入;等待期间换了歌(再按一次热键会换 context)这一笔不挪徽标。**不重搜**——候选本来就在 `@State` 里。collector 重启照旧每次采纳排一次(`scheduleCollectorRestart` 已合并:在飞最多一个、补一次),**刻意不**把重启延后到关窗——重启存在的理由正是 collector 内存里还留着旧条目、它下一次落盘会把 App 刚写的盖回去,collector 也没有热重载。另外两个入口维持关窗:歌词管理是编辑器上方的模态,留着会挡住刚回填的编辑器;歌词窗口的 sheet 关了才看得到背后的歌词。**顺带修的真 bug**:这扇小窗的 onApply 从 08-30 加纯文本候选起就没有 `isPlainTextOnly` 分流,「无时间戳」候选被当 LRC 喂进 `saveEdit`(见 11 章已知坑 #21);selftest contracts 组新增「采纳候选入口」守卫钉住三处调用点同进同出。
 
 ### 隐藏行为(全部只对悬浮歌词生效)
 
-| 行为 | 机制 | 与灵动岛的关系 |
 |---|---|---|
 | 手动显示/隐藏 | `setVisible` 写 `classicOverlayEnabled`,窗口 orderFront/orderOut | 各自独立开关 |
-| 暂停/无播放时隐藏 | `hideWhenNotPlaying`;实际可见 = 手动开 AND (未开自动隐藏 OR 正在播)。跟的是 `isPlayingSmoothed`(停止侧带 0.25s 宽限——2026-09-02 从 0.5s 砍半,吸收换歌/seek 抖动;恢复播放立即响应),恢复播放自动重新显示,不改手动开关本身 | ⚠️ **2026-09-01 起不再与灵动岛共享**:那天用户要求把「自动隐藏」卡从「其它」段搬进两个形态各自的页面,一旦按形态分栏展示、用户就会按形态去理解它,于是连值一起拆开。这个键**只归悬浮歌词**,灵动岛那份是 `notchHideWhenNotPlaying`。⚠️ 2026-09-02 落点又变了一次:那张独立的「自动隐藏」卡整个撤掉,两行并进本段的「行为」入口与抽屉「窗口」组,真源 `UI/AutoHideSettingsRows.swift`(同日晚些时候「行为」本身又从常驻卡改成了编辑台工具栏浮层,见第十六步)——**只是宿主变了,值仍是两份** |
-| 截屏/录屏时隐藏 | `hideDuringScreenCapture` → `window.sharingType = .none`:截图/录屏/会议共享拍不到,用户自己仍看得见 | 同上,只归悬浮歌词;灵动岛那份是 `notchHideDuringScreenCapture` |
 | 拖动前先长按(2026-08-23) | `overlayDragNeedsLongPress`,默认**关**;关=按住歌词直接拖(靠精准歌词热区,四周空白仍穿透)、开=旧的长按 0.35s。见上面「拖动」那条 | 只对悬浮歌词生效 |
-| 指针划过时让开(2026-08-22) | `overlayFadeOnHover`;在 `LyricsOverlayView` 顶层挂 `.opacity`(淡到 15%,**不是** orderOut——那会跟上面三个真正的可见性来源抢同一个开关)。淡入 0.18s 比淡出 0.12s 慢:扫过去要立刻让开才有用,回来从容点更好。判据是 `isHoveringLyrics`(**指针压在歌词文字上**),不是 `isHoveringForControls`(整窗)——见下面「歌词命中判定」 | **只对悬浮歌词生效**;灵动岛贴刘海、hover 是它展开的手势,让开会跟展开打架 |
 
 `setVisible(true)` 时会把三个已配置偏好(capture-hide / pause-hide / lockPosition)重新应用一遍,保证从菜单栏/快捷键打开时状态与持久化一致;App 启动时 AppDelegate 只在 `classicOverlayEnabled` 为真时才触碰控制器单例做同样的应用(避免凭空构造窗口)。
 
@@ -233,10 +211,8 @@
 | 设置项 | 改什么行为 |
 |---|---|
 | 桌面悬浮歌词(总开关) | 窗口显示/隐藏(`classicOverlayEnabled`);配置项不跟开关联动,关着也能预先调。2026-08-30 起它常驻在编辑台正下方、**不进**「全部设置」抽屉 |
-| 跟随封面(本段「主题」组;2026-09-02~09-07 在「文字」组) | 前景色改用封面动态强调色;**同时被灵动岛整套 UI 读走**(见交互节)。⚠️ 标题原为「文字跟随封面」,2026-08-26 应用户要求去掉「文字」二字缩短——**跟灵动岛「风格」选项里的「跟随封面」(`NotchCardStyle.coverArt`,卡片背景样式,见第 05 章)字面撞名**,是两个不同的设置(这个管前景色,那个管卡片背景),同名纯属巧合,靠各自所在的卡片/分组区分 |
 | 配色主题(本段「主题」组) | 一键套一整套四字段配色(文字/背景/描边色 + 描边开关,不含字体字号)。⚠️ **2026-09-02 起任何时候都显示**,不再被跟随封面收起 —— 选一个主题本来就会把跟随封面关掉(`ColorTheme.apply(to:)` 第一行),藏起来只会把一步的操作变成两步。⚠️ **跟随封面开着时当前值显示占位符「—」**(判据在 `currentThemeLabel`;工具栏「主题」按钮的摘要 2026-09-07 起在跟随时报「跟随封面」而不是「—」——那颗按钮管的浮层里现在就有这个开关,见第十九步):那一刻没有任何一套主题真的在生效,报具体主题名等于说"现在是黑字描边"而屏幕上并不是。跟快捷菜单「一个勾都不打」同一条逻辑。⚠️ **下拉项只有名字,不带色条也不打勾**——2026-09-06 试过 `Toggle` + 带图 `Label`,菜单弹开一个条目都画不出来(用户当天报「一片空白」),同日回退;真要做走 AppKit,见决策 21 |
 | 文字颜色(本段「文字」组) | 固定前景色;跟随封面开着时这一行**不收起**(2026-09-07 起;此前整行藏掉),尾部改成一句灰字「跟随封面」指向原因——取色模式的开关已经不在这个浮层里。**禁透明** —— alpha 拖到 0 会让整扇窗消失且界面上没有任何线索能定位问题 |
-| 卡拉OK效果(本段「文字」组,2026-09-06) | `overlayLyricsKaraoke`(默认开):悬浮歌词要不要按逐字时间轴填色。关掉就在 `OverlayPlayback` 订阅 `currentLine` 那一步把行压成整行(`SyncedLyricLine.lineLevel`,words/wordGroups 一起清,译文/罗马音/声部保留),下游渲染自然走"这首歌没有逐字数据"那条路;翻面当场生效。**前身是「歌词 → 效果」里一颗全局开关 `preferWordLevelKaraoke`**(关掉在引擎里丢弃 YRC、四个展示面一起退化),09-06 用户指出"卡拉OK是某个面怎么画的问题,跟繁简/罗马音那些改内容本身的不是一类",拆成悬浮歌词/灵动岛/菜单栏各一颗,歌词窗口始终逐字;老用户全局关着的迁成三面全关(`AppSettings.init`)。判据同 08-29 挪「双行显示」那次:只对一种展示方式生效的归到那一段。排在字号之后、颜色行之前 |
 | 背景颜色(本段「背景」组) | 卡片背景(含 alpha,全透明=无背景) |
 | 毛玻璃背景(本段「背景」组,从属子行) | 背景颜色的从属开关(默认关):开着时卡片底下垫系统材质、背景颜色变成玻璃着色 |
 | 文字描边 + 描边颜色(本段「文字」组) | 开关与颜色;粗细固定 1.2pt 不可调 |
@@ -287,10 +263,6 @@
 ## 与其它功能的交互
 
 - **设置搜索**(14 章 §1,2026-09-09):搜索命中本面「全部设置」抽屉里的行时,抽屉自动展开、那一行高亮并滚进视野(`OverlayAllSettingsDrawer.expandForSearchIfNeeded`,信号来自 Environment `settingsSearchPendingDrawer`);抽屉的 `isExpanded` 仍是默认折叠的 @State。新加一行设置要到 Core `SettingsSearchCatalog` 登记,否则 selftest `settings-search` 组会红。
-- **数据源链**:显示内容全部来自 `PlaybackCoordinator`(单例),它转发 `LocalPlaybackSource`——2 秒轮询 media-control 拿播放快照,20Hz `fastTick` 用 `ProgressAnchor` 外推位置定"当前行";歌词正文来自 collector 的 enrich 缓存(`EnrichCacheReader.lookup`)。「搜索歌词中/暂无歌词/纯音乐/网络连接失败」四个占位状态分别对应 collector 侧的解析进度/`resolved`/`instrumental`/网络状态。悬浮窗视图**不整对象订阅**这两个单例——经 `OverlayPlayback` 窄代理只订阅它实读的二十来个字段(2026-08-19,LiveRowPlayback 同款模式),歌词窗口音量滑杆/灵动岛封面这类无关高频写入不再打醒它的 body;`anchor`/`currentLyricsOffsetMs` 由 TimelineView 闭包直读协调器,不入订阅。
-- **歌词处理管线共享**:署名行过滤(`strippingCreditLines`)、简繁转换(`lyricsChineseVariant`)、逐字/整行选择(覆盖率判据;2026-09-06 之前还叠着全局开关 `preferWordLevelKaraoke`,已拆成各展示面自己的「卡拉OK效果」,引擎始终解析逐字数据)都在引擎/数据源层完成,悬浮窗、灵动岛、歌词窗口、菜单栏看到的是同一份结果;"关了卡拉OK"这一步由各展示面在消费点用 `SyncedLyricLine.lineLevel` 压平。署名行过滤直接影响悬浮窗动态高度(漏判的长职员表行曾把窗口撑爆)。
-- **与灵动岛**:开关互相独立可同开;共享 `WordKaraokeGradient`(30Hz 上限+渐变算法);**`hideWhenNotPlaying` / `hideDuringScreenCapture` 2026-09-01 起不再共享**(拆成了两份,灵动岛那份叫 `notchHide*`,见 05-notch.md 设置项表里「工具栏「行为」浮层」那两条)。⚠️ 2026-09-02 起两个形态**共用同一份视图** `UI/AutoHideSettingsRows.swift`(靠 `AutoHideSurface` 分流)——共用的是渲染和文案,**不是值**,别把"共用组件"读回"共用设置";「跟随封面」(`followsCoverArt`)开关也被灵动岛读走(NotchLyricsView.accentOrWhite),但两边用的强调色变体不同(悬浮窗按"与描边对比/够亮",灵动岛按"深底够亮")。
-- **与歌词窗口**:共享 `showRomanization/showTranslation/showNextLinePreview` 三个开关、`WrapLayout`、`KaraokeFill`、LyricDuet;但字体/字重/字号/三个颜色**只**对悬浮窗生效,歌词窗口用固定系统配色;对唱 nil 兜底两边不同(悬浮窗居中、窗口靠左)。
 - **与歌词时间轴校正**:`LyricsOffsetStore` 的基准(全部 / 按播放器,二选一)+ 单曲微调合成 `currentLyricsOffsetMs`,同时作用于"当前行判定"(引擎内)和"逐字填色基准"(视图内显式相加)。
 - **与设置页预览**(⚠️ 下面这一整条描述的是 2026-08-31 之前的钉条 `OverlayPreviewBar`,它连同那份渲染已经删除;编辑台从第八步起画的就是真 `LyricsOverlayView`,不再有第二份渲染。留档是因为「第二份渲染必然漂」这条教训值钱):`OverlayPreviewBar` 曾是刻意维护的第二份渲染实现,复用 `settings.mainFont`/`backgroundColor`/`displayForegroundColor` 规则和 `lyricsTextStroke`(为此放开成 internal)。**逐字填色也复用**(2026-08-26 用户要求,原来这里不复制)——真在播放且当前行有逐字数据时,用同一套 `WordKaraokeGradient`/`KaraokeFill` 算法、同一个播放位置来源(`PlaybackCoordinator.anchor`/`pausedPositionMs`/`currentLyricsOffsetMs`)按真实进度逐字填色,`karaokeContent`/`wordText` 是 `LyricsOverlayView.mainLine`/`wordText` 的镜像写法;没在播放或这一行没有逐字数据时退回原来"整行最终颜色"的静态样子。仍不复制的是逐字行的自动换行(`WrapLayout`,预览高度固定、长行只裁切)和罗马音/译文行;圆角 16 是手抄的常量,改视图记得改预览。
   - ⚠️⚠️ **已修(2026-08-29 用户反馈"描边渲染有问题",连续三轮才修对,记录完整过程免得以后又踩同一个坑)。**
@@ -342,7 +314,6 @@
 | 进度外推 | `lyrimuse/Sources/LyrimuseCore/Playback/ProgressClock.swift` · `ProgressAnchor.extrapolatedPositionMs` |
 | 20Hz 行定位 | `lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift` · `fastTick` / `resolveLinesForPausedPosition` |
 | 设置存储 | `lyrimuse/Sources/lyrimuse/Settings/AppSettings.swift` · `AppSettings`(`recomputeFonts` 等) |
-| 设置页 | `lyrimuse/Sources/lyrimuse/SettingsView.swift` · `AppearanceSettingsTab`(`currentSection` 里悬浮歌词那一段的**纯装配**)。这一段现在只装三块(编辑台 / 总开关卡 / 抽屉),内容各在自己的文件里:编辑台 `UI/OverlayEditorStage.swift`、「行为」浮层与行为项真源 `UI/OverlayBehaviorSettingsRows.swift`、折叠抽屉 `UI/OverlayAllSettingsDrawer.swift`、外观设置行 `UI/OverlayStyleSettingsRows.swift`(抽屉与编辑台浮层共用同一份)、自动隐藏两行 `UI/AutoHideSettingsRows.swift`(`AutoHideSurface`/`AutoHideItem`/`AutoHideSettingsRows`,与灵动岛共用同一份,四个宿主) |
 | 设置页那一小片「桌面」(壁纸样图 + 棋盘格兜底) | `lyrimuse/Sources/lyrimuse/UI/OverlayDesktopSurface.swift` · `OverlayDesktopSurface` / `DesktopWallpaperSample`。三个消费方:两块编辑台的舞台、菜单栏预览条的底。⚠️ 页顶钉条 `OverlayPreviewBar` 与它那份简化渲染 `OverlayLyricsCanvas` **已于 2026-08-31 删除**(零实例化),这两个文件不再存在;下文第一到第九步里提到它们的地方都是历史叙述 |
 | 编辑台渲染真视图的接缝(2026-08-30 第八步) | `UI/LyricsOverlayView.swift` · `OverlayChromeSource` / `OverlayPreviewLine` / `LyricsOverlayView.line`·`showingPreviewLine`·`nextLineText` / `showsDebugHUD`;预览侧 chrome 在 `UI/OverlayEditorStage.swift` · `OverlayPreviewChrome`;真控制器侧 `UI/LyricsOverlayWindowController.swift` · `controlsDidBecomeVisible()` |
 | 控制排胶囊的材质与"隐藏"(2026-08-30 第九步) | `UI/LyricsOverlayView.swift` · `View.overlayCapsuleBackground(visible:)`,调用点 `playbackControls` / `unlockPill`;把它收走的容器在 `Settings/SettingsDesignSystem.swift` · `SettingsGlassContainer` / `SettingsPage` |
@@ -379,7 +350,6 @@
 - `OverlayEditorStage`(新)——编辑台本体 + 私有的 `OverlayWidthHandle`。
 - `OverlayPreviewBar`——只剩钉条该管的事;三个对外静态量(`rawCardHeight`/`cardHeight`/
   `maxPreviewWidthShared`)签名与取值**与改造前逐字一致**(它们是 `SectionPreviewMetrics` 的
-  高度契约,灵动岛/菜单栏两段也在读)。
 
 ⚠️ **编辑台只能待在滚动内容区,不能放回那个固定头部**:头部里的控件收不到事件(2026-08-15/16
 两次复现,连 `.allowsHitTesting(false)` 都救不回来,是该结构在 SwiftUI 里的事件派发行为)。
@@ -488,7 +458,6 @@
   `OverlayBehaviorBar`(编辑台下面那条三列小格)都按 `allCases` 迭代它,**只决定怎么摆**。
   (⚠️ `OverlayBehaviorBar` 已于**第十六步**删除,宿主换成了编辑台工具栏的 `OverlayBehaviorPopover`;
   枚举本身和"两个宿主、只决定怎么摆"这条结构没变。)
-  ⚠️ 2026-09-02 起这两个宿主里各多两行**自动隐藏**,但它们来自另一个枚举 `AutoHideItem`(`UI/AutoHideSettingsRows.swift`),`OverlayBehaviorItem.allCases` **仍然恒为三项**;别为了"都是行为项"把它们并进来——那两项要同时服务灵动岛,而这个枚举的 Binding 写死打的是悬浮窗控制器。见第十五步。(当时还有第二条理由「三列小格的版式压根不画副标题和 ⓘ 气泡」,第十六步把那张卡换成浮层之后不再成立——浮层里全是标准 `SettingsRow`;**按形态分流那条理由没变**。)
 - `OverlayAllSettingsDrawer.swift`(新)——默认折叠的「全部设置」抽屉,替掉原来平铺的 5 张卡
   (配色 / 我的配色主题 / 文字 / 窗口 / 恢复)。展开是就地长出来,不跳页、不开新窗口。里面每一组都是
   别处那份组件,只有「宽度」滑杆是它独有的(编辑台那边是拖握柄,不是滑杆)。
@@ -595,7 +564,6 @@ View 层),真窗口的点击穿透、鼠标监听器装卸在 `LyricsOverlayWind
 ### 第四步:去掉"缩放"、握柄挪到窗口自己身上
 
 2026-08-30 用户反馈,原话:「就不应该有什么缩放的概念在这里;只显示实际的大小以及一切;并且这里可以
-拖动的不应该是外面这个带桌面的大窗口,而是里面的文字对应的悬浮歌词窗口才对吧」。两条都是**概念性
 错误**,不是观感偏好:编辑台的全部意义是"所见即所得",而缩放让"看到的大小"不再是真实大小;握柄贴在
 画布外缘则等于在拖"桌面有多大",拖的对象根本不是那扇窗。
 
@@ -612,7 +580,6 @@ caption 里「已缩放至 X%」整句删掉(宽度数字保留 —— 它是这
 带「两端已裁切」的那句。**两个信号缺一不可** —— 只有渐隐会被读成"边上暗一点是设计如此",只有文字则
 没人会去读 caption。
 
-**② 握柄贴在悬浮歌词窗口自己的左右边缘上。** 整条 16pt 命中带压在窗口最外侧那 16pt 上、朝里长,高度锁
 成窗口高度(120pt)而不是撑满 246pt 的舞台 —— 撑满就又变回"一条比窗口还高的杆子"。用
 `.frame(maxWidth:.infinity, alignment:)` 贴边而不是 `.offset`:offset 不改变布局尺寸,握柄会被摆到父框
 外面去,而这里正需要它**始终留在框里**。窗口超宽时它的真实边缘已被裁到舞台外,握柄停在舞台内沿(再往外
@@ -721,7 +688,6 @@ caption 里「已缩放至 X%」整句删掉(宽度数字保留 —— 它是这
 
 2026-08-30 用户第三轮反馈,原话:「算了你始终不明白我的意思;既然这样,那么就这样调整,**在这个框里加
 一个调整条,可以控制歌词的宽度**;然后**外面始终是 1 比 1 的大小,不可以拖动外部的框**」(配图用红框圈
-出了位置:编辑台舞台**内部**、悬浮歌词窗口虚线轮廓**下方**那条空白)。第一/四/五步里所有关于握柄的
 描述,行为上都已被这一步取代;那些段落留着是为了留住那三轮的踩坑记录。
 
 **为什么是放弃拖拽,而不是又一次"改良握柄"**:第一步把握柄做出来、第四步把它从画布外缘挪到窗口边上、
@@ -817,7 +783,6 @@ UserDefaults,而 Slider 拖动中按鼠标事件频率反复调 set;② **`if se
 ### 第七步:整块舞台只留一张壁纸,窗口在上面开洞
 
 2026-08-30 用户第四轮反馈,原话:「还有一点要调整就是**背景永远不要变**,拖动宽度框的时候**只变可显示
-歌词窗口的宽度**,背景不应该变」。
 
 **病根是第五步留下的**:那一步之后舞台上有**两张**壁纸 —— 窗内那张来自共用画布
 (`OverlayLyricsCanvas.desktopUnderlay`,按**窗口宽度**做 `scaledToFill`),窗外那张按**舞台宽度**裁一次
@@ -875,20 +840,17 @@ UserDefaults,而 Slider 拖动中按鼠标事件频率反复调 set;② **`if se
 逐字填色。译文、罗马音(整行的和逐词标注的)、下一句预览、`WrapLayout` 自动换行、对唱两侧内缩与声部
 指示圆点、六种占位状态、常驻的播放控制排槽位 —— 一样都没有。
 
-**改法照灵动岛那一段的先例**(`NotchPreviewBar` 直接渲染真的 `NotchLyricsView`):把
 `LyricsOverlayView` 按新协议 `OverlayChromeSource` 泛型化,真窗口拿 `LyricsOverlayWindowController`
 当 chrome,编辑台拿**不建窗**的 `OverlayPreviewChrome`。
 
 ⚠️ **不建窗是硬要求,不是优化**:`LyricsOverlayWindowController.shared` 是 `static let`,光是读一下
 属性就会执行 `init()` 建窗并 `orderFront` —— 悬浮歌词关着的用户一打开设置页就会凭空多出一扇(不可见
-但已经装好全局鼠标监听器和三个观察者的)窗。这跟 `NotchPreviewChrome` 存在的理由是同一条。
 
 **`LyricsOverlayView` 侧的四处改动**(全部向后兼容,真窗口那唯一一个构造点一个字没改):
 
 | 改动 | 为什么 |
 |---|---|
 | `struct LyricsOverlayView<Chrome: OverlayChromeSource>`,`overlayController` 类型换成 `Chrome` | 唯一的接缝:视图原来硬编码了具体类。四个 `@Published`(`isHoveringForControls`/`isHoveringLyrics`/`isDragArmed`/`showDragHint`)控制器本来就有,写 conformance 只是把契约显式化 |
-| `PlaybackCoordinator.shared.refreshFavorited()` → `overlayController.controlsDidBecomeVisible()` | 这是视图里**唯一**一处真副作用(起 osascript 子进程读 favorited)。真控制器实现、预览空实现,同 `NotchChromeSource.setExpanded` |
 | 新增 `showsDebugHUD: Bool = true` | 调试 HUD(`np:debugHUD`)会在设置页上画 fps 角标,还让 `frameProbe` 每帧 tick。编辑台传 false |
 | 新增 `previewLine: OverlayPreviewLine? = nil`,收口成 `line` / `showingPreviewLine` / `nextLineText` 三个计算属性 | 没在播放时真视图走 `mainLine` 的占位分支(♪/「搜索歌词中…」/「暂无歌词」),设置页里就是一张空卡,而"改文字色能当场看见"正是这块预览存在的全部理由。⚠️ 必须**收在一个** `line` 计算属性上、而不是只在 `mainLine` 里挑一次:译文/罗马音/逐词分组/对唱声部/换行缓存 key 读的都得是同一行 |
 
@@ -1416,7 +1378,6 @@ static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max
 
 ### 第十四步:修掉拖动中冻住的宽度读数 + 浮层外壳提成共用(2026-08-31)
 
-这一步是做**灵动岛**编辑台(见 [05 章「编辑台改造」](05-notch.md#编辑台改造2026-08-31))时顺带落在这一段的两处,
 悬浮歌词这边的功能一项没变。
 
 #### 14.1 `widthValueText` 拖动中冻住
@@ -1459,7 +1420,6 @@ static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max
 
 - `OverlayPreviewBar` 的最后一个引用点在 `SettingsView` 那个固定头部的 switch 里。悬浮歌词段
   在第八步把预览升级成内容区里的编辑台之后就改成了 `EmptyView()`(固定头部收不到点击事件,
-  可交互的预览只能待在滚动区),灵动岛段 2026-08-31 同样改成 `EmptyView()` —— 至此三段里只有
   菜单栏还钉着预览,而它用的是自己的 `MenuBarPreviewBar`。
 - `OverlayLyricsCanvas` 从第八步起就只剩钉条一个消费方,钉条一走它也没人用了。
 
@@ -1481,23 +1441,17 @@ static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max
 `Overlay` 前缀,多了一个可选的 `help` 参数(桥到 `SettingsCardHeader(title:help:)`)。三个浮层
 (「文字」「配色」「排版」)的行为一个像素没变:宽度默认 380、「排版」仍传 460、`maxHeight` 仍是 460。
 
-搬的理由:灵动岛那一段的编辑台也有两个浮层,再复制一份外壳就意味着同一个窗口里两种浮层的宽度上限/
 高度上限/标题排版各自漂。这是设置页的通用外壳,不是悬浮歌词专属。
 
 ### 第十五步:「自动隐藏」并进各形态的「行为」入口(2026-09-02)
 
-设置页这一段最后一张**只装隐藏开关的独立卡**没了。用户原话:「灵动岛歌词配置以及悬浮歌词配置这个
 地方不要单独放在外面,要遵循设计理念,放到行为卡片里面去」。
 
 - **改了什么**:删掉 `SettingsView.autoHideCard(subtitle:help:captureBinding:notPlayingBinding:)`
-  这个函数和它在悬浮歌词/灵动岛两段的调用点;「截屏/录屏时隐藏」「暂停/无播放时隐藏」两行搬进
   各形态**已经存在**的「行为」入口。文案(标题/副标题/ⓘ)、图标、Binding 逐字保留,**没有任何行为变化**。
-- **真源**:新文件 `UI/AutoHideSettingsRows.swift` —— `AutoHideSurface`(`.desktopOverlay`/`.notch`)
   + `AutoHideItem`(图标/文案/`binding(for:)`)+ `AutoHideSettingsRows`(两行的标准渲染)。
 - **四个宿主**(增删内容必须四处一起对,漏一处不报错;用户口中的"行为卡片"在这一段就是那条
   「行为」栏,它内部确实是一张 `SettingsCard`):悬浮歌词 =「行为」栏(`OverlayBehaviorBar`,
-  三列小格**下面**另起两行标准行)+ 抽屉「窗口」组;灵动岛 =「行为」浮层(`NotchBehaviorPopover`)
-  + 抽屉「行为」组。另外 `NotchEditorStage.behaviorSummary` 也要把这两项算进去,否则工具栏按钮会在
   它们开着时照旧显示「全部关闭」。
   ⚠️ **宿主①当天晚些时候又换了一次**:那条「行为」栏整个被删掉,五项进了编辑台工具栏第二行的
   `OverlayBehaviorPopover`(见第十六步)。下面那段「版式:三列小格仍然是三列」跟着作废 —— 但它
@@ -1521,36 +1475,29 @@ static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max
 **版式**:三列小格仍然是三列 —— 那两行画在 `HStack` **之外**。塞进格子里会被 `.frame(maxHeight: .infinity)`
 拉成等高格子,而格子版式只画"标题 + mini 开关",副标题和 ⓘ 气泡会被静默丢掉。离屏 `NSHostingView`
 在 600/560/530/499pt 四档、中英两种语言下都验过不折行(英文那行最宽,自然宽 385pt —— 1pt 步进
-探出的不折行下限因此是 386,05-notch.md 那张浮层宽度表记的就是这个 386,两个数不打架)。
 
 ### 第十六步:「行为」从常驻卡改成编辑台工具栏浮层(2026-09-02)
 
 第十五步刚把两行自动隐藏并进「行为」栏,用户看到成品后要求改掉那条栏本身。原话:「这里这样不是我
-预期的;你帮我和灵动岛设置页一样处理,放到上面的小按钮里面,点了出现下拉框」。
 
 - **改了什么**:删掉 `OverlayBehaviorBar`(编辑台正下方那张常驻卡:三列小格 + 下面两行标准行)和它在
   `AppearanceSettingsTab` 里的调用点;编辑台工具栏**新增第二行**,里面一颗「⇄ 行为 · 摘要」按钮,点开是
   `OverlayBehaviorPopover`(标准设置行 ×5:锁定位置 / 长按拖动 / 悬浮淡化 + 截屏隐藏 / 暂停隐藏)。
   `OverlayBehaviorItem`、`OverlayBehaviorSettingsRows`、`AutoHideSettingsRows`、抽屉「窗口」组**一律没动**,
   文案/图标/Binding 逐字保留,**零新增 L10n 键**、没有任何行为变化。
-- **为什么是对的**:灵动岛那边同一批东西早就是工具栏浮层(`NotchBehaviorPopover`,第十五步刚往里加过
   这两行)。同一类设置在两个形态里长成两副样子,是用户直接读得到的不一致 —— 他这次要的正是取齐。
   顺带解决了那张卡自己的结构性别扭:格子版式**只画"标题 + mini 开关"**,不画副标题也不画 ⓘ 气泡,所以
   第十五步并进来的两行只能摆在三列格子**外面**、走另一套版式,一张卡里两种行长相;浮层里五项全是
   标准 `SettingsRow`,长相一致。
 - **为什么另起一行、不当第一行的第四颗**:第一行的横向预算 2026-08-31 加第三个入口时就量到了上限
   (可用 600pt / 中文常见值 535pt,右边还有「重置 ▾」),再加一颗必然把摘要压成「…」甚至挤掉标题。
-  灵动岛那边也是同一个理由拆的两行(`NotchEditorStage.toolbarRow2`)。第二行目前只放一颗按钮 ——
   横向因此宽裕到不用重新离屏量,以后再多一个"设一次就不动"的入口有现成位置。
 - **浮层宽度 420 是抄的实测值,不是拍的**:瓶颈是英文标题 "Hide During Screenshots/Recording"(216pt)
   + ⓘ(19pt),自动隐藏两行的内容自然宽 271pt(中文)/ 385pt(英文),1pt 步进探出的英文不折行硬下限
   **386**(第十五步量的,见上)。`SettingsRow` 的标题没有 `lineLimit`,超宽的表现是**折行**不是截断,而 ⓘ 跟
   标题同处一个 `HStack` 会垂直居中、尾部开关是 `.top` 对齐,三者当场错位。420 的余量 +34 跟
-  `NotchStylePopover` +28 / `NotchEarPopover` +24 / `OverlayLayoutPopover` +32 同一档;另外三项都比它短,
-  瓶颈不变。跟 `NotchBehaviorPopover` 同宽,也让两个形态的「行为」浮层看起来是一件东西。
 - **⚠️ 按钮上那句摘要必须跨两个枚举**:`OverlayBehaviorItem` 三项 + `AutoHideItem` 两项。只统计前者不会
   编译报错,只会让用户开着「截屏/录屏时隐藏」时按钮照旧写「全部关闭」——一个会撒谎的派生值。归约
-  逻辑(全开 / 全关 / `ListFormatter` 拼开着的那几项)这一步从 `NotchEditorStage.toggleSummary` 又往上提了
   一层到 `SettingsToggleSummary.text(_:)`(`Settings/SettingsDesignSystem.swift`),两个编辑台共用 —— 它产出的
   是用户看得见的文案,各留一份迟早漂开。⚠️ 元组数组不能用 key path 简写(`filter(\.isOn)` 编译不过)。
 - **⚠️ 摘要会在悬浮歌词关着的时候求值**(设置项刻意不跟总开关联动),所以它读的 `binding` **get 分支必须
@@ -1603,7 +1550,6 @@ static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max
 滚动条")。**「背景」显式给 420**,这是量出来的:内容自然宽中文 298pt / **英文 386pt**(离屏
 `NSHostingView.fittingSize`,1pt 步进的换行探测给出的英文硬下限就是 386),瓶颈是「毛玻璃背景」
 那一行的副标题 —— 英文 "When on, the background color tints the glass" 比中文长 88pt,380 差 6pt、
-英文下当场折成两行。420 按同族浮层的既有余量取(`NotchStylePopover` +28 / `NotchEarPopover` +24 /
 `OverlayLayoutPopover` +32)。
 
 **摘要**:`OverlayStyleSummary.color` 改名成 `theme`(取值一字未变 —— 它报的一直是"当前这一套配色
@@ -1692,7 +1638,6 @@ catalog 改前就有 12 处键序乱序(别人插入时留的),改后仍是 12 �
 
 ### 第十九步:按"不要这一个那一个"重排 —— 「跟随封面」归「主题」,抽屉分组对齐工具栏(2026-09-07)
 
-用户先在灵动岛那一页提的要求(「很多都是混乱的…有些它不应该放在这一个框框里面…把各自应该待的
 模块给它合并好,不要出现这一个那一个的情况」,见 05 章决策 #27),随后原话「按照这个思路,帮我把
 悬浮歌词这一页设置也重新优化调整一下」。这一页的骨架(主题 / 文字 / 背景 + 排版 / 行为,两行工具栏)
 本来就是按"改的是哪一层"分的,不用推翻;查出来的"这一个那一个"有三处:
@@ -1710,7 +1655,6 @@ catalog 改前就有 12 处键序乱序(别人插入时留的),改后仍是 12 �
    如实记下;要回到「—」只改 `OverlayStyleSummary.theme` 一处。
 2. **抽屉最后一组叫「窗口」、装着宽度 + 三个行为项 + 两行自动隐藏,工具栏对应的入口却叫「行为」**。
    第十五步曾把这条不对称记成"有意接受"。这次按"抽屉分组、顺序、标题跟工具栏一一对应"取齐:
-   主题 → 文字 → 背景 → 排版 → **宽度(组外独立一行,跟灵动岛抽屉里两根宽度滑杆同一摆法)** → 行为 →
    恢复默认。
 3. **「行为」浮层和抽屉「窗口」组各自拼一次「三项 + 分隔线 + 自动隐藏两行」**,靠注释警告别漏。
    现在 `OverlayBehaviorSettingsRows` 自己把 `AutoHideSettingsRows(surface: .desktopOverlay)` 接在三项后面,
@@ -1729,7 +1673,6 @@ catalog 改前就有 12 处键序乱序(别人插入时留的),改后仍是 12 �
 ## 设计决策与已知坑
 
 1. **逐字填色不走 @Published+SwiftUI 补间**:SwiftUI 对 .linear 曲线在重定目标时做矢量相加而非接续,高频更新必卡;改为 TimelineView 每帧从锚点现算真值(SyncedLyricWord 注释、mainLine 注释)。
-2. **30Hz 刷新上限曾漏掉悬浮窗**:2026-08-14 只给歌词窗口加了上限,常驻显示的悬浮窗和灵动岛按 120Hz 全速跑到 08-15 才补齐(WordKaraokeGradient.refreshInterval 注释)。
 3. **TimelineView 故意包整行、不下沉到每个字**:下沉后每个字是各自独立的 30Hz 时钟、tick 时刻互不对齐,描边(整行一份 mask)反而可能被 N 个错开的时刻各触发一次;整行一个表的闭包成本有 30Hz 上限,收益配不上结构翻动(mainLine 注释)。2026-08-19 起描边剪影已换静态 mask 源、compositingGroup 已删,"描边逼整行重渲染"不再是理由,但上面这条独立成立。
 4. **fillFraction 故意不夹 [0,1]**:夹住会让所有未唱到的词在开头误算出一截高亮,裁剪必须在 stops 里分情况做(KaraokeFill 注释)。
 5. **位置改存顶边**:旧版存左下角 origin,配合"顶边固定向下增高"导致每次重启窗口累积下漂;顶边才是稳定锚(LyricsOverlayWindowController 文件头注释)。
@@ -1756,14 +1699,9 @@ catalog 改前就有 12 处键序乱序(别人插入时留的),改后仍是 12 �
     亏空全压在按钮上",这条是"总宽够、分配算法没分给它"。修法是给控件本身加 `.fixedSize()`,让它先按
     理想宽度落位;代价是宿主太窄时亏空转到标题(标题换行)——**取舍原则是"让能读的那一半让步"**:
     标题换行仍读得出来,选项被截就没法用了。
-16. **悬浮歌词毛玻璃不用 NSVisualEffectView,直接用 SwiftUI 材质;背景色升格为着色而不是新开一个「模糊度」滑杆**(2026-09-02)。`LyricsOverlayWindow` 本来就是 `isOpaque=false` + `.clear` 的面板,`NotchLyricsWindow` 用 `.thickMaterial` 已经证明材质在这种窗口里能直接渲染,不需要再垫一层 AppKit 视图去按 identifier 查找复用。强度不做滑杆:系统材质的模糊半径不可调,能调的只有"玻璃上盖多深的颜色",而这正好就是现有的背景颜色 alpha——复用它,设置面上只多一个开关。材质选 `.regularMaterial`:`.thick` 把壁纸盖成灰板、失去透出壁纸的意义,`.ultraThin` 在浅色壁纸上白字不够清楚。开关不进 `ColorTheme`(四字段不变,用户自存主题不迁移),但进「恢复默认文字与配色」的重置清单(7 → 8)。已知未处理:「跟随封面」的取色规则假设背景是壁纸或任意窗口,玻璃开着时底色是模糊混合色,浅壁纸配浅字的可读性靠描边兜底,观感不行再按材质明度改取色。
 17. **"两个东西看起来一直对齐"可能只是因为它们的兜底值撞在一起**(2026-09-03,控制排在对唱歌里不在歌词上方)。歌词卡片按声部靠边、控制排吃 `VStack` 默认的 `.center`,这两条推导从一开始就不是同一套;普通歌 `duetSide` 兜底恰好也是 `.center`,于是它们算出同一个位置,分歧被整整藏了两周半,只有对唱歌才暴露。**教训**:凡是"上下两块必须对齐"的布局,对齐关系要么由同一份几何算出来,要么就得有一条断言钉住,别指望肉眼在默认场景下看得见 —— 默认场景恰恰是最可能巧合对上的那个。修法与实测见「对唱分声部」那一节。
-18. **竖排歌词不做(2026-09-03,用户拍板)**。被参考的做法是一行 `writing-mode: vertical-rl` 翻转书写方向,这个项目没有等价的开关:SwiftUI 没有竖排文本,正经做要走 CoreText 竖排 frame(竖排字形变体、标点换位),等于新写一个文本渲染器;而现有管线每一层都绑死横轴——逐字填色是沿 x 的渐变遮罩(`KaraokeFill` 吐水平比例)、`WrapLayoutMath` 吃宽度吐行、`MarqueeText` 只横向滚、注音标在词底下、对唱分左右声部、描边是遮罩式、控制排热区 / 卡片内边距 / 「宽固定高随内容」的窗口几何全按横排算,竖排是把这七八处全部换轴,不是加一个分支;窗口还要另做一版竖向长条的位置记忆 / 屏幕落位 / 编辑台。只对悬浮歌词有意义(灵动岛一行胶囊、菜单栏一行字、歌词窗口是滚动列表)。最便宜的降级版(只主歌词行、CoreText 逐行、无逐字填色 / 描边 / 注音 / 对唱)约 2～3 天且要解释一堆功能为何消失,判定不值。将来 SwiftUI 给出竖排文本 API 再回来看。
-19. **卡拉OK「弹跳」风格不做(2026-09-03,用户拍板)**。被参考的做法是当前词整词填色 + 0.42s ease-out 跳动(45% 处上抬 0.16em、放大 1.07 倍)。机制上可行(悬浮歌词已经是每字一个 Text,给当前词按时间算一个位移 / 缩放,一帧一个叶子的变换不贵),但撞两条实测定下来的纪律:① **缩放糊字** —— 歌词窗口 2026-08-10 给当前行挂过 1.02 倍 scaleEffect 后删掉(渲染后仿射变换,非整数倍重采样,1x 外接屏上字形边缘过渡宽度 1.48px vs 对照 1.14～1.25px,见 `LyricsWindowView` 那段注释),弹跳的 1.07 倍是它的三倍多、动的还是正在唱的那个词;② **描边错位** —— 描边是整行一份静态剪影 mask(2026-08-19 性能审计改成静态源,见上面第 3 条),当前词一跳字形位置变了、mask 没动,描边会在词底下露出一圈错位;要跟着动就得每帧重建整行剪影,正是当年修掉的开销。灵动岛 / 菜单栏一行小字不适用,歌词窗口的当前行强调靠满不透明 / 零模糊 / 逐字填色三样在扛、已拒绝过缩放。若将来要做:只做悬浮歌词、填色风格三选一、描边开着时禁用弹跳并在设置里说明、用同一个 30Hz 表按词起始时间算进度不叠 SwiftUI 动画,先在 1x 屏上量糊字。
 20. **拖动松手后贴边吸附不做(2026-09-04,用户拍板)**。被参考的做法是松手后窗口边距显示器四边 ≤12 像素就自动拉平。机制上很便宜:`armDragIfStillPressed` 在 `performDrag` 返回后直接写盘,那里加一步几何修正即可(此时 `isDragArmed` 仍为 true,didMove 观察者不会重复存),纯几何可以放进 `OverlayPlacement` 按 `hostVisibleFrame` 算、selftest 覆盖。不做的理由是收益对不上:这扇窗口是个比文字大得多的透明容器,贴边贴的是看不见的框——顶部先是常驻的播放控制槽位(约 22pt)再加 4pt 内边距,底部有 120pt 高度地板(单行歌词内容矮不少),左右有 `cardHorizontalPadding` 20pt 外边距加 9pt 内边距且默认居中,四边贴上之后文字离屏幕边都还有一段,用户只会看到"松手时框跳了一下"。按文字矩形去吸附能让字真贴边,但会把框推出屏幕:顶部压进菜单栏区域,底部撞上 `updateHeight` 的高度夹取、译文出现时被裁掉。另:上面「位置只由用户拖动决定」以及 `OverlayPlacement` 头注「拖到屏幕边缘只留一条边在外面是正常用法、不该被纠正」两条原则仍然有效,若将来要做只准处理 ±12pt 内"差一点就贴上"的情形、只在拖动结束那一处调用、不碰启动还原和插拔屏逻辑。
 21. **「配色主题」下拉项带三段色条 + 当前项打勾(2026-09-06,用户拍板,借鉴清单 #55)**。起因:下拉里只有名字——「深色卡片」「浅色卡片」这类名字对没试过的人信息量有限,自定义主题更是只有名字可认;而且悬浮窗右键快捷菜单里同一批主题**早就有勾**(`NSMenuItem.state`),设置页这边反而没有,两个入口说法不一。做法:`ThemeSwatch.image`(`Settings/ColorThemeSwatch.swift`)画一张 28×12 的 NSImage——文字 / 背景 / 描边三段竖条,**描边关着时第三段画灰斜线而不是省略**(「经典白字」与「白字描边」前景背景完全一样、只差描边开关,省掉第三段两者就长得一样),段底下垫棋盘格(六个内置预设里四个背景透明),四周与段间 0.5pt `separatorColor`,用 `drawingHandler` 让动态色按绘制时的外观解析;`ColorTheme.swatchImage()` 转发。菜单项从 `Button(theme.name)` 换成 **`Toggle(isOn:)` + `Label { Text } icon: { Image(nsImage:) }`**:macOS 上 Menu 里的 Toggle 桥接成带 state 的 NSMenuItem(勾是原生的),Label 的 icon 桥接成 `item.image`;勾的判据与快捷菜单 `colorThemeMenu` 完全一致(精确匹配四字段、跟随封面开着一个都不打),set 忽略传入值、点已勾项再套用一次(幂等,跟随封面开着时点它正好是切回固定色);当前值打包逻辑收成 `OverlayThemeSettingsRows.currentColors`,勾与 `currentThemeLabel` 共用。「我的配色主题」子行把同一张色条放在「套用」左边,不放行首(SettingsSubRow 刻意不占图标列)。**不做参考项目那种网格**:380pt 浮层已有两条尾部控件被挤的坑(决策 14 / 15),网格会撞上。无新文案。验证:六个内置预设的色条离屏渲染成 PNG 在浅 / 深两种外观下逐张看过;**菜单弹出后的实际样子(色块与勾同时出现)需要真机点开确认**,不能用 GUI 自动化。退路原以为是 `Picker(.menu)`。**结果(同日 01:20 左右,用户实测)**:下拉点开**一片空白**——菜单面板照常弹出、尺寸也对,里面一个条目都画不出来,**连主题名都没有**,失败在「条目」这一层而不是「图标」那一层,兜底图救不回来。同事会话 ls-Laurie 当场做了最小恢复:`themeItem` 改回 `Button(theme.name)`,色条只留在「我的配色主题」子行(它是普通 SwiftUI 视图、不走 NSMenu 桥接;但用户没有自存主题,这一行**从未被渲染过**,「子行正常」目前是推理不是实测)。为什么没继续试哪一样能用:① 本仓每一个正常工作的 SwiftUI `Menu` 都是 `Button(标题)`,`Toggle` 条目与 `Image(nsImage:)` 图标一个先例都没有;② 离屏验不了——SwiftUI 的 `Menu` 在 `NSHostingView` 视图树里不产生 `NSPopUpButton`(只有 `KeyViewProxy` / `_FocusRingView` 两层壳),NSMenu 是打开那一刻才建的,摸不到 `menu.items`,只能靠真人点开;在一个「改错了用户就看到空白菜单」的位置上不值得拿没有先例的写法赌。**真要在下拉里显示色条 + 勾,走 AppKit**:`OverlayQuickSettingsMenu.colorThemeMenu` 已证明 `NSMenu` + `NSMenuItem.image` + `.state` 这条路在本仓是通的,把这一格换成包一层 `NSViewRepresentable` 的 `NSPopUpButton` 即可,条目内容还能离屏 dump 出来核对。教训两条:**没有先例的 SwiftUI 桥接写法,即便逻辑上成立,也先在 Dev 上点开看再合**;扫源码的守卫要先剥注释行(`themeItem` 的文档注释里故意贴着那段坏代码当反面教材,不剥会被自己打红)。守卫改为:色条只在子行出现一次、下拉项必须是纯 `Button(theme.name)`、下拉里不许再出现 `Toggle(isOn: Binding(`;「跟随封面开着不打勾」的两入口对齐语义改钉 `currentThemeLabel` 的占位符判据。**回退是否有效只能由用户点开确认**(01:31 正式版已装上回退后的二进制;符号层只能证明「新二进制装上了、ThemeSwatch 还在」,证明不了「下拉能画出条目」——这个 bug 只在 NSMenu 打开那一刻现形),确认前按「待确认」记。**2026-09-06 用户真机点开确认**:下拉条目正常显示,回退有效;「我的配色主题」子行的色条仍未实测(用户无自存主题)。
-22. **没有曲目时悬浮窗画品牌标记「♪ Lyrimuse」(2026-09-07,用户提出)**。起因:用户反馈「刚下载打开、走完引导流程之后存在感太低 —— 开了悬浮歌词,没放歌的情况下没有显示内容」。现场核实:没有曲目时 `mainLine` 落到最底下那个兜底 `Text("♪")`、前景色 **30%** 不透明度,单个 31pt 字形在浅色壁纸上等于不存在;而那个「♪」当初是给**曲内间奏**准备的("这里有歌词、只是此刻没词"的轻标记),被拿来兼任"整个 App 装好之后的首屏"是职责错配 —— 首屏要回答的是"我装的东西在哪、活着没",间奏标记要回答的是"别担心,下一句马上来",两件事要的分量完全不同。做法:`OverlayPlayback` 新增 `hasTrack`(`CombineLatest3($title, $artist, $isCurrentTrackAdBreak)` 折成 `!title.isEmpty || !artist.isEmpty || isAd` 再去重 —— 只订阅折算后的 Bool,换歌时标题变了但"有曲目"没变,不打醒 body;判据**照抄灵动岛** `NotchLyricsWindowController.hasTrack`(2026-08-21 那条),而不是歌词窗口 `isIdle` 只看 `title.isEmpty` 的窄版:广告插播必须算"有曲目",否则 Spotify 广告期间 title/artist 都空就会画成品牌标记而不是「广告中」;停播时 `LocalPlaybackSource.clearIfWasPlaying` 会把 title/artist 连同广告/纯音乐/无歌词/hasLyricsContent 一起清空),`mainLine` 在整行文本分支之后、广告分支之前插一条 `!playback.hasTrack` → `Text(Image(systemName: "music.note")) + Text(verbatim: " Lyrimuse")`:SF Symbol 拼进 Text,跟着主行字体尺寸缩放、基线自动对齐,不用另调图文间距;品牌名走 `Text(verbatim:)` 不查本地化表(灵动岛刘海胶囊同款);字体 / 前景色 / 描边三样全部沿用歌词本身的设置(默认主题「经典黑描边」下就是白字黑边,任何壁纸上都读得出),于是用户在设置里调的外观**没放歌时也当场看得见**;不透明度 **0.7**,介于歌词正文(1.0)与五条状态文案(0.5)之间 —— 要的是"看得见它在",不是跟歌词抢眼。**为什么排在几条状态文案前面而不是只替换最底下那个「♪」**:停播时那几条判定已经被一起清空、`isPlayingNow` 也是 false,理论上都不会命中,唯独 `collectorNetworkDown` 是 collector 的**全局**健康位、跟有没有曲目无关 —— 没有曲目就没有要搜的东西,断网这时候对用户没有信息量,不该让首屏变成一句「网络连接失败」;有曲目之后的状态机(广告 / 纯音乐 / 无歌词 / 断网 / 搜索中 / 间奏「♪」)一个字不变,兜底「♪」仍在,只负责它本来的间奏场景。**刻意不做的**:① 不加「在 Apple Music 播放任意歌曲…」这类引导副行 —— 用户要的是存在感不是教程,歌词窗口停播页(`IdleStandbyView.noTrackHero`)已经有那句,悬浮窗是常驻桌面的东西,一句永远挂着的提示只会变成噪音;② 不做灵动岛 / 菜单栏的同款(用户只点了悬浮歌词;灵动岛胶囊里塞品牌名跟它"贴着刘海一行小字"的形态不搭,菜单栏那格已经有 App 图标当存在感);③ 不做成设置项 —— 想让它消失的用户已经有「暂停 / 无播放时隐藏悬浮窗」(`hideWhenNotPlaying`),那条开着时窗口整个 `orderOut`,根本走不到这里。无新文案键("Lyrimuse" 是品牌名不本地化),`Localizable.xcstrings` 一字未动;设置页编辑台永远带示例行(`previewLine`),不受影响;第十一步那个"真悬浮窗克隆"高度探针(`previewLine` 传 nil、没在播放)现在量的是这条品牌标记而不是「♪」,同一号字体的单行 Text,仍在 120pt 地板之下,窗口几何不变。验证:`swift build` 通过;selftest 3445 条里当时 2 条 FAIL 全在同事会话正在改的灵动岛对齐 / 本地化生成物上,与本条无关;真机效果需没放歌时看一眼悬浮窗(`check-windows.swift --require-overlay` 拿窗口 ID 后 `screencapture -l`)。
-23. **不做桌面小组件,也不做「沉在桌面层」的层级选项(2026-09-09,用户看过示意页后拍板「不做」)**。起因:用户问「我们这个软件是否可以做出桌面小组件」。评估把「桌面小组件」拆成两种:① macOS 14 的系统小组件(WidgetKit 扩展)—— 每天只有几十次时间线刷新预算,做不了同步歌词,只能做封面 + 歌名的「正在播放」卡;小组件是独立的沙盒扩展进程,读不到 App 与 collector 之间那层 `~/Library/Application Support` 下的 JSON / 歌词缓存交换面(02 章「进程边界」),要么 App Group(需要 Team ID,本项目 ad-hoc 签名没有)、要么给 collector 加一个 localhost HTTP 接口;仓库是 SwiftPM + build.sh 手工装 bundle,`.appex` 得手工造(PlugIns 目录、扩展 Info.plist、链接 WidgetKit、codesign),ad-hoc 签名的扩展能否被系统加载没验证过,MacPorts / Sparkle 打包都要跟。② 「沉在桌面层」的常驻卡片(同类 App 里有这么做的) —— 只是悬浮歌词窗的层级从写死的 `.floating` 改成三选一(桌面图标之上、窗口之下),同一套逐帧渲染,半天到一天。给用户做了一页可点的假桌面示意(层级三选一 × 卡片样式三种 × 「显示桌面」,`~/Desktop/lyrimuse-桌面卡片示意.html`,不入库),用户看后决定两条都不做。记在这里是为了以后再有人提「桌面小组件」时不用从头评估:两条路的代价与边界如上;若重新考虑,先做 ②,① 只在明确要进系统小组件库时才开一天的验证(ad-hoc `.appex` 能否加载 + localhost 数据通道)。
 24. **对唱舞台:左右声部只在卡片正中一条固定宽度的带里分栏,拉宽只加长句冗余(2026-09-10,用户提出)**。原话:「如果歌词已经拉得很宽,这时候遇上对唱类歌词,左右两句就会分得很开。这种情况下,我希望哪怕宽度拉得很宽,也尽量还是居中显示;剩余的宽度留给很长的歌词做冗余」。现状:卡片 `.frame(maxWidth: .infinity, alignment: 声部)` + 两侧内缩只留**远侧**,左声部的字从 x≈20 起、右声部的字到窗宽−20 止 —— 用户为了装下长句把窗口拉到一千多点时,对唱歌的两句就隔着整个窗宽。**几种做法的取舍**:①给卡片设 maxWidth —— 长句就被迫在舞台宽度换行,正好违背"剩余宽度给长句"。②量出每行自然宽度、把短句钉在舞台边、超长句再往外挪 —— 要在 WrapLayout 外再包一层自定义 Layout,而 WrapLayout 刻意撑满提案宽(对唱对齐靠它),量自然宽只能靠 `.unspecified` 提案走 `unconstrainedSize`,Text 还有"按自然宽提案会不会多折一行"的舍入风险;收益只在"一句比 舞台边→远侧换行点 还长"这种极端情形才和③有差别。③**只给近侧多一份内缩**(选定):舞台宽 S = `max(448, 12em)` 封顶于可用宽,近侧多缩 (可用宽 − S)/2,远侧内缩不动 —— 短句从舞台边起笔,长句越过舞台往外长,换行点跟改动前逐点相同;纯 padding,VStack 对齐 / 声部指示圆点 / 罗马音译文补偿 / 下一句预览 delta / 控制排落点这一整套既有机制原样成立。基准 448 取"默认窗宽 488 − 40":这套分栏的观感就是按默认窗宽调出来的,**不比默认宽的窗口逐像素不变**(用户没抱怨的那个场景不动);12em 兜底是给大字号的,免得 448 在 48pt 下只剩 9 个字宽、两句叠到一起。合唱不加舞台(本来就居中,加了只会更早换行);nil 恒 0(普通歌纪律)。**验证**:selftest `overlay` 组 —— 默认/更窄窗宽 0、1400 窗 / 31pt 两侧各让 456、48pt 走 12em、可用宽小于 12em 时舞台=整卡、退化输入不为负;进 cardInsets 后左/右/合唱/nil 四种取值、`stageInset` 缺省等于旧值、控制排"只多一份内边距"不变式;几何核算左声部起笔 476 / 右声部收笔 924(两栏隔 448 而不是对照组的 1360)、左声部换行点 1256 与改动前相同。真机:设置里把悬浮歌词宽度拉到 1000+ 放一首对唱歌看,或直接看设置页编辑台(它画的就是真视图)。
 25. **按钮悬停高亮补上,按下反馈仍然不补(2026-09-11,用户提出前半截)**。原话:「悬浮歌词这上面的按钮帮我开一个鼠标移上去有交互的动效视觉 ux 效果」。这排按钮从 2026-08-18 改成"常年点击穿透 + 控制器按矩形分发"起就**既没有 hover 高亮也没有按下变暗**,当时的记法是"代价,拍板接受"。这次补回来的是 hover 那一半,做法上有三件事值得记:① **不能走 `.onHover`**——窗口 `ignoresMouseEvents` 恒 true,SwiftUI 一个鼠标事件都收不到,挂上去就是又一段永不触发的死代码(同 `.help()` 那个 tooltip 被删的理由);走的是控制器 `.mouseMoved` 里**已经在算**的那次命中测试,顺手发布成 `hoveredControl`,零额外遍历。② **可见性必须由高亮判据自己兜住**,不能复用点击那条:点击只在按钮显示时才分发(调用点守着),而高亮每次鼠标移动都求值——指针不在窗口里(全局监听器照样送事件)、或者锁定态下压在上一轮残留的矩形上,都会画出"高亮浮在一颗看不见的按钮上"。所以 Core 里另开 `hoveredControl(at:in:insideWindow:positionLocked:)` 而不是给 `control(at:in:)` 加参数——两个函数回答的是两个问题。③ ⚠️ **上报矩形的那层 `.background(GeometryReader…)` 必须留在 `iconButton` 的最外面,悬停的放大只准发生在它里面**:那个矩形就是控制器分发点击的判据,让它跟着 hover 一起放大就会变成"变大→仍然命中→保持变大 / 缩回→不再命中→缩回"的自激抖动,而且可点区域会随指针位置伸缩。现在放大只加在 `Image` 上、高亮圆只当背景画,`.frame` 那层尺寸逐像素不变(19/22pt)。**按下反馈这次不做**:点击是在 `.leftMouseDown` 就派发掉的,而 `.settingsMenu` 会当场弹出一个跑自己事件循环的 `NSMenu`,"按下变暗、松手复原"在那条路上很容易卡成一个永远按着的按钮;真要补得做成不依赖 mouseUp 的定时闪一下(设 `pressedControl`、定时器无条件清),那是另一件事。**验证**:selftest `overlay` 组 7 条钉住"该亮哪一颗";真机效果要把指针移到那排按钮上看——不能用 GUI 自动化(不许驱动界面,也不许挪用户的鼠标),留给用户确认;**2026-09-11 用户真机看过:没问题**。
 26. **悬浮歌词位置预设:自由 / 顶部居中 / 底部居中(Dock 之上)(2026-09-11,GitHub issue #5「可否增加底部在 Dock 栏之上水平居中对齐选项」,用户拍板做 v1)**。报告人原话「目前程序运行之后,是在顶部菜单栏下水平居中…很难接受手动进行调整,希望作者可以增加在底部 Dock 栏之上水平居中对齐选项」—— 诉求不是"挪一下",是**程序算出来的精确对齐**,所以做成模式(`OverlayPlacementMode`,UserDefaults `np:overlayPlacementMode`,默认 `free` = 改动前全部行为,老用户零迁移)而不是一次性的"对齐到…"动作。**几何**全在 `OverlayPlacement`(selftest 覆盖):`presetFrame` 按**窗口所在那块屏**的 `visibleFrame` 算 —— 它本来就扣掉了 Dock 与菜单栏,"Dock 之上"不用自己量 Dock,Dock 放侧边 / 自动隐藏时退化成"屏幕底部居中";顶部预设的边距 `presetTopMargin = 40` 就是没存过位置时默认落点用的那个数(选了顶部居中不该跳一下),底部 `presetBottomMargin = 12`。**底部预设逼出来的一处既有坑**:高度模型一直是"顶边固定、向下增高、底边夹到可见区底边"(2026-08-02),底边贴着 Dock 顶的窗口 `maxHeight = 顶边 − Dock 顶 = 120 = 地板`,**一点都长不了**,译文 / 罗马音 / 换行一出来直接被裁 —— 这不是新功能的边角,手动拖到 Dock 上方今天就是这样(selftest「增高: 底边贴 Dock 的窗口守顶边时长不了」坐实)。修法:`updateHeight` 的几何抽成 `OverlayPlacement.grownFrame(anchorsBottom:)`,`.bottomCenter` 守底边向上长、顶边夹到可见区顶边;视图根部 `.frame(alignment:)` 跟着贴底(锚边那一侧的字永远不动,新增的行往另一侧展开);热区换算 `OverlayControlHitTest.windowLocalRect` 多一个 `contentTopInset`(贴底时 = 窗高 − 内容高),原口径隐含的"内容块顶边 == 窗口顶边"被显式化 —— ⚠️ 贴底时**窗高没变、内容高变了**(单行在 120 地板之下的 70→90)按钮也挪了,`updateHeight` 那条"亚像素不动"的早退里补了一次重算,否则又是 08-25 那种"点偏一点才生效"。**控制器**订阅 `AppSettings.$overlayPlacementMode`(`removeDuplicates().dropFirst()`,初值在 `convenience init` 建窗口时经 `presetOrigin` 用过)三处落位:启动 —— 锚点只用来决定"在哪块屏",落点按预设重算;切模式(`applyPlacementMode`)—— 在窗口此刻所在屏上算、`setFrameAnimated` 飞过去,切回自由什么都不动(锚点一直跟着写,当前位置就是锚点);屏幕 / Dock 参数变化(`reconcilePresetPlacement`)—— 沿用自由模式那套借屏语义:锚点那块屏回来了就回去,窗口被系统搬到别的屏(锚点那块屏没了)就在现在这块屏上算但标记 `isBorrowingScreen`、不写盘,「多屏」一节的不变量在预设下同样成立;Dock 改大小 / 换边 / 开关自动隐藏走的是同一条 `didChangeScreenParametersNotification`(visibleFrame 变了),所以"Dock 之上"跟着 Dock 走(这一条要真机确认)。**预设模式下不接拖动**(用户拍板"直接停用",比"一拖就悄悄切成自由"少一层惊讶):闸设在 `armDragIfStillPressed` 一处(按住歌词立刻武装、长按到点两条路都汇到这儿),给一句 `flashTransientHint(「位置由预设固定」)` 而不是静默吞掉 —— 用户做的正是"拖窗口"的手势,什么都不发生他只会以为坏了;那次按下照旧穿透。「长按即可拖动位置」的首次解锁提示在预设下不弹也不设标记。**入口**:设置页「行为」浮层 / 抽屉第一行「位置」三选一(`OverlayPlacementSegmentedControl`,手搭分段控件第三份,同形状的理由见 `OverlayAlignmentSegmentedControl`)+ ⓘ 说明;悬浮窗 ⚙ 快捷菜单加「位置」子菜单(预设下长按只会闪那句提示,下一步最可能就是想切模式,就近给出口);「行为」工具栏按钮摘要在预设时前缀模式名(「底部居中 · 全部关闭」),自由时不提。**不在「重置」范围内**(跟宽度、总开关同一条取舍)。**v1 刻意不做**:不提供"选哪块屏"(要换屏:切回自由拖过去再切回预设);边距不做成滑杆;内容贴底之后 120pt 地板留下的空白在**上方**(单行时字离 Dock 顶 ≈ 12 + 卡片下内边距),观感要真机看。**验证**:selftest `overlay` 组新增 40 条(模式 rawValue / 落点 / 两个方向的增高与夹取 / 热区 inset),`settings-search` 组登记「位置」;新文案 6 键三语(`位置` / `自由` / `顶部居中` / `底部居中` / ⓘ 说明 / `位置由预设固定`),parity ✓;真机:设置 → 悬浮歌词 → 行为 → 位置 选「底部居中」,放一首带译文的歌看窗口是否向上长、按钮是否可点;改 Dock 大小看是否跟随。**同日第二轮(用户装上后实机反馈三条)**:① 「选了居中之后尝试去移动的那个提示太不醒目了」—— 第一版走 `flashTransientHint`,是卡片里一行 12pt caption、1.6 秒,31pt 歌词旁边等于没有。改成两件事一起做:控制排槽位换成一条「🔒 位置已固定为「底部居中」，在 ⚙ 菜单里可改」胶囊(`placementLockPill`,跟播放控制排同底、钉 30pt 等高,槽位三态切换歌词不跳;2.4 秒,连按续期)+ 歌词卡左右抖三下(`OverlayRejectShake`,GeometryEffect 纯投影位移、sin 走整数周期静止位精确归零,「减弱动态效果」下不抖)。状态经 `OverlayChromeSource` 两个新字段(`placementLockNotice` / `placementLockShakeTick`)下发,预览替身恒 nil / 0。**触发时机紧接着又收了一刀**(用户:「不要一点击就触发拒绝拖动的提示,要明确感受到有在拖动才触发」):预设模式下 `.leftMouseDown` 不武装、不起长按计时,只记下按在歌词文字上的那一点;`.leftMouseDragged` 里位移超过 `presetDragIntentDistance`(12pt,长按取消容差 4pt 的三倍)才给一次反馈,同一次按住不重复、松手复位;按在四周透明区的按下不记(拖桌面图标路过窗口不该抖);单击原样穿透、什么都不说。`armDragIfStillPressed` 里那道预设闸退成纯防御。② 「这个上面怎么还留了这么多空间」(顶部居中下菜单栏到歌词约 92pt = 边距 40 + 槽位 38 + 卡片内边距 14):两刀 —— `presetTopMargin` 40→12(第一版照搬"没存过位置时的默认落点",但预设的意图是**贴**菜单栏,跟"随手丢个好抓的位置"不是一回事;默认落点那个 40 不动),以及**「顶部居中」下控制排槽位翻到歌词卡下方**(`controlsSlotBelow`,规则:槽位放在离锚边远的一侧 —— 守顶边放下面、守底边放上面、自由模式保持 08-07 拍板的上方不动;两颗胶囊自带的"离卡片 4pt"挪到槽位上按上下翻面)。歌词顶到菜单栏底 = 12 + 14 = 26pt,跟底部模式的 12 + 14 对称。代价如实记:顶部居中下控制排在歌词下方,歌词换行 / 译文出现时它会跟着挪(底部居中下控制排在上方本来就是这样),自由模式一像素不变。③ 「这个位置的配置项也给上面放一个」—— 「位置」从「行为」浮层里整个搬出来:工具栏第二行第三颗 `位置 · 底部居中`(摘要就是当前模式名)、自己的浮层 `OverlayPlacementPopover`、抽屉自己的「位置」组(排在「行为」之后 = 第二行顺序),`OverlayBehaviorSettingsRows` 复原成三开关 + 两行自动隐藏、`behaviorSummary` 不再挂前缀;搜索目录里「位置」改成不带 group 的独立条;「重置 ▾」作用范围副标题随之改成「不含排版、行为、位置和宽度」(两个入口一字不差)。文案:+「位置已固定为「%@」，在 ⚙ 菜单里可改」+「不含排版、行为、位置和宽度」,−「位置由预设固定」−「不含排版、行为和宽度」(删前 grep 0 引用)。selftest 4251 条 ALL PASS(位置预设组补上下边距对称一条)。真机待看:抖动 + 胶囊的观感、顶部居中下歌词离菜单栏的距离、控制排在歌词下方是否顺手。

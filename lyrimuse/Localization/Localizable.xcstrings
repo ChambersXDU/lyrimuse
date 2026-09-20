@@ -120,29 +120,6 @@
         }
       }
     },
-    "关闭灵动岛歌词" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn Off Notch Lyrics"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关闭灵动岛歌词"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "關閉動態島歌詞"
-          }
-        }
-      }
-    },
     "副行" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -179,29 +156,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "只影響裝得下的短句：它在歌詞行裡靠哪邊。「自動」按對唱聲部走：誰唱靠誰那邊、合唱置中，沒有對唱資訊就靠左。放不下的句子會橫向捲動，沒有多餘空間，對齊不起作用"
-          }
-        }
-      }
-    },
-    "展开时在曲目信息右侧显示四颗按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "When expanded, shows four buttons to the right of the track info: search lyrics, show lyrics, settings, and turn off notch lyrics."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "展开时在曲目信息右侧显示四颗按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "展開時在曲目資訊右側顯示四顆按鈕：搜尋歌詞、顯示歌詞、設定、關閉動態島歌詞。"
           }
         }
       }
@@ -1246,29 +1200,6 @@
         }
       }
     },
-    "两个数来自 Last.fm 的两条接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。不相等通常意味着有一种写法只被其中一边合并了" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The two numbers come from two Last.fm endpoints: the row sums track.getInfo (with autocorrect) over the spelling family, while the breakdown lists exact spellings via user.getTrackScrobbles. A gap usually means one spelling was merged on only one side"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "两个数来自 Last.fm 的两条接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。不相等通常意味着有一种写法只被其中一边合并了"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "兩個數字來自 Last.fm 的兩條介面：列上的次數由 track.getInfo（autocorrect）依寫法族加總，明細由 user.getTrackScrobbles 依精確寫法逐筆列出。不相等通常表示有一種寫法只被其中一邊合併"
-          }
-        }
-      }
-    },
     "加载更早的" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1311,29 +1242,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "還有更早的記錄尚未載入，這些列暫不編號"
-          }
-        }
-      }
-    },
-    "这首歌在你 Last.fm 上的第几次收听，点一下看合并了哪些写法" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Which play of this track this was in your Last.fm history. Click to see which spellings were merged"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这首歌在你 Last.fm 上的第几次收听，点一下看合并了哪些写法"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這首歌在你 Last.fm 上的第幾次聆聽，按一下查看合併了哪些寫法"
           }
         }
       }
@@ -1913,29 +1821,6 @@
         }
       }
     },
-    "%@ 条被 Last.fm 拒绝" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ rejected by Last.fm"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 条被 Last.fm 拒绝"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 筆被 Last.fm 拒絕"
-          }
-        }
-      }
-    },
     "%@ 次" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2212,121 +2097,6 @@
         }
       }
     },
-    "Last.fm 只接受约两周内的记录，更早的补不上去" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm only accepts scrobbles from about the last two weeks; older ones can't be filled in"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 只接受约两周内的记录，更早的补不上去"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 只接受約兩週內的記錄，更早的補不上去"
-          }
-        }
-      }
-    },
-    "Last.fm 已确认收到这次播放" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm has acknowledged this play"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 已确认收到这次播放"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 已確認收到這次播放"
-          }
-        }
-      }
-    },
-    "Last.fm 拒绝了写入，Scrobble 已暂停——授权可能已在网站上被撤销" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm is rejecting scrobbles, so scrobbling is paused. Your authorization may have been revoked on the Last.fm website"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 拒绝了写入，Scrobble 已暂停——授权可能已在网站上被撤销"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 拒絕了寫入，Scrobble 已暫停——授權可能已在網站上被撤銷"
-          }
-        }
-      }
-    },
-    "Last.fm 规则：需长于 30 秒且播完一半（或满 4 分钟）。专辑过场轨常达不到。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm counts tracks over 30s played halfway (or 4 min). Interludes often miss."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 规则：需长于 30 秒且播完一半（或满 4 分钟）。专辑过场轨常达不到。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 規則：需長於 30 秒且播完一半（或滿 4 分鐘）。專輯的過場曲目常達不到。"
-          }
-        }
-      }
-    },
-    "Last.fm 返回错误: %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm returned an error: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 返回错误: %@"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 傳回錯誤：%@"
-          }
-        }
-      }
-    },
     "Lyric × Muse——把你的歌词交给音乐女神吧" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2415,29 +2185,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lyrimuse 支援 Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、Spotify，也可以交給「自動識別」——挑一個你平時用來聽歌的，隨時可以在設定裡重新選擇"
-          }
-        }
-      }
-    },
-    "Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛同样无法显示任何内容。点下面的按钮即可启用，之后开机会自动运行，不用再管" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse needs a background service running at all times to read playback state, resolve lyrics and artwork, and cache them locally. Without it, the floating lyrics and the notch have nothing to show. Click Enable below; it then starts automatically at login and needs no further attention"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛同样无法显示任何内容。点下面的按钮即可启用，之后开机会自动运行，不用再管"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 需要一個背景程式常駐執行，負責讀取播放狀態、解析歌詞/封面並寫入本機快取——沒有它，浮動歌詞/動態島同樣無法顯示任何內容。按下面的按鈕即可啟用，之後登入時會自動啟動，不用再管"
           }
         }
       }
@@ -2638,52 +2385,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Safari 把這項放在設定裡，不在選單列：先到「Safari → 設定 → 進階」勾選「顯示網頁開發者功能」，設定裡就會多出「開發」一欄，在那裡勾選「允許 Apple 事件中的 JavaScript」。"
-          }
-        }
-      }
-    },
-    "Scrobble" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble"
-          }
-        }
-      }
-    },
-    "Scrobble 到 Last.fm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble to Last.fm"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble 到 Last.fm"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble 到 Last.fm"
           }
         }
       }
@@ -2999,29 +2700,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "「%@」刪除後無法復原"
-          }
-        }
-      }
-    },
-    "「自动」选带刘海的那块；「所有屏幕」每块屏各显示一个；指定的屏幕拔掉后自动回到「自动」" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“Automatic” picks the display with the notch; “All Displays” shows one on every display; if the chosen display is unplugged it falls back to Automatic"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「自动」选带刘海的那块；「所有屏幕」每块屏各显示一个；指定的屏幕拔掉后自动回到「自动」"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「自動」選有瀏海的那個螢幕；「所有螢幕」每個螢幕各顯示一個；指定的螢幕拔掉後自動回到「自動」"
           }
         }
       }
@@ -3433,29 +3111,6 @@
         }
       }
     },
-    "上面的「Scrobble 到 Last.fm」关着，这里的设置暂时不起作用" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“Scrobble to Last.fm” above is off, so these settings have no effect right now"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上面的「Scrobble 到 Last.fm」关着，这里的设置暂时不起作用"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上面的「Scrobble 到 Last.fm」是關著的，這裡的設定暫時不會生效"
-          }
-        }
-      }
-    },
     "下" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3590,29 +3245,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下載中…"
-          }
-        }
-      }
-    },
-    "下面的「连接」要用这对密钥完成授权：先在 Last.fm 创建一个应用，拿到 API Key 和 Secret" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connecting below needs this key pair. Create a Last.fm application first to get an API Key and Secret"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下面的「连接」要用这对密钥完成授权：先在 Last.fm 创建一个应用，拿到 API Key 和 Secret"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下面的「連線」要用這對金鑰完成授權：先在 Last.fm 建立一個應用程式，取得 API Key 和 Secret"
           }
         }
       }
@@ -4553,61 +4185,6 @@
         }
       }
     },
-    "以下两项只对「灵动岛歌词」生效；桌面悬浮歌词、菜单栏歌词和歌词窗口不受影响" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The two options below apply only to Notch Lyrics; the desktop overlay, menu bar lyrics and the Lyrics window are unaffected"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以下兩項只對「動態島歌詞」生效；桌面浮動歌詞、選單列歌詞和歌詞視窗不受影響"
-          }
-        }
-      }
-    },
-    "以下两项只对「桌面悬浮歌词」生效；灵动岛、菜单栏歌词和歌词窗口不受影响" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The two options below apply only to the Desktop Overlay; the Notch, menu bar lyrics and the Lyrics window are unaffected"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以下兩項只對「桌面浮動歌詞」生效；動態島、選單列歌詞和歌詞視窗不受影響"
-          }
-        }
-      }
-    },
-    "以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These apply to both the desktop floating lyrics and the notch lyrics; the menu bar lyrics and the lyrics window are unaffected."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以下兩項對「桌面浮動歌詞」和「動態島歌詞」同時生效；選單列歌詞和歌詞視窗不受影響"
-          }
-        }
-      }
-    },
     "企业微信" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5229,52 +4806,6 @@
         }
       }
     },
-    "关掉之后灵动岛只保留贴着刘海那一条的高度，歌词行不再渲染——适合想看播放状态、又不想被歌词挡住视线的场合。\n\n指向展开仍然可用（那是够到播放控制和进度条的唯一入口），只是展开区里那行「下一句」跟着一起不显示。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "With this off, the notch keeps only the strip hugging the cutout and stops rendering the lyric row — handy when you want to see playback status without lyrics in the way.\n\nHovering to expand still works (it is the only way to reach the transport controls and the scrubber); the next-line row inside just goes away with it."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关掉之后灵动岛只保留贴着刘海那一条的高度，歌词行不再渲染——适合想看播放状态、又不想被歌词挡住视线的场合。\n\n指向展开仍然可用（那是够到播放控制和进度条的唯一入口），只是展开区里那行「下一句」跟着一起不显示。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "關掉之後動態島只保留貼著瀏海那一條的高度，歌詞行不再渲染——適合想看播放狀態、又不想被歌詞擋住視線的場合。\n\n指向展開仍然可用（那是碰到播放控制和進度列的唯一入口），只是展開區裡那行「下一句」也跟著不顯示。"
-          }
-        }
-      }
-    },
-    "关掉之后灵动岛只保留贴着刘海那一条的高度，歌词行不再渲染——适合想看播放状态、又不想被歌词挡住视线的场合。\n\n指向展开的效果完全不受影响：播放控制、进度条、下一句歌词预览照常显示，跟开着「显示歌词」时一模一样。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turns off just this compact row and drops the card down to hugging the notch — good for people who want to see playback status without lyrics blocking their view.\n\nHovering to expand is completely unaffected: playback controls, the scrubber, and the next-line preview still show exactly as when \"Show Lyrics\" is on."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关掉之后灵动岛只保留贴着刘海那一条的高度，歌词行不再渲染——适合想看播放状态、又不想被歌词挡住视线的场合。\n\n指向展开的效果完全不受影响：播放控制、进度条、下一句歌词预览照常显示，跟开着「显示歌词」时一模一样。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "關掉之後動態島只保留貼著瀏海那一條的高度，歌詞行不再渲染——適合想看播放狀態、又不想被歌詞擋住視線的場合。\n\n指向展開的效果完全不受影響：播放控制、進度列、下一句歌詞預覽照常顯示，跟開著「顯示歌詞」時一模一樣。"
-          }
-        }
-      }
-    },
     "关掉则暂停时只收起歌词行，保留顶部那一条" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5294,29 +4825,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "關掉則暫停時只收起歌詞行，保留頂部那一條"
-          }
-        }
-      }
-    },
-    "关掉后稳态只保留刘海那条高度，不显示歌词；指向展开时播放控制、进度条、下一句预览仍照常显示。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "When off, the resting card keeps only the notch-height row and shows no lyrics; hovering to expand still shows playback controls, the scrubber, and the next-line preview as usual."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关掉后稳态只保留刘海那条高度，不显示歌词；指向展开时播放控制、进度条、下一句预览仍照常显示。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "關掉後穩態只保留瀏海那條高度，不顯示歌詞；指向展開時播放控制、進度列、下一句預覽仍照常顯示。"
           }
         }
       }
@@ -6734,45 +6242,6 @@
         }
       }
     },
-    "另有 %@ 条太旧、Last.fm 不再接受" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ more are too old for Last.fm to accept"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "另有 %@ 条太旧、Last.fm 不再接受"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "另有 %@ 筆太舊，Last.fm 不再接受"
-          }
-        }
-      }
-    },
-    "只对灵动岛生效" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applies to the notch only"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只對動態島生效"
-          }
-        }
-      }
-    },
     "只对悬浮歌词生效" : {
       "localizations" : {
         "en" : {
@@ -6785,45 +6254,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "只對浮動歌詞生效"
-          }
-        }
-      }
-    },
-    "只作用于播放中/指向展开时那一行。没在播放时灵动岛缩成刘海大小，那时左边是封面、右边是播放指示条，不受这里影响。\n\n播放指示条固定在右耳外缘，不占模块位。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applies to the row shown while playing, or while hovering to expand. When nothing is playing the notch shrinks to the cutout itself, showing artwork on the left and the playback indicator on the right — unaffected by these settings.\n\nThe playback indicator is pinned to the outer edge of the right ear and does not take a module slot."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只作用于播放中/指向展开时那一行。没在播放时灵动岛缩成刘海大小，那时左边是封面、右边是播放指示条，不受这里影响。\n\n播放指示条固定在右耳外缘，不占模块位。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只作用於播放中/指向展開時那一行。沒在播放時動態島縮成瀏海大小，那時左邊是封面、右邊是播放指示條，不受這裡影響。\n\n播放指示條固定在右耳外緣，不佔模組位置。"
-          }
-        }
-      }
-    },
-    "只作用于播放中/指向展开时那一行。没在播放时灵动岛缩成刘海大小，那时左边是封面、右边是播放指示条，不受这里影响。\n\n播放指示条（音浪）贴哪只耳朵在上面单独配，跟下面的模块选择不互斥，可以同时选中。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applies only to the row shown while playing, or while expanded on hover. When nothing is playing the notch collapses to its physical size, showing artwork on the left and the playback indicator on the right — unaffected by this setting.\n\nWhich ear the playback indicator (waveform) sits on is configured above; it is independent of the module choice below, so both can be set at once."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只作用於播放中/指向展開時那一行。沒在播放時動態島縮成瀏海大小，那時左邊是封面、右邊是播放指示條，不受這裡影響。\n\n播放指示條（音浪）貼哪一邊耳朵在上面單獨設定，跟下面的模組選擇不互斥，可以同時選取。"
           }
         }
       }
@@ -7081,29 +6511,6 @@
         }
       }
     },
-    "可以滚动阅读的完整歌词列表" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A scrollable view of the full lyrics"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以滚动阅读的完整歌词列表"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以捲動閱讀的完整歌詞列表"
-          }
-        }
-      }
-    },
     "可以随时在设置里调整这些选项" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7255,29 +6662,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "同步失敗"
-          }
-        }
-      }
-    },
-    "同步收听到 Last.fm（可选）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble to Last.fm (optional)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同步收听到 Last.fm（可选）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同步聆聽記錄到 Last.fm（選填）"
           }
         }
       }
@@ -7714,52 +7098,6 @@
         }
       }
     },
-    "在 Last.fm 打开" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open on Last.fm"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Last.fm 打开"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Last.fm 打開"
-          }
-        }
-      }
-    },
-    "在 Last.fm 网站查看主页" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View My Profile on Last.fm"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Last.fm 网站查看主页"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Last.fm 網站查看個人頁面"
-          }
-        }
-      }
-    },
     "在 ListenBrainz 网站获取 Token →" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7852,29 +7190,6 @@
         }
       }
     },
-    "在其他设备上播放，Last.fm 已收到" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Playing on another device; Last.fm has received it"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在其他设备上播放，Last.fm 已收到"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在其他裝置上播放，Last.fm 已收到"
-          }
-        }
-      }
-    },
     "在播放器中打开" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7950,29 +7265,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在瀏覽器裡手動開啟"
-          }
-        }
-      }
-    },
-    "在设置中查看 Last.fm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View Last.fm in Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在设置中查看 Last.fm"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在設定中查看 Last.fm"
           }
         }
       }
@@ -8617,29 +7909,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "寬度模式"
-          }
-        }
-      }
-    },
-    "对悬浮歌词和灵动岛生效" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applies to the floating lyrics and the notch"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "对悬浮歌词和灵动岛生效"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "對浮動歌詞和動態島生效"
           }
         }
       }
@@ -9431,29 +8700,6 @@
         }
       }
     },
-    "已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm's authorization page is open in your browser. Click “Yes, allow access” there to finish, and you'll be sent back to Lyrimuse automatically. If your browser doesn't come back on its own, use the button below"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已在瀏覽器開啟 Last.fm 授權頁面。請在瀏覽器裡按一下「Yes, allow access」完成授權，完成後會自動跳回 Lyrimuse 繼續；如果瀏覽器沒有自動跳回，也可以回來手動按下面的按鈕"
-          }
-        }
-      }
-    },
     "已在资料库" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9861,22 +9107,6 @@
         }
       }
     },
-    "已显示灵动岛歌词" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notch lyrics shown"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已顯示動態島歌詞"
-          }
-        }
-      }
-    },
     "已显示菜单栏歌词" : {
       "localizations" : {
         "en" : {
@@ -10112,29 +9342,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已設定"
-          }
-        }
-      }
-    },
-    "已连接 Last.fm 账号" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connected to Last.fm Account"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已连接 Last.fm 账号"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 帳號已連線"
           }
         }
       }
@@ -10420,22 +9627,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已隱藏發音"
-          }
-        }
-      }
-    },
-    "已隐藏灵动岛歌词" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notch lyrics hidden"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已隱藏動態島歌詞"
           }
         }
       }
@@ -10817,29 +10008,6 @@
         }
       }
     },
-    "待推送的收听" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pending Scrobbles"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "待推送的收听"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "待上傳的聆聽記錄"
-          }
-        }
-      }
-    },
     "待播清单" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10951,29 +10119,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "快速開關"
-          }
-        }
-      }
-    },
-    "总 scrobble" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Total scrobbles"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "总 scrobble"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "總 scrobble"
           }
         }
       }
@@ -11585,29 +10730,6 @@
         }
       }
     },
-    "打开歌词窗口" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Lyrics Window"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开歌词窗口"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打開歌詞視窗"
-          }
-        }
-      }
-    },
     "打开歌词管理" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11781,29 +10903,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把你播放的歌同步到 ListenBrainz"
-          }
-        }
-      }
-    },
-    "把你播放的歌记录到 Last.fm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Records what you play to Last.fm"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "把你播放的歌记录到 Last.fm"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "把你播放的歌記錄到 Last.fm"
           }
         }
       }
@@ -12576,29 +11675,6 @@
         }
       }
     },
-    "播放指示条，跟着音量起伏摆动，跟耳朵里选的内容共存显示（选了「播放控制」时让位）。关掉之后两只耳朵纯按你选的模块渲染，灵动岛也能配得更窄。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A playback indicator that pulses with the audio. It coexists with whatever content that ear shows (it yields when that ear is set to \"Playback Controls\"). Turn it off and both ears render purely by their chosen module — the Dynamic Island can also be sized narrower."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放指示条，跟着音量起伏摆动，跟耳朵里选的内容共存显示（选了「播放控制」时让位）。关掉之后两只耳朵纯按你选的模块渲染，灵动岛也能配得更窄。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放指示條，跟著音量起伏擺動，跟耳朵裡選的內容同時顯示（選了「播放控制」時讓位）。關掉之後兩邊耳朵純按你選的模組渲染，動態島也能設定得更窄。"
-          }
-        }
-      }
-    },
     "播放控制" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12875,29 +11951,6 @@
         }
       }
     },
-    "数据源留空时自动判定：两个账号都配了优先用 Last.fm，只配了一个就用那个" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "With no source chosen: Last.fm if both accounts are set up, otherwise whichever one is"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "数据源留空时自动判定：两个账号都配了优先用 Last.fm，只配了一个就用那个"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "資料來源留空時自動判定：兩個帳號都設定了就優先用 Last.fm，只設定了一個就用那個"
-          }
-        }
-      }
-    },
     "整份只有署名行，没有正文" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13124,29 +12177,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "中斷連線"
-          }
-        }
-      }
-    },
-    "断开 Last.fm？" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Disconnect Last.fm?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "断开 Last.fm？"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "要中斷與 Last.fm 的連線嗎？"
           }
         }
       }
@@ -13666,22 +12696,6 @@
         }
       }
     },
-    "显示/隐藏灵动岛歌词" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show/Hide Notch Lyrics"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "顯示/隱藏動態島歌詞"
-          }
-        }
-      }
-    },
     "显示/隐藏菜单栏歌词" : {
       "localizations" : {
         "en" : {
@@ -13921,52 +12935,6 @@
         }
       }
     },
-    "显示歌词窗口" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show Lyrics Window"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示歌词窗口"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "顯示歌詞視窗"
-          }
-        }
-      }
-    },
-    "显示灵动岛歌词" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show Notch Lyrics"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示灵动岛歌词"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "顯示動態島歌詞"
-          }
-        }
-      }
-    },
     "显示简介" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14147,29 +13115,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "暫停/無播放時隱藏"
-          }
-        }
-      }
-    },
-    "暂停或广告插播时，灵动岛缩到贴着刘海的一小块，只剩左耳封面、右耳音浪——跟 iPhone 灵动岛的极简形态一样。关掉之后暂停时卡片保持原来的大小，歌名和歌词照常显示（位置停在暂停那一刻）。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "While paused or during an ad break, the Dynamic Island shrinks to a small block hugging the notch, showing only cover art on the left ear and an audio wave on the right — like the iPhone's minimal Dynamic Island. Turn this off to keep the card at its normal size while paused, with the title and lyrics still shown (frozen at the moment of pausing)."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暂停或广告插播时，灵动岛缩到贴着刘海的一小块，只剩左耳封面、右耳音浪——跟 iPhone 灵动岛的极简形态一样。关掉之后暂停时卡片保持原来的大小，歌名和歌词照常显示（位置停在暂停那一刻）。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暫停或廣告插播時，動態島縮到貼著瀏海的一小塊，只剩左耳封面、右耳音浪——跟 iPhone 動態島的極簡形態一樣。關掉之後暫停時卡片保持原來的大小，歌名和歌詞照常顯示（位置停在暫停那一刻）。"
           }
         }
       }
@@ -14645,29 +13590,6 @@
         }
       }
     },
-    "最近记录" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recent Scrobbles"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最近记录"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最近記錄"
-          }
-        }
-      }
-    },
     "有 %@ 首歌是因为这个开关被锁定的。解锁后它们会重新接受自动重搜和打分改进；你手动编辑过正文的歌不受影响，始终保持锁定" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14687,29 +13609,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "有 %@ 首歌是因為這個開關被鎖定的。解鎖後它們會重新接受自動重新搜尋和評分改進；你手動編輯過內文的歌不受影響，始終保持鎖定"
-          }
-        }
-      }
-    },
-    "有新版本 %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Update available: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有新版本 %@"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有新版本 %@"
           }
         }
       }
@@ -15032,29 +13931,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "本機時間晚上 10 點之後當天第一次檢查時推播：當天播放次數、累計時長、聽得最多的幾首歌"
-          }
-        }
-      }
-    },
-    "本地还没有待推送的收听" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No scrobbles are waiting locally"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本地还没有待推送的收听"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本機還沒有待上傳的聆聽記錄"
           }
         }
       }
@@ -15469,52 +14345,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "檢查中…"
-          }
-        }
-      }
-    },
-    "检查更新" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Check for Updates"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "检查更新"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "檢查更新"
-          }
-        }
-      }
-    },
-    "检查更新…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Check for Updates…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "检查更新…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "檢查更新…"
           }
         }
       }
@@ -16165,52 +14995,6 @@
         }
       }
     },
-    "歌词窗口" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrics Window"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词窗口"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌詞視窗"
-          }
-        }
-      }
-    },
-    "歌词窗口…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrics Window…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词窗口…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌詞視窗…"
-          }
-        }
-      }
-    },
     "歌词管理" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16757,29 +15541,6 @@
         }
       }
     },
-    "正在记录" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobbling now"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在记录"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在記錄"
-          }
-        }
-      }
-    },
     "正在重新匹配…" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17056,29 +15817,6 @@
         }
       }
     },
-    "没拉到最近记录" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't load recent scrobbles"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没拉到最近记录"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "沒抓到最近記錄"
-          }
-        }
-      }
-    },
     "没有匹配的字体" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17190,52 +15928,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "沒有封面資料時會使用下面選擇的文字顏色作為備用"
-          }
-        }
-      }
-    },
-    "没有找到带时间戳的版本，已自动采纳一份纯文本兜底（可在「歌词窗口」里查看）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No timed version found — automatically adopted a plain-text fallback (viewable in the Lyrics Window)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有找到带时间戳的版本，已自动采纳一份纯文本兜底（可在「歌词窗口」里查看）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "沒有找到帶時間戳記的版本，已自動採納一份純文字備用版本（可在「歌詞視窗」裡查看）"
-          }
-        }
-      }
-    },
-    "没能取到那年今日——Last.fm 没有响应" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't load this day in past years — Last.fm didn't respond"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没能取到那年今日——Last.fm 没有响应"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法取得那年今日——Last.fm 沒有回應"
           }
         }
       }
@@ -17723,75 +16415,6 @@
         }
       }
     },
-    "灵动岛" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notch"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "灵动岛"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "動態島"
-          }
-        }
-      }
-    },
-    "灵动岛宽度" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notch Card Width"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "灵动岛宽度"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "動態島寬度"
-          }
-        }
-      }
-    },
-    "灵动岛歌词" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notch Lyrics"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "灵动岛歌词"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "動態島歌詞"
-          }
-        }
-      }
-    },
     "点击归零" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18018,29 +16641,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "現在去設定裡連線"
-          }
-        }
-      }
-    },
-    "现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛和菜单栏歌词要等开始播放才看得到" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nothing is playing right now — Desktop Floating Lyrics appears straight away; Notch Lyrics and Menu Bar Lyrics only show up once playback starts"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛和菜单栏歌词要等开始播放才看得到"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "現在沒有在播放——桌面浮動歌詞會立刻出現，動態島和選單列歌詞要等開始播放才看得到"
           }
         }
       }
@@ -18636,29 +17236,6 @@
         }
       }
     },
-    "等待 Last.fm 确认（通常几秒内）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Waiting for Last.fm to acknowledge (usually a few seconds)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等待 Last.fm 确认（通常几秒内）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等待 Last.fm 確認（通常幾秒內）"
-          }
-        }
-      }
-    },
     "签名密钥（可选）" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18936,52 +17513,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "系統自動化授權：這個瀏覽器沒在執行，查不到目前狀態"
-          }
-        }
-      }
-    },
-    "紧凑地贴着屏幕顶部的刘海" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tucked beside the notch at the top"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "紧凑地贴着屏幕顶部的刘海"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "緊湊地貼著螢幕頂部的瀏海"
-          }
-        }
-      }
-    },
-    "紧凑地贴着屏幕顶部的刘海显示" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tucked compactly beside the notch at the top of the screen"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "紧凑地贴着屏幕顶部的刘海显示"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "緊湊地貼著螢幕頂部的瀏海顯示"
           }
         }
       }
@@ -20362,29 +18893,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "規則換版重選"
-          }
-        }
-      }
-    },
-    "解析 Last.fm 响应失败" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't read the response from Last.fm"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "解析 Last.fm 响应失败"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "解析 Last.fm 回應失敗"
           }
         }
       }
@@ -21964,29 +20472,6 @@
         }
       }
     },
-    "还没有 scrobble 记录" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No scrobbles yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有 scrobble 记录"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "還沒有 scrobble 記錄"
-          }
-        }
-      }
-    },
     "还没有手动选定过歌词；从现在起你选定的都会直接锁定" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -22006,29 +20491,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "還沒有手動選定過歌詞；從現在起你選定的都會直接鎖定"
-          }
-        }
-      }
-    },
-    "还没有收听记录" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No scrobbles yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有收听记录"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "還沒有聆聽記錄"
           }
         }
       }
@@ -22084,29 +20546,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "還沒生效：瀏覽器收下了請求卻一直沒回應，多半是那個開關還沒勾選（有的瀏覽器不回報錯誤、直接不回）。按上面那條路徑再確認一下"
-          }
-        }
-      }
-    },
-    "还没连接 Last.fm 账号" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm account isn't connected yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没连接 Last.fm 账号"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 帳號還沒連線"
           }
         }
       }
@@ -22366,29 +20805,6 @@
         }
       }
     },
-    "这个开关只影响「桌面悬浮歌词」：在当前句下方预览下一句。歌词窗口本来就显示整份歌词，灵动岛和菜单栏只有一行空间" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This setting only affects Desktop Floating Lyrics: it previews the next line beneath the current one. The Lyrics Window already shows the full lyrics, and Notch and Menu Bar Lyrics only have room for a single line"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个开关只影响「桌面悬浮歌词」：在当前句下方预览下一句。歌词窗口本来就显示整份歌词，灵动岛和菜单栏只有一行空间"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這個開關只影響「桌面浮動歌詞」：在目前句下方預覽下一句。歌詞視窗本來就顯示整份歌詞，動態島和選單列只有一行空間"
-          }
-        }
-      }
-    },
     "这个文件不是 Lyrimuse 的设置备份，没有导入" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -22408,29 +20824,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這個檔案不是 Lyrimuse 的設定備份，沒有匯入"
-          }
-        }
-      }
-    },
-    "这个时段还没有记录" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No scrobbles in this period"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个时段还没有记录"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這個時段還沒有記錄"
           }
         }
       }
@@ -22493,29 +20886,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這個來源就是你正在用的播放器，時間軸對著同一份音訊母版（+250）"
-          }
-        }
-      }
-    },
-    "这个源确实收录了这首歌，但只有不带时间戳的纯文本——可以在「歌词窗口」里当静态文字阅读，无法逐字/逐行跟随播放高亮" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This source does have the song, but only as plain text with no timing — you can read it as static text in the Lyrics Window, but it can't highlight word by word or line by line as the song plays"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个源确实收录了这首歌，但只有不带时间戳的纯文本——可以在「歌词窗口」里当静态文字阅读，无法逐字/逐行跟随播放高亮"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這個來源確實收錄了這首歌，但只有不帶時間戳記的純文字——可以在「歌詞視窗」裡當靜態文字閱讀，無法逐字/逐行跟隨播放高亮"
           }
         }
       }
@@ -22681,29 +21051,6 @@
         }
       }
     },
-    "这份歌词没有时间戳，采纳后只能在「歌词窗口」里作为静态文字展示，不会逐字/逐行跟随播放高亮" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These lyrics have no timing. Once adopted they only show as static text in the Lyrics Window, and won't highlight word by word or line by line as the song plays"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这份歌词没有时间戳，采纳后只能在「歌词窗口」里作为静态文字展示，不会逐字/逐行跟随播放高亮"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這份歌詞沒有時間戳記，採納後只能在「歌詞視窗」裡作為靜態文字展示，不會逐字/逐行跟隨播放高亮"
-          }
-        }
-      }
-    },
     "这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除。清空之前会自动备份一份,能从这个菜单里的「从自动备份恢复」找回来。下次播放会重新走一遍匹配解析" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -22865,29 +21212,6 @@
         }
       }
     },
-    "这台 Mac 没有刘海，会显示在屏幕顶部正中" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No notch on this Mac, so it sits at the top center"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这台 Mac 没有刘海，会显示在屏幕顶部正中"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這台 Mac 沒有瀏海，會顯示在螢幕頂部正中"
-          }
-        }
-      }
-    },
     "这次请求耗时有点久。如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -23003,52 +21327,6 @@
         }
       }
     },
-    "这里的设置对桌面悬浮歌词和灵动岛生效，先开启其中一种" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These settings apply to Desktop Floating Lyrics and Notch Lyrics — turn one of them on first"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这里的设置对桌面悬浮歌词和灵动岛生效，先开启其中一种"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這裡的設定對桌面浮動歌詞和動態島生效，先開啟其中一種"
-          }
-        }
-      }
-    },
-    "这首歌在你 Last.fm 上的第几次收听" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Which play of this track this was in your Last.fm history"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这首歌在你 Last.fm 上的第几次收听"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這首歌在你 Last.fm 上的第幾次聆聽"
-          }
-        }
-      }
-    },
     "这首歌第一次播放，正在联网搜索歌词，完成后会自动显示，不需要手动刷新。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -23095,52 +21373,6 @@
         }
       }
     },
-    "连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once connected, every track you play is scrobbled to Last.fm automatically"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連上之後，你播放的每一首歌都會自動 scrobble 到 Last.fm"
-          }
-        }
-      }
-    },
-    "连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm，还能在这里看到你专属的听歌档案" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once connected, every track you play is scrobbled to Last.fm automatically, and you'll get your own listening profile here too"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm，还能在这里看到你专属的听歌档案"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連上之後，你播放的每一首歌都會自動 scrobble 到 Last.fm，還能在這裡看到你專屬的聽歌記錄"
-          }
-        }
-      }
-    },
     "连不上 ListenBrainz，稍后会自动重试" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -23183,75 +21415,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "連線"
-          }
-        }
-      }
-    },
-    "连接 Last.fm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect Last.fm"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接 Last.fm"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連線至 Last.fm"
-          }
-        }
-      }
-    },
-    "连接 Last.fm 账号" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect Last.fm Account"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接 Last.fm 账号"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連線至 Last.fm 帳號"
-          }
-        }
-      }
-    },
-    "连接 Last.fm…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect Last.fm…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接 Last.fm…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連線至 Last.fm…"
           }
         }
       }
@@ -25296,29 +23459,6 @@
         }
       }
     },
-    "鼠标悬停在灵动岛上时能看到什么" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "What you see when hovering over the Dynamic Island"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "鼠标悬停在灵动岛上时能看到什么"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "滑鼠指向動態島時能看到什麼"
-          }
-        }
-      }
-    },
     "鼠标移到悬浮歌词上时它会淡下去，移开恢复" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26349,29 +24489,6 @@
         }
       }
     },
-    "到第 %@ 次 scrobble" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Until scrobble #%@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "到第 %@ 次 scrobble"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "到第 %@ 次 scrobble"
-          }
-        }
-      }
-    },
     "暂时跳过" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26533,29 +24650,6 @@
         }
       }
     },
-    "Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛无法显示任何内容" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse needs a helper running in the background to read playback state, resolve lyrics and artwork, and write them to a local cache — without it the floating lyrics and the Dynamic Island have nothing to show"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛无法显示任何内容"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 需要一個背景程式常駐執行，負責讀取播放狀態、解析歌詞/封面並寫入本機快取——沒有它，浮動歌詞/動態島無法顯示任何內容"
-          }
-        }
-      }
-    },
     "后台采集服务：运行中" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26694,29 +24788,6 @@
         }
       }
     },
-    "这两项只在「桌面悬浮歌词」和「歌词窗口」里显示——灵动岛受限于胶囊空间放不下，菜单栏歌词只能显示一行纯文字" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Both only appear in the desktop floating lyrics and the lyrics window — the Dynamic Island capsule has no room for them, and the menu bar can only show a single line of plain text"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这两项只在「桌面悬浮歌词」和「歌词窗口」里显示——灵动岛受限于胶囊空间放不下，菜单栏歌词只能显示一行纯文字"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這兩項只在「桌面浮動歌詞」和「歌詞視窗」裡顯示——動態島受限於膠囊空間放不下，選單列歌詞只能顯示一行純文字"
-          }
-        }
-      }
-    },
     "常驻后台服务" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26828,29 +24899,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "還差一點"
-          }
-        }
-      }
-    },
-    "Lyrimuse 住在屏幕右上角的菜单栏里，点它就能打开设置、歌词管理和歌词窗口；按住 ⌘ 拖动可以把图标挪个位置。常用操作还能在设置的「快捷键」里配上全局热键" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse lives in the menu bar at the top right — click it to open Settings, the lyrics manager and the lyrics window. Hold ⌘ and drag to move the icon somewhere else. You can also set global hotkeys under Shortcuts in Settings"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 住在屏幕右上角的菜单栏里，点它就能打开设置、歌词管理和歌词窗口；按住 ⌘ 拖动可以把图标挪个位置。常用操作还能在设置的「快捷键」里配上全局热键"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyrimuse 住在螢幕右上角的選單列裡，按一下它就能開啟設定、歌詞管理和歌詞視窗；按住 ⌘ 拖移可以把圖像挪個位置。常用操作還能在設定的「快速鍵」裡設定全域快速鍵"
           }
         }
       }
@@ -27228,29 +25276,6 @@
         }
       }
     },
-    "授权已失效，Scrobble 已暂停" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Authorization revoked — scrobbling paused"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "授权已失效，Scrobble 已暂停"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "授權已失效，Scrobble 已暫停"
-          }
-        }
-      }
-    },
     "已连接" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27494,23 +25519,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "繁體中文"
-          }
-        }
-      }
-    },
-    "勾选的播放器全部退出后，等 5 秒再退出 Lyrimuse；期间任一个重新打开就取消。设置、歌词管理或歌词窗口开着时不退" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once every checked player has quit, Lyrimuse quits after a 5-second grace period; if any of them reopens in the meantime, the quit is cancelled. It never quits while Settings, Lyrics Manager or the lyrics window is open"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "勾選的播放器全部結束後，等 5 秒再結束 Lyrimuse；期間任一個重新打開就取消。設定、歌詞管理或歌詞視窗開著時不結束"
           }
         }
       }
@@ -28534,29 +26542,6 @@
         }
       }
     },
-    "灵动岛展开宽度" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notch Card Expanded Width"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "灵动岛展开宽度"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "動態島展開寬度"
-          }
-        }
-      }
-    },
     "%@–%@pt" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -28853,29 +26838,6 @@
         }
       }
     },
-    "Scrobble 时机" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble Point"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble 时机"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble 時機"
-          }
-        }
-      }
-    },
     "曲终" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -29102,29 +27064,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "步長"
-          }
-        }
-      }
-    },
-    "测试版更新" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beta Updates"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "测试版更新"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "測試版更新"
           }
         }
       }
@@ -29474,29 +27413,6 @@
         }
       }
     },
-    "合唱时上送给 Last.fm 的歌手名。\n全部：原样整串。\n只发第一位：另一位不出现在记录里。\n智能：Last.fm 已有这个合唱条目就发整串；没有、但第一位名下有这首歌就只发第一位；两边都没有仍发整串。每首歌只判一次。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Which artist name is sent to Last.fm for a duet.\nAll: the full credit as-is.\nFirst only: the other artist won't appear in your history.\nSmart: full credit if Last.fm already has the duet entry; first artist only if just they have the track; full credit if neither. Decided once per track."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "合唱时上送给 Last.fm 的歌手名。\n全部：原样整串。\n只发第一位：另一位不出现在记录里。\n智能：Last.fm 已有这个合唱条目就发整串；没有、但第一位名下有这首歌就只发第一位；两边都没有仍发整串。每首歌只判一次。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "合唱時送給 Last.fm 的歌手名。\n全部：原樣整串。\n只送第一位：另一位不會出現在記錄裡。\n智慧：Last.fm 已有這個合唱項目就送整串；沒有、但第一位名下有這首歌就只送第一位；兩邊都沒有仍送整串。每首歌只判定一次。"
-          }
-        }
-      }
-    },
     "在歌词一格的最左或最右放一枚菜单栏图标，图标颜色从下往上涨表示播放进度：涨上来的用「已唱到」色，其余用「未唱到」色。只在显示歌词时出现。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -29516,29 +27432,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在歌詞一格的最左或最右放一枚選單列圖像，圖像顏色從下往上漲表示播放進度：漲上來的用「已唱到」色，其餘用「未唱到」色。只在顯示歌詞時出現。"
-          }
-        }
-      }
-    },
-    "听到哪里才记到 Last.fm。\n50%：曲长一半、最多 4 分钟（官方规则）。\n75% / 90%：听满对应比例。\n曲终：放到结尾才记，中途切歌不记。\n只影响 Last.fm。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "How far into a track before it's scrobbled to Last.fm.\n50%: half the track, capped at 4 minutes (Last.fm's rule).\n75% / 90%: that fraction of the track.\nTrack End: only when played through; skipping doesn't count.\nLast.fm only."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "听到哪里才记到 Last.fm。\n50%：曲长一半、最多 4 分钟（官方规则）。\n75% / 90%：听满对应比例。\n曲终：放到结尾才记，中途切歌不记。\n只影响 Last.fm。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "聽到哪裡才記到 Last.fm。\n50%：曲長一半、最多 4 分鐘（官方規則）。\n75% / 90%：聽滿對應比例。\n曲終：播到結尾才記，中途切歌不記。\n只影響 Last.fm。"
           }
         }
       }
@@ -29635,29 +27528,6 @@
         }
       }
     },
-    "开：短于 30 秒的曲目也 scrobble，听过一半就记。\n关：不记（Last.fm 官方规则）。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On: tracks under 30 seconds are scrobbled too, once half-played.\nOff: they aren't (Last.fm's rule)."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开：短于 30 秒的曲目也 scrobble，听过一半就记。\n关：不记（Last.fm 官方规则）。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "開：短於 30 秒的曲目也 scrobble，聽過一半就記。\n關：不記（Last.fm 官方規則）。"
-          }
-        }
-      }
-    },
     "这里能看到已创建应用的 API Key，但看不到 Secret；丢了就用「前往申请」再建一个。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -29704,29 +27574,6 @@
         }
       }
     },
-    "只影响桌面悬浮歌词和歌词窗口；灵动岛受空间所限不支持，菜单栏只能显示一行。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Only affects Desktop Floating Lyrics and the Lyrics Window; Notch Lyrics has no room for it, and Menu Bar Lyrics shows a single line."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只影响桌面悬浮歌词和歌词窗口；灵动岛受空间所限不支持，菜单栏只能显示一行。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只影響桌面浮動歌詞和歌詞視窗；動態島受空間所限不支援，選單列只能顯示一行。"
-          }
-        }
-      }
-    },
     "网页播放器不会主动汇报精确进度，切歌后需要这个开关才能立刻校准。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -29750,40 +27597,6 @@
         }
       }
     },
-    "Scrobble 的播放器" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Players to Scrobble"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble 的播放器"
-          }
-        }
-      }
-    },
-    "只有勾选的播放器放的歌才 scrobble 到 Last.fm，也只有它们更新 Last.fm 的正在播放；默认全部勾选。\n不影响 ListenBrainz、网页和歌词。浏览器里的网页播放器按整个浏览器算。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Only songs from the checked players are scrobbled to Last.fm, and only they update its now playing; all are checked by default.\nListenBrainz, the web page and lyrics are unaffected. Web players count as their browser."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只有勾選的播放器放的歌才 scrobble 到 Last.fm，也只有它們更新 Last.fm 的正在播放；預設全部勾選。\n不影響 ListenBrainz、網頁和歌詞。瀏覽器裡的網頁播放器按整個瀏覽器算。"
-          }
-        }
-      }
-    },
     "全部勾选" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -29797,40 +27610,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "全部勾選"
-          }
-        }
-      }
-    },
-    "全部不 scrobble" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nothing is scrobbled"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全部不 scrobble"
-          }
-        }
-      }
-    },
-    "不 scrobble：%@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not scrobbled: %@"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不 scrobble：%@"
           }
         }
       }
@@ -30300,29 +28079,6 @@
         }
       }
     },
-    "歌词窗口的封面卡：部分专辑在 Apple Music 上有会动的封面，没有的照旧静态显示。低电量或开了「减弱动态效果」时自动暂停" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The lyrics window's artwork card: some albums have animated artwork on Apple Music; the rest stay static. Pauses in Low Power Mode or when Reduce Motion is on"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词窗口的封面卡：部分专辑在 Apple Music 上有会动的封面，没有的照旧静态显示。低电量或开了「减弱动态效果」时自动暂停"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌詞視窗的封面卡：部分專輯在 Apple Music 上有會動的封面，沒有的照舊靜態顯示。低電量或開了「減少動態效果」時自動暫停"
-          }
-        }
-      }
-    },
     "没能跳过这条广告" : {
       "localizations" : {
         "en" : {
@@ -30712,57 +28468,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "搜尋"
-          }
-        }
-      }
-    },
-    "Last.fm 账户" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm Account"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last.fm 帳戶"
-          }
-        }
-      }
-    },
-    "有软件更新可用" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Software Update Available"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有軟體更新可用"
-          }
-        }
-      }
-    },
-    "同步收听记录" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scrobble your listens"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同步收聽記錄"
           }
         }
       }
@@ -31260,40 +28965,6 @@
         }
       }
     },
-    "软件更新" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Software Update"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "軟體更新"
-          }
-        }
-      }
-    },
-    "立即更新" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Update Now"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "立即更新"
-          }
-        }
-      }
-    },
     "立即重启" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -31341,23 +29012,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已是最新版本"
-          }
-        }
-      }
-    },
-    "正在检查更新…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Checking for updates…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在檢查更新…"
           }
         }
       }
@@ -31464,23 +29118,6 @@
         }
       }
     },
-    "自动更新" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automatic Updates"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自動更新"
-          }
-        }
-      }
-    },
     "更新失败" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -31562,40 +29199,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "發佈於 %@"
-          }
-        }
-      }
-    },
-    "这是预览：真有新版本时这里显示发版日志" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preview: the release notes appear here when an update is available"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這是預覽：真有新版本時這裡顯示發佈說明"
-          }
-        }
-      }
-    },
-    "打开软件更新" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Software Update"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打開軟體更新"
           }
         }
       }

@@ -6,7 +6,6 @@ public enum OverlayControlID: String, Hashable, CaseIterable, Sendable {
     case next
     case favorite
     case lock
-    case expandToLyricsWindow
     case settingsMenu
     case closeOverlay
     case unlockPill

@@ -46,78 +46,9 @@ private struct PlayerLinkageChips: View {
     }
 }
 
-struct PlayerBundleChoice: Identifiable, Equatable {
-
-    let id: String
-    let name: String
-    let player: PlaybackPlayer?
-}
-
-struct PlayerBundleChipsRow: View {
-    let icon: String
-    let title: String
-    var help: String?
-    let choices: [PlayerBundleChoice]
-
-    let excluded: Set<String>
-
-    let onToggle: (String, Bool) -> Void
-
-    private var summary: String {
-        let off = choices.filter { excluded.contains($0.id) }
-        if off.isEmpty { return L10n.t("全部勾选") }
-        if off.count == choices.count { return L10n.t("全部不 scrobble") }
-        return String(format: L10n.t("不 scrobble：%@"), off.map(\.name).joined(separator: "、"))
-    }
-
-    var body: some View {
-        SettingsRow(icon: icon, title: title, subtitle: summary, help: help) {
-            PlayerChipFlow(spacing: PlayerChipMetrics.spacing) {
-                ForEach(choices) { choice in
-                    let selected = !excluded.contains(choice.id)
-                    PlayerChip(selected: selected, label: choice.name) {
-                        onToggle(choice.id, !selected)
-                    } icon: {
-                        if let player = choice.player {
-                            PlayerIconView(player: player, size: PlayerChipMetrics.iconSize)
-                        } else {
-                            TrustedPlayerIconView(bundleID: choice.id, size: PlayerChipMetrics.iconSize)
-                        }
-                    }
-                }
-            }
-
-            .frame(maxWidth: PlayerChipMetrics.flowMaxWidth, alignment: .trailing)
-        }
-    }
-}
-
-private struct TrustedPlayerIconView: View {
-    let bundleID: String
-    var size: CGFloat
-    @State private var resolved: NSImage?
-
-    var body: some View {
-        Group {
-            if let resolved {
-                Image(nsImage: resolved).resizable().frame(width: size, height: size)
-            } else {
-                Image(systemName: "checkmark.seal")
-                    .font(.system(size: size * 0.58, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: size, height: size)
-                    .background(Color.secondary,
-                                in: RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))
-            }
-        }
-        .onAppear { if resolved == nil { resolved = AppIconResolver.icon(forBundleID: bundleID) } }
-    }
-}
-
 enum PlayerChipMetrics {
     static let iconSize: CGFloat = 22
     static let spacing: CGFloat = 6
-    static let flowMaxWidth: CGFloat = 320
 }
 
 private struct PlayerChip<Icon: View>: View {

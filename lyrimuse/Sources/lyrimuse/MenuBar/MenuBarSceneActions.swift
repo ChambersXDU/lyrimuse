@@ -62,10 +62,6 @@ private struct SceneActionRegistrar: View {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindowAction(id: "lyrics-manager")
                 }
-                AppActions.shared.openLyricsWindow = {
-                    NSApp.activate(ignoringOtherApps: true)
-                    openWindowAction(id: "lyrics-window")
-                }
                 AppActions.shared.openLyricsQuickSearch = {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindowAction(id: "lyrics-quick-search")

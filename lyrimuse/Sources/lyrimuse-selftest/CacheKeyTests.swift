@@ -386,8 +386,8 @@ func runCacheKeyTests() {
                                                    album: "never enough (bonus version)"))
         expectEqual(ArtistCredit.albumConsensusKey(artist: "Daniel Caesar", album: nil), nil)
 
-        let albumArt = URL(string: "https://lastfm.example/album.jpg")!
-        let singleArt = URL(string: "https://lastfm.example/single.jpg")!
+        let albumArt = URL(string: "https://cover.example/album.jpg")!
+        let singleArt = URL(string: "https://cover.example/single.jpg")!
         let album = "NEVER ENOUGH (Bonus Version)"
         let rows: [(artist: String, album: String?, image: URL?)] = [
             ("Daniel Caesar & Mustafa", album, singleArt),
@@ -400,8 +400,8 @@ func runCacheKeyTests() {
                     albumArt)
 
         let noConsensus = ArtistCredit.albumConsensusCovers(rows: [
-            ("V.A.", "Compilation", URL(string: "https://lastfm.example/a.jpg")!),
-            ("V.A.", "Compilation", URL(string: "https://lastfm.example/b.jpg")!),
+            ("V.A.", "Compilation", URL(string: "https://cover.example/a.jpg")!),
+            ("V.A.", "Compilation", URL(string: "https://cover.example/b.jpg")!),
         ])
         expectEqual(noConsensus.isEmpty, true)
 

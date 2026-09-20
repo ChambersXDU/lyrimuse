@@ -33,10 +33,6 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         quick.addItem(toggle(L10n.t("显示桌面悬浮歌词"), symbol: "captions.bubble",
                              on: settings.classicOverlayEnabled,
                              action: #selector(toggleClassicOverlay)))
-        quick.addItem(toggle(L10n.t("显示灵动岛歌词"), symbol: "rectangle.topthird.inset.filled",
-                             on: settings.notchOverlayEnabled,
-                             action: #selector(toggleNotchOverlay)))
-
         quick.addItem(toggle(L10n.t("显示菜单栏歌词"), symbol: "menubar.rectangle",
                              on: settings.showLyricsInMenuBar,
                              action: #selector(toggleMenuBarLyrics)))
@@ -75,14 +71,6 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
                             selector: #selector(openSettings)))
         menu.addItem(action(L10n.t("歌词管理…"), symbol: "music.note.list",
                             selector: #selector(openLyricsManager)))
-
-        menu.addItem(.separator())
-        menu.addItem(action(L10n.t("歌词窗口…"), symbol: "text.quote",
-                            selector: #selector(openLyricsWindow)))
-
-        menu.addItem(.separator())
-        menu.addItem(action(L10n.t("检查更新…"), symbol: "arrow.triangle.2.circlepath",
-                            selector: #selector(checkForUpdates)))
 
         menu.addItem(action(L10n.t("重新运行引导…"), symbol: "sparkles",
                             selector: #selector(rerunOnboarding)))
@@ -142,10 +130,6 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         LyricsOverlayWindowController.shared.setVisible(!AppSettings.shared.classicOverlayEnabled)
     }
 
-    @objc private func toggleNotchOverlay() {
-        NotchLyricsWindowController.shared.setVisible(!AppSettings.shared.notchOverlayEnabled)
-    }
-
     @objc private func toggleMenuBarLyrics() {
         AppSettings.shared.showLyricsInMenuBar.toggle()
     }
@@ -177,19 +161,12 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
 
     @objc private func openSettings() { AppActions.shared.openSettings?() }
     @objc private func openLyricsManager() { AppActions.shared.openLyricsManager?() }
-    @objc private func openLyricsWindow() { AppActions.shared.openLyricsWindow?() }
     @objc private func rerunOnboarding() { AppActions.shared.openOnboarding?() }
 
     @objc private func openAbout() {
 
         AppActions.shared.requestSettings(.tab(.about))
         AppActions.shared.openSettings?()
-    }
-
-    @objc private func checkForUpdates() {
-
-        NSApp.activate(ignoringOtherApps: true)
-        SparkleUpdaterManager.shared.checkForUpdates()
     }
 
     @objc private func quit() {

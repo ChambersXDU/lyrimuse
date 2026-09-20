@@ -356,9 +356,6 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             AppSettings.shared.lockPosition = false
             setLocked(false)
 
-        case .expandToLyricsWindow:
-            AppActions.shared.openLyricsWindow?()
-
         case .settingsMenu:
             overlayQuickSettingsMenu.popUp()
 

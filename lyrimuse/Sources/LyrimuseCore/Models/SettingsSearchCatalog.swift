@@ -6,8 +6,6 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
         case tab(String)
 
         case account(String)
-
-        case softwareUpdate
     }
 
     public let destination: Destination
@@ -39,7 +37,6 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
         switch destination {
         case .tab(let raw): dest = "tab:\(raw)"
         case .account(let name): dest = "account:\(name)"
-        case .softwareUpdate: dest = "softwareUpdate"
         }
         return "\(dest)|\(sectionValue ?? "")|\(pathKeys.joined(separator: "/"))|\(titleKey)"
     }
@@ -53,9 +50,7 @@ public enum SettingsSearchCatalog {
 
     public static let lyricsSectionKey = "settings:lyricsSection"
 
-    public static let lastfmSectionKey = "np:lastfmDetailSection"
-
-    public static let brandPathComponents: Set<String> = ["ListenBrainz", "Last.fm"]
+    public static let brandPathComponents: Set<String> = ["ListenBrainz"]
 
     private static func lyrics(_ section: String, _ title: String, alt: [String] = [], sub: String? = nil,
                                kw: [String] = [], group: String? = nil) -> SettingsSearchEntry {
@@ -81,7 +76,6 @@ public enum SettingsSearchCatalog {
         let sectionTitle: String
         switch surface {
         case .overlay: sectionTitle = "悬浮歌词"
-        case .notch: sectionTitle = "灵动岛"
         case .menuBar: sectionTitle = "菜单栏"
         }
         return SettingsSearchEntry(destination: .tab("appearance"),
@@ -108,16 +102,10 @@ public enum SettingsSearchCatalog {
                             pathKeys: ["关于", group])
     }
 
-    private static func softwareUpdate(_ title: String, sub: String? = nil, kw: [String] = [],
-                                       group: String?) -> SettingsSearchEntry {
-        SettingsSearchEntry(destination: .softwareUpdate, titleKey: title, subtitleKey: sub, keywords: kw,
-                            pathKeys: ["软件更新"] + (group.map { [$0] } ?? []))
-    }
-
     private static func account(_ name: String, path: [String], sectionValue: String? = nil, _ title: String,
                                 kw: [String] = []) -> SettingsSearchEntry {
         SettingsSearchEntry(destination: .account(name),
-                            sectionKey: sectionValue == nil ? nil : lastfmSectionKey, sectionValue: sectionValue,
+                            sectionKey: nil, sectionValue: sectionValue,
                             titleKey: title, keywords: kw, pathKeys: path)
     }
 
@@ -179,33 +167,6 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "位置", kw: ["自由", "顶部居中", "底部居中", "Dock", "预设", "对齐"]),
         surface(.overlay, "恢复默认", sub: "不含排版、行为、位置和宽度", kw: ["重置"]),
 
-        surface(.notch, "灵动岛歌词", sub: "紧凑地贴着屏幕顶部的刘海显示", kw: ["开关", "刘海", "总开关"], inDrawer: false),
-        surface(.notch, "风格", kw: ["纯黑", "磨砂玻璃", "深色渐变", "跟随封面", "背景", "强调色"]),
-        surface(.notch, "屏幕", kw: ["自动", "所有屏幕", "指定屏幕", "显示器", "多屏"]),
-        surface(.notch, "左耳", kw: ["模块", "歌名", "歌手", "专辑", "封面", "播放控制", "已播时长", "剩余时长"]),
-        surface(.notch, "右耳", kw: ["模块", "歌名", "歌手", "专辑", "封面", "播放控制", "已播时长", "剩余时长"]),
-        surface(.notch, "音浪", kw: ["频谱", "音条", "律动"], group: "左耳"),
-        surface(.notch, "宽度", kw: ["稳态宽", "pt"]),
-        surface(.notch, "展开宽度", kw: ["展开态", "pt"]),
-        surface(.notch, "显示歌词", kw: ["歌词行", "状态条"], group: "歌词行"),
-        surface(.notch, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "歌词行"),
-        surface(.notch, "副行", kw: ["下一句", "译文", "罗马音", "两行"], group: "歌词行"),
-        surface(.notch, "展开时预览下一句", kw: ["下一句", "预览"], group: "歌词行"),
-        surface(.notch, "卡拉OK效果", kw: ["逐字", "染色", "karaoke"], group: "歌词行"),
-        surface(.notch, "显示封面", kw: ["封面缩略图", "专辑图"], group: "歌词行"),
-        surface(.notch, "封面位置", kw: ["左侧", "右侧", "封面"], group: "歌词行"),
-        surface(.notch, "字体", kw: ["字体族", "font"], group: "字体"),
-        surface(.notch, "粗细", kw: ["字重", "weight"], group: "字体"),
-        surface(.notch, "字号", kw: ["大小", "font size"], group: "字体"),
-        surface(.notch, "显示播放控制", kw: ["播放", "暂停", "上一首", "下一首", "三键"], group: "展开态"),
-        surface(.notch, "显示歌词校准", kw: ["偏移", "校准", "时间轴"], group: "展开态"),
-        surface(.notch, "快捷操作", kw: ["搜索歌词", "设置", "关闭", "图标键"], group: "展开态"),
-        surface(.notch, "曲目信息", kw: ["封面", "歌名", "歌手", "专辑", "头部"], group: "展开态"),
-        surface(.notch, "暂停缩回", kw: ["暂停", "收起", "缩回"], group: "行为"),
-        surface(.notch, "截屏/录屏时隐藏", kw: ["截图", "录屏", "会议", "共享屏幕"], group: "行为"),
-        surface(.notch, "暂停/无播放时隐藏", kw: ["自动隐藏", "暂停"], group: "行为"),
-        surface(.notch, "恢复默认", sub: "不含宽度和总开关", kw: ["重置"]),
-
         surface(.menuBar, "菜单栏歌词", kw: ["开关", "跑马灯", "总开关"], inDrawer: false),
         surface(.menuBar, "宽度模式", kw: ["固定", "自适应", "宽度"], group: "布局"),
         surface(.menuBar, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "布局"),
@@ -222,13 +183,11 @@ public enum SettingsSearchCatalog {
         surface(.menuBar, "恢复默认", sub: "不含宽度和总开关", kw: ["重置"]),
 
         shortcut("显示/隐藏悬浮歌词", kw: ["悬浮歌词", "开关"]),
-        shortcut("显示/隐藏灵动岛歌词", kw: ["灵动岛", "开关"]),
         shortcut("显示/隐藏菜单栏歌词", kw: ["菜单栏", "开关"]),
         shortcut("锁定/解锁位置", kw: ["锁定", "位置"]),
         shortcut("显示/隐藏译文", kw: ["译文", "翻译"]),
         shortcut("显示/隐藏发音", kw: ["罗马音", "发音"]),
         shortcut("打开歌词管理", kw: ["歌词管理", "窗口"]),
-        shortcut("打开歌词窗口", kw: ["歌词窗口", "窗口"]),
         shortcut("搜索歌词", kw: ["手动搜索", "换歌词"]),
         shortcut("打开设置", kw: ["设置窗口"]),
         shortcut("歌词提前", kw: ["偏移", "时间轴", "校准"]),
@@ -246,13 +205,9 @@ public enum SettingsSearchCatalog {
         general("开机启动", kw: ["登录项", "自动启动", "启动"], group: "语言与启动"),
         general("iCloud 备份", alt: ["备份文件夹"], kw: ["备份", "迁移", "搬家", "同步", "文件夹"], group: "备份与迁移"),
         general("设置文件", sub: "含明文凭证；导入会覆盖全部设置并重启", kw: ["导出", "导入", "备份", "JSON"], group: "备份与迁移"),
-        general("动态封面", sub: "歌词窗口的封面卡：部分专辑在 Apple Music 上有会动的封面，没有的照旧静态显示。低电量或开了「减弱动态效果」时自动暂停", kw: ["封面", "动画", "motion", "artwork", "会动", "视频"], group: "封面"),
+        general("动态封面", sub: "桌面悬浮歌词的封面卡：部分专辑在 Apple Music 上有会动的封面，没有的照旧静态显示。低电量或开了「减弱动态效果」时自动暂停", kw: ["封面", "动画", "motion", "artwork", "会动", "视频"], group: "封面"),
         general("清除所有设置", sub: "本机设置，无法撤销", kw: ["重置", "恢复出厂", "删除"]),
 
-        softwareUpdate("软件更新", kw: ["更新", "Sparkle", "版本", "检查更新", "升级"], group: nil),
-        softwareUpdate("自动检查", kw: ["更新", "自动"], group: "自动更新"),
-        softwareUpdate("自动下载并安装", kw: ["更新", "自动"], group: "自动更新"),
-        softwareUpdate("测试版更新", sub: "预发布版本，可能不稳定", kw: ["beta", "测试版", "预发布"], group: nil),
         about("反馈问题", sub: "GitHub Issues", kw: ["issue", "bug", "反馈"], group: "反馈与社区"),
         about("想法与建议", sub: "GitHub Discussions", kw: ["discussion", "建议"], group: "反馈与社区"),
         about("版权说明", kw: ["版权", "歌词版权"], group: "许可与版权"),
@@ -262,11 +217,6 @@ public enum SettingsSearchCatalog {
         about("配置文件夹", kw: ["config", "配置", "文件夹", "路径"], group: "诊断与数据"),
 
         account("listenBrainz", path: ["ListenBrainz"], "账户信息", kw: ["ListenBrainz", "token", "令牌", "用户名", "连接"]),
-        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "Scrobble", kw: ["Last.fm", "scrobble", "记录"]),
-        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "合唱歌曲的歌手", kw: ["Last.fm", "scrobble", "合唱", "歌手"]),
-        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "Scrobble 时机", kw: ["Last.fm", "scrobble", "50%", "曲终"]),
-        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "短于 30 秒的曲目", kw: ["Last.fm", "scrobble", "短曲"]),
-        account("lastfm", path: ["Last.fm", "设置"], sectionValue: "settings", "Scrobble 的播放器", kw: ["Last.fm", "scrobble", "播放器", "排除", "不上送", "浏览器"]),
         account("stateRelay", path: ["网页推送"], "连接信息", kw: ["中继", "网页", "relay", "worker", "推送"]),
         account("bark", path: ["推送提醒"], "提醒", kw: ["Bark", "推送", "webhook", "通知"]),
         account("bark", path: ["推送提醒"], "每周听歌小结", kw: ["周报", "推送", "Bark"]),

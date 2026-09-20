@@ -36,7 +36,6 @@ func TestLyricSourceForHost(t *testing.T) {
 		"search.kuwo.cn":                "kuwo",
 		"pd.musicapp.migu.cn":           "migu",
 		"d.musicapp.migu.cn":            "migu",
-		"ws.audioscrobbler.com":         "",
 		"api.listenbrainz.org":          "",
 		"musicbrainz.org":               "",
 		"itunes.apple.com":              "",
@@ -145,14 +144,12 @@ func TestLyricSourceBreakerIgnoresCanceledAnd4xx(t *testing.T) {
 	if _, cooling := b.coolingDown("kugou"); !cooling {
 		t.Fatal("酷狗自己两次失败应熔断")
 	}
-	b.observe("ws.audioscrobbler.com", errProbeDial, 0, "")
-	b.observe("ws.audioscrobbler.com", errProbeDial, 0, "")
 	for _, s := range lyricSourceNames {
 		if s == "kugou" {
 			continue
 		}
 		if _, cooling := b.coolingDown(s); cooling {
-			t.Fatalf("Last.fm 的失败不该影响任何歌词源,%s 却在冷却", s)
+			t.Fatalf("未知主机的失败不该影响任何歌词源,%s 却在冷却", s)
 		}
 	}
 }
@@ -247,7 +244,6 @@ func TestLyricSourceTransportFailureCodes(t *testing.T) {
 
 	b.observe("apic-appmobile.musixmatch.com", context.Canceled, 0, "")
 
-	b.observe("ws.audioscrobbler.com", dns, 0, "")
 	b.observe("itunes.apple.com", dns, 0, "")
 
 	got := b.transportFailureCodes()

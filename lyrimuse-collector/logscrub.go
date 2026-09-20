@@ -14,7 +14,6 @@ import (
 const redactedMark = "***"
 
 const (
-
 	minSecretLen = 8
 
 	minPathSecretLen = 16
@@ -72,10 +71,6 @@ func rememberConfigSecrets(c *config) {
 	registerSecrets(
 		c.Token,
 		c.StateRelayToken,
-		c.LastfmAPIKey,
-		c.LastfmScrobbleAPIKey,
-		c.LastfmScrobbleSecret,
-		c.LastfmScrobbleSessionKey,
 		c.DingtalkSignSecret,
 		c.FeishuSignSecret,
 	)

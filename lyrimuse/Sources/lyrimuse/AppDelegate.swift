@@ -77,20 +77,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if url.host == "settings" {
-            if url.path == "/software-update" {
-                let wantsCheck = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
-                    .contains { $0.name == "check" && $0.value != "0" } ?? false
-                if wantsCheck {
-                    SparkleUpdaterManager.shared.checkForUpdates()
-                } else {
-                    SparkleUpdaterManager.shared.showUpdatePage()
-                }
-            } else {
-                AppActions.shared.openSettings?()
-            }
-            return
+            AppActions.shared.openSettings?()
         }
-        LastfmConnectController.shared.handleAuthCallback()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -106,10 +94,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ICloudConfigStore.ensureFolderIconIfPresent()
 
         URLCache.shared = URLCache(memoryCapacity: 32 << 20, diskCapacity: 256 << 20)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            _ = LastfmStatsService.shared
-        }
 
         UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 150])
 
@@ -150,17 +134,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             LyricsOverlayWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
             LyricsOverlayWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
         }
-        if settings.notchOverlayEnabled {
-
-            NotchLyricsWindowController.shared.setHiddenFromCapture(settings.notchHideDuringScreenCapture)
-            NotchLyricsWindowController.shared.setHideWhenNotPlaying(settings.notchHideWhenNotPlaying)
-        }
-
         MediaControlHealth.shared.checkInBackground()
         startObservingScreenLock()
         installScrollForwardMonitor()
-        startObservingVolumeBannerPreference()
-        NotchMirrorManager.start()
         SpaceDiagnostics.start()
 
         UnknownPlayerNotifier.shared.registerCategory()
@@ -184,13 +160,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         GlobalHotkeys.registerAll()
 
-        _ = SparkleUpdaterManager.shared
     }
 
     private var isActiveForReopen = false
     private var becameActiveAt = Date.distantPast
 
-    private var reopenLyricsTask: Task<Void, Never>?
     private let reopenLogger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "reopen")
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -212,46 +186,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .attributeDescriptor(forKeyword: AEKeyword(keyAddressAttr))?
             .stringValue ?? "(no AE)"
         reopenLogger.notice("reopen: hasVisibleWindows=\(flag, privacy: .public) from=\(aeSender, privacy: .public)")
-        if isLyricsOnReopenSuppressed() {
-            reopenLogger.notice("reopen: lyrics window suppressed (immediate)")
-            return false
-        }
-
         if AuxiliaryWindowActivation.hasAnyOpen {
             let wasActive = wasAlreadyActiveBeforeReopen
             let r = AuxiliaryWindowActivation.bringOpenWindowsForward()
             reopenLogger.notice("reopen: auxiliary window(s) open → restored=\(r.restored, privacy: .public) fronted=\(r.fronted, privacy: .public) alreadyFront=\(r.alreadyFront, privacy: .public) wasActive=\(wasActive, privacy: .public)")
             if r.foundNone {
 
-                reopenLogger.notice("reopen: counter says open but no window found, falling through to lyrics window")
+                reopenLogger.notice("reopen: counter says open but no window found")
             } else if r.alreadyFront && wasActive {
-                reopenLogger.notice("reopen: app already in front and nothing to bring forward, falling through to lyrics window")
+                reopenLogger.notice("reopen: app already in front and nothing to bring forward")
             } else {
                 return false
             }
         }
-        reopenLyricsTask?.cancel()
-        reopenLyricsTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled else { return }
-
-            if self.isLyricsOnReopenSuppressed() {
-                self.reopenLogger.notice("reopen: lyrics window suppressed (deferred)")
-                return
-            }
-            self.reopenLogger.notice("reopen: opening lyrics window")
-            AppActions.shared.openLyricsWindow?()
-        }
         return false
     }
 
-    private func isLyricsOnReopenSuppressed() -> Bool {
-        guard let until = AppActions.shared.suppressLyricsOnReopenUntil else { return false }
-        return Date() < until
-    }
-
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        AppExit.logTermination(sparkleInstalling: SparkleUpdaterManager.shared.isInstallingUpdate)
+        AppExit.logTermination()
         guard ConfigStore.shared.isDirty else { return .terminateNow }
         Task {
             _ = await ConfigStore.shared.save()
@@ -359,13 +311,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func startObservingVolumeBannerPreference() {
-        AppSettings.shared.$notchOverlayEnabled
-            .sink { notchEnabled in
-                MainActor.assumeIsolated {
-                    VolumeMonitor.apply(enabled: notchEnabled)
-                }
-            }
-            .store(in: &cancellables)
-    }
 }

@@ -30,7 +30,7 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var compactDwellMs: Int?
 
     @Published public private(set) var compactLeadInMs: Int?
-    @Published public private(set) var allLines: [LyricsWindowLine] = []
+    @Published public private(set) var allLines: [MenuBarLyricLine] = []
 
     @Published public private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
 
@@ -1536,30 +1536,6 @@ public final class LocalPlaybackSource: ObservableObject {
             hue: hueOf(r: r, g: g, b: b, maxC: maxC, minC: minC),
             saturation: saturation * ratio,
             brightness: floor)
-    }
-
-    nonisolated public static func accentForDarkBackdrop(
-        r: Double, g: Double, b: Double, lumaFloor: Double = 0.62
-    ) -> (r: Double, g: Double, b: Double) {
-        let luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        guard luma < lumaFloor, luma < 1 else { return (r, g, b) }
-
-        let t = min(1, max(0, (lumaFloor - luma) / (1 - luma)))
-        return (r + t * (1 - r), g + t * (1 - g), b + t * (1 - b))
-    }
-
-    nonisolated public static let notchCoverArtOverlayOpacity: Double = 0.45
-
-    nonisolated public static func accentForCoverArtBackground(
-        r: Double, g: Double, b: Double,
-        rawR: Double, rawG: Double, rawB: Double,
-        minContrast: Double = 4.5
-    ) -> (r: Double, g: Double, b: Double) {
-        let dim = 1 - notchCoverArtOverlayOpacity
-        return accentAgainstStroke(
-            r: r, g: g, b: b,
-            strokeR: rawR * dim, strokeG: rawG * dim, strokeB: rawB * dim,
-            minContrast: minContrast)
     }
 
     nonisolated public static func accentAgainstStroke(

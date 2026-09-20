@@ -503,7 +503,7 @@ struct LyricsSearchSheet: View {
             characteristicBadges(c, source: c.source, showsSource: true, isCurrent: isCurrentCandidate(c), duplicateOf: duplicateAnchors[c.source])
             if c.isPlainTextOnly {
                 Label(
-                    L10n.t("这份歌词没有时间戳，采纳后只能在「歌词窗口」里作为静态文字展示，不会逐字/逐行跟随播放高亮"),
+                    L10n.t("这份歌词没有时间戳，采纳后只能作为静态文字展示，不会逐字/逐行跟随播放高亮"),
                     systemImage: "info.circle"
                 )
                 .font(.caption)

@@ -18,13 +18,6 @@ type config struct {
 	StateRelayURL   string `json:"state_relay_url,omitempty"`
 	StateRelayToken string `json:"state_relay_token,omitempty"`
 
-	LastfmUser   string `json:"lastfm_user,omitempty"`
-	LastfmAPIKey string `json:"lastfm_api_key,omitempty"`
-
-	LastfmScrobbleAPIKey     string `json:"lastfm_scrobble_api_key,omitempty"`
-	LastfmScrobbleSecret     string `json:"lastfm_scrobble_secret,omitempty"`
-	LastfmScrobbleSessionKey string `json:"lastfm_scrobble_session_key,omitempty"`
-
 	NotificationPlatform   string `json:"notification_platform,omitempty"`
 	NotificationWebhookURL string `json:"bark_url,omitempty"`
 
@@ -34,13 +27,6 @@ type config struct {
 	LogLevel string `json:"log_level,omitempty"`
 
 	loadIssues []string
-}
-
-func (c *config) lastfmBridgeAPIKey() string {
-	if c.LastfmScrobbleAPIKey != "" {
-		return c.LastfmScrobbleAPIKey
-	}
-	return c.LastfmAPIKey
 }
 
 func loadConfig(path string) (*config, error) {

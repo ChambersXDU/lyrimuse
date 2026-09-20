@@ -103,6 +103,6 @@ func TestResolveEnrichAsyncCancelWritesNoLyricsEntry(t *testing.T) {
 		t.Errorf("取消场景下不该凑巧真的解析出歌词,got lyrics=%q", e.Lyrics)
 	}
 	if e.TS <= 0 {
-		t.Errorf("TS 必须 > 0——EnrichCacheReader.lookup 靠它判定'这一轮解析真的跑完了',否则灵动岛/悬浮歌词会一直卡在'搜索歌词中…'")
+		t.Errorf("TS 必须 > 0——EnrichCacheReader.lookup 靠它判定'这一轮解析真的跑完了',否则悬浮歌词/菜单栏歌词会一直卡在'搜索歌词中…'")
 	}
 }

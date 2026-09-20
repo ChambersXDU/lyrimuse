@@ -82,7 +82,7 @@ extension CharacterSet {
     }()
 }
 
-public struct LyricsWindowLine: Identifiable, Equatable {
+public struct MenuBarLyricLine: Identifiable, Equatable {
     public let id: String
     public let timeMs: Int
     public let line: SyncedLyricLine
@@ -1163,16 +1163,16 @@ public final class LyricsSyncEngine {
         return (text, side)
     }
 
-    public func allLines(idPrefix: String) -> [LyricsWindowLine] {
+    public func allLines(idPrefix: String) -> [MenuBarLyricLine] {
         if usingWords {
             return (0 ..< wordLines.count).compactMap { i in
                 guard let line = buildLine(i) else { return nil }
-                return LyricsWindowLine(id: "\(idPrefix)#\(i)", timeMs: wordLines[i].timeMs, line: line)
+                return MenuBarLyricLine(id: "\(idPrefix)#\(i)", timeMs: wordLines[i].timeMs, line: line)
             }
         }
         return (0 ..< baseLines.count).compactMap { i in
             guard let line = buildLine(i) else { return nil }
-            return LyricsWindowLine(id: "\(idPrefix)#\(i)", timeMs: baseLines[i].timeMs, line: line)
+            return MenuBarLyricLine(id: "\(idPrefix)#\(i)", timeMs: baseLines[i].timeMs, line: line)
         }
     }
 

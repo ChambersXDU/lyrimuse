@@ -10,8 +10,8 @@ fixes; there are no long-term support branches.
 | Latest release | Yes |
 | Anything older | No |
 
-The app updates itself through Sparkle, so staying current usually takes no
-action. `brew upgrade --cask lyrimuse` works too.
+New versions are published through the normal release and package-manager
+channels. `brew upgrade --cask lyrimuse` works too.
 
 ## Reporting a vulnerability
 
@@ -40,17 +40,16 @@ Worth knowing before you look for issues:
 - **No listening sockets.** Neither the menu-bar app nor the background helper
   (`com.lyrimuse.collector`, a launchd agent) opens one. All network activity is
   outbound.
-- **Credentials sit in a file, not the Keychain.** The Last.fm session key and
-  the ListenBrainz token live in `~/.config/lyrimuse/config.json`, written
+- **Credentials sit in a file, not the Keychain.** The ListenBrainz token lives
+  in `~/.config/lyrimuse/config.json`, written
   atomically with mode `0600`. Anything that can read your user's files can read
-  them. If your machine is compromised, revoke those tokens at Last.fm and
-  ListenBrainz.
+  it. If your machine is compromised, revoke that token at ListenBrainz.
 - **Logs and diagnostic exports go through a redactor** that removes known
   credential values, sensitive query parameters (`api_key`, `token`, `sk`,
   `session_key`, ...), and credentials carried in URL paths. If you find a way to
   get a live credential into a log or an export, that is a bug worth reporting.
-- **Outbound traffic** goes to the lyrics and metadata providers, and to Last.fm
-  and ListenBrainz once you connect those accounts.
+- **Outbound traffic** goes to the lyrics and metadata providers, and to
+  ListenBrainz once you connect that account.
 - **Nothing leaves your Mac for a third-party service by default.** Pushing
   now-playing state to a relay is opt-in: it only happens if you set
   `state_relay_url` yourself, and there is no default relay compiled into the
@@ -58,9 +57,6 @@ Worth knowing before you look for issues:
 - **Automation permission.** The app asks for macOS Automation access so it can
   send Apple Events to media players and browsers to read the current track. It
   is not sandboxed.
-- **Updates** are delivered by Sparkle over HTTPS from GitHub Releases and are
-  verified against an EdDSA public key pinned in the app bundle. A malicious
-  appcast alone is not enough to install anything.
 
 ## Known limitations
 
@@ -79,5 +75,5 @@ as vulnerabilities, but do tell me if you think the reasoning is wrong.
 In scope: this repository, the released app and its background helper, and the
 Homebrew tap at `Yudaotor/homebrew-lyrimuse`.
 
-Out of scope: the third-party lyrics, metadata and scrobbling services the app
+Out of scope: the third-party lyrics, metadata and listening services the app
 talks to. Report those to the service in question.

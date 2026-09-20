@@ -20,13 +20,8 @@ enum ConfigPortability {
         "np:hasShownMenuBarPositionHint",
 
         "np:unknownPlayerNotices",
-        "np:overlayStyle",
         "np:overlayPositionTop",
         "np:overlayPositionOrigin",
-        "np:notchScreenID",
-
-        "np:lyricsWindowFrame",
-        "np:lyricsWindowScreenID",
         "np:launchAtLoginEnabled",
 
         "np:collectorServiceEnabled",
@@ -34,17 +29,12 @@ enum ConfigPortability {
         "np:spotifyProbeLeadByDevice",
         "np:spotifyProbeLeadSecs",
 
-        "np:receiveBetaUpdates",
-
         CollectorServiceManager.installedFingerprintKey,
 
         ICloudConfigStore.customFolderKey,
     ]
 
     static let obsoleteDefaultsKeys: Set<String> = [
-
-        "np:notchVolumeBanner",
-        "np:notchShowEqualizer",
 
         "np:launchMusicOnLyrimuseOpen",
         "np:dataSourceMode",
@@ -56,6 +46,44 @@ enum ConfigPortability {
         "np:hideWhenFullscreenApp",
 
         "np:preferWordLevelKaraoke",
+
+        "np:overlayStyle",
+        "np:notchScreenID",
+        "np:receiveBetaUpdates",
+        "np:lyricsWindowFrame",
+        "np:lyricsWindowScreenID",
+        "np:notchLyricsKaraoke",
+        "np:notchContentWidth",
+        "np:notchExpandedContentWidth",
+        "np:notchHideDuringScreenCapture",
+        "np:notchHideWhenNotPlaying",
+        "np:notchOverlayEnabled",
+        "np:notchCardStyle",
+        "np:notchShowLyrics",
+        "np:notchCollapsesWhenPaused",
+        "np:notchShowsEqualizer",
+        "np:notchEqualizerEar",
+        "np:notchExpandedShowsNextLine",
+        "np:notchExpandedShowsControls",
+        "np:notchExpandedShowsLyricsOffset",
+        "np:notchExpandedShowsArtwork",
+        "np:notchExpandedShowsTrackTitle",
+        "np:notchExpandedShowsArtist",
+        "np:notchExpandedShowsAlbum",
+        "np:notchExpandedShowsQuickActions",
+        "np:notchLyricRowShowsArtwork",
+        "np:notchLyricRowArtworkPosition",
+        "np:notchLyricsAlignment",
+        "np:notchSecondaryLine",
+        "np:notchFontFamilyName",
+        "np:notchFontWeight",
+        "np:notchFontSize",
+        "np:notchLeftEar",
+        "np:notchRightEar",
+        "np:notchAllScreens",
+        "np:notchOverlayVisible",
+        "np:notchVolumeBanner",
+        "np:notchShowEqualizer",
     ]
 
     private static let excludedDefaultsKeys: Set<String> =

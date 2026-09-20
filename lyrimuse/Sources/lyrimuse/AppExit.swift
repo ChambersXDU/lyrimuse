@@ -7,8 +7,6 @@ enum AppExit {
         case restartAfterConfigChange = "restart_after_config_change"
 
         case olderInstanceReplaced = "older_instance_replaced"
-        case sparkleInstall = "sparkle_install"
-
         case followedPlayerQuit = "followed_player_quit"
         case sigterm = "sigterm"
         case externalRequest = "external_request"
@@ -26,8 +24,8 @@ enum AppExit {
         NSApp.terminate(nil)
     }
 
-    @MainActor static func logTermination(sparkleInstalling: Bool) {
-        let reason = pendingReason ?? (sparkleInstalling ? .sparkleInstall : .externalRequest)
+    @MainActor static func logTermination() {
+        let reason = pendingReason ?? .externalRequest
         pendingReason = nil
         logger.notice("exiting reason=\(reason.rawValue, privacy: .public)")
     }

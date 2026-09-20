@@ -70,8 +70,8 @@ func TestLoadConfigIssuesNeverLeakSecrets(t *testing.T) {
 
 	body := `{
 	  "listenbrainz_token": {"nested": "` + secret + `"},
-	  "lastfm_scrobble_secret": ["` + secret + `"],
-	  "lastfm_scrobble_session_key": 12345
+	  "listenbrainz_user": ["` + secret + `"],
+	  "state_relay_token": 12345
 	}`
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)

@@ -94,21 +94,11 @@ enum DiagnosticsExporter {
         lines.append("lyrimuse-features.json: \(describe(FeatureSettingsStore.shared.fileState))")
         lines.append("App language: \(settings.appLanguage)")
         lines.append("Classic overlay enabled: \(settings.classicOverlayEnabled)")
-        lines.append("Notch overlay enabled: \(settings.notchOverlayEnabled)")
         lines.append("ListenBrainz configured (submit): \(config.isListenBrainzConfigured)")
 
         lines.append("ListenBrainz readable (digests/bridge): \(config.isListenBrainzReadable)")
-
-        lines.append("Last.fm bridge active: \(config.lastfmBridgeMissingHint() == nil && config.isListenBrainzReadable)")
-
-        lines.append("Last.fm mirror configured: \(!config.lastfmScrobbleSessionKey.isEmpty)")
         lines.append("State relay configured: \(config.stateRelayMissingHint() == nil)")
         lines.append("Push notification configured: \(config.pushMissingHint() == nil)")
-
-        let sparkle = SparkleUpdaterManager.shared.updater
-        lines.append("Auto-update checks: \(sparkle.automaticallyChecksForUpdates)"
-                     + (sparkle.lastUpdateCheckDate.map { " (last checked: \(ISO8601DateFormatter().string(from: $0)))" }
-                        ?? " (never checked this run)"))
         lines.append("")
 
         lines.append("== Windows ==")

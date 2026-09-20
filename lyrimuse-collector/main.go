@@ -18,7 +18,6 @@ import (
 var clientVersion = "dev"
 
 const (
-
 	clientName = "lyrimuse"
 
 	pollInterval      = 5 * time.Second
@@ -61,16 +60,6 @@ func main() {
 		return
 	}
 
-	if len(os.Args) > 1 && os.Args[1] == "backfill-lastfm" {
-		runBackfillLastfmCLI(os.Args[2:])
-		return
-	}
-
-	if len(os.Args) > 1 && os.Args[1] == "delete-listen" {
-		runDeleteListenCLI(os.Args[2:])
-		return
-	}
-
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		runHealthcheckCLI(os.Args[2:])
 		return
@@ -78,11 +67,6 @@ func main() {
 
 	if len(os.Args) > 1 && os.Args[1] == "test-lyric-sources" {
 		runTestLyricSourcesCLI(os.Args[2:])
-		return
-	}
-
-	if len(os.Args) > 1 && os.Args[1] == "top-artists" {
-		runTopArtistsCLI(os.Args[2:])
 		return
 	}
 
@@ -152,8 +136,6 @@ func main() {
 	featureFlagsPath := filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json")
 	features = loadFeatureFlags(featureFlagsPath)
 
-	setLastfmExcludePath(featureFlagsPath)
-
 	loadEnrichCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cache.json"))
 
 	loadArtistAliasCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-alias-cache.json"))
@@ -201,17 +183,6 @@ func main() {
 	migrateManualPickMarks()
 	exportLyricsFiles()
 
-	initListenLog(filepath.Join(filepath.Dir(*cfgPath), clientName+"-listens.jsonl"))
-	forwardedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-forwarded.json")
-	lfmMirroredPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-mirrored.json")
-	lastfmStatusPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-status.json")
-
-	lastfmCollapsePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-collapse.json")
-
-	lastfmFeedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-recent-feed.json")
-
-	lastfmFeedNudgePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-feed-nudge")
-
 	setCollectorStatusPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-collector-status.json"))
 
 	setEnrichCancelRequestPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cancel-request.txt"))
@@ -219,9 +190,8 @@ func main() {
 	setPositionBiasPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-position-bias.json"))
 
 	setLyricsFillPaths()
-	weeklyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-weekly.json")
+	weeklyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-weekly.json")
 	dailyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-daily.json")
-	topArtistsStatePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-top-artists.json")
 
 	lb := &lbClient{root: cfg.APIRoot, token: cfg.Token, hc: &http.Client{}, dryRun: *dryRun, alerter: newAlerter(cfg.NotificationPlatform, cfg.NotificationWebhookURL, cfg.DingtalkSignSecret, cfg.FeishuSignSecret)}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -1,6 +1,5 @@
 # 15. 运行、部署与后台任务
 
-> 最后核对：2026-09-12 · 基线：b7e08ef+工作树（2026-09-12 补 build.sh「装了但 App 没换」的静默退化形状**及其修法**，见第 1 节末与决策 14；同日更新界面改成 App 内「软件更新」页、Sparkle 换自定义 `SPUUserDriver`，见决策 15）
 
 ## 定位
 
@@ -9,7 +8,6 @@
 ## 入口与展示面
 
 - 开发者：`cd lyrimuse && ./build.sh`（唯一的真机部署路径）。
-- 用户可见：设置 → 播放器 → 后台采集服务（状态/装卸）；账号 → 推送提醒；灵动岛音量横幅；`collector health-check` CLI。
 
 ## 行为规格
 
@@ -50,13 +48,11 @@
 
 collector 二进制打包在 `.app/Contents/Resources/` 内，由 `Bundle.main` 精确定位，无需用户拼路径。`CollectorControl.restartAndWaitAsync`（launchctl kickstart -k + 真实退出码检查）被歌词管理和 features 保存共用；设置侧两个 Store 经 `CollectorRestartCoordinator`（去抖，`isRestarting` 可观察）发起，结果回到设置窗口底部状态条（14 章决策 21）。
 
-**启动时对账（`CollectorServiceManager.reconcileAfterLaunch`，2026-08-22 加）**——这是 Sparkle 自动更新 / Homebrew cask upgrade / 手动拖 .app 覆盖这三条路唯一的兜底，它们都不经过 build.sh：
 
 - 判据是**二进制指纹**（`np:collectorInstalledFingerprint` = collector 路径+大小+mtime）变了 **或** 服务没在跑，且用户开着 `np:collectorServiceEnabled`；命中就重跑 `install()`（它本身就是完整的 bootout→写 plist→bootstrap→kickstart→LWCR 重试三级自愈，这里缺的只是一个启动触发点）。
 - **为什么不能只看「在不在跑」**：更新之后老 collector 往往还活着（要等下一次缺页才被 SIGKILL），那一刻 `isRunning` 仍是 true，只看运行状态会整个错过这次更新；而等它真死掉时 App 早就启动完了，没有人再检查。
 ### 签名身份（2026-09-11）
 
-`build.sh` 默认仍然是 ad-hoc（`--sign -`），**CI 和别人的机器上一个字节都不变**；本机 login 钥匙串里存在一张 CN = `Lyrimuse Dev Signing` 的自签名 Code Signing 证书时自动改用它（`SIGN_ID`，`LYRIMUSE_SIGN_ID=-` 可显式强制 ad-hoc）。九个签名调用点（collector / lyrics-translate / lyrics-romanize / media-control 两个 + 框架 / Sparkle 框架内外 / 最外层 `.app`）全部走同一个变量。
 
 **为什么**：ad-hoc 签名的「指定要求」是一条光秃秃的 cdhash——
 
@@ -104,37 +100,28 @@ rm -f key.pem ident.p12          # 私钥已经进钥匙串,别留在磁盘上
 - **companionLaunch**：打开所选播放器时顺带唤起 Lyrimuse（`features.launchLyrimuseOnMusicOpen`，默认开）；反方向（开 Lyrimuse 唤起播放器）在 App 侧。检测走 `pgrep -x <可执行文件名>`（不碰 AppleScript/自动化权限，所以对没有 AppleScript 支持的播放器同样生效），名字表在 `knownPlayerProcessNames`：`Music` / `QQMusic` / `NeteaseMusic` / `Spotify` / **`酷狗音乐`**（中文，`CFBundleExecutable` 实测值）。
   ⚠️ 酷狗这一项 2026-08-22 才补上——它接进 collector 时（`system.go`/`features.go` 都加了 `playerKugou`）漏了这一路，`playerProcessName()` 的 switch 没有 kugou 分支、落进 `default: return "Music"`，于是**选了酷狗的用户这个联动实际在盯 Music.app**：打开酷狗不会唤起 Lyrimuse，反倒打开 Apple Music 会；`knownPlayerProcessNames` 同样漏了它，「自动识别」档也盖不住。回归测试 `TestPlayerProcessNameCoversEveryPlayer` 双向钉住（每个播放器都有自己的名字 + 都在 auto 那份列表里），做过变异测试。
   ⚠️ 往名字表里加新播放器时要一起核**两件事**：① `pgrep -x` 能匹配非 ASCII 的 comm（拿中文名进程实测过，可以）；② UTF-8 字节数不超过内核 `p_comm` 的 16 字节上限（「酷狗音乐」是 12 字节，再长两个汉字就会被截断、`-x` 精确匹配当场失效）。
-- 网络观察（networkobs）：解析全空时标记「网络不通」状态给 UI（歌词区显示网络提示而非「没歌词」）；`doHTTPTracked` 同时是（2026-08-26 起）collector 侧**所有对外请求**的统一审计日志出口，见第 14 章「对外请求审计日志」——一并接进来的调用点覆盖 Last.fm/ListenBrainz/七个歌词源/推送/状态中继/翻译/取色/MusicBrainz/iTunes，只有 DNS-over-HTTPS（`doh.go`）刻意排除在外（不是"联系了哪个外部服务"，是基础设施调用，理由跟它不参与 `networkLooksDown()` 统计一致）。
 
-- **退出原因日志（2026-09-03）**：常驻 collector 的每一条退出路径退出前都打一行 `exiting reason=<code>`（`exitreason.go` 的 `logExit` / `fatalExit`，经 log.Printf → logscrub 出口）。原因码：`already_running` 拿不到单实例锁（退出码 0，等 KeepAlive 重试）/ `signal` ctx 被 SIGTERM·SIGINT 取消（kickstart 重启、bootout 卸载、Ctrl-C，**此前这条最常见的退出一行日志都没有**）/ `run_error` / `config_unreadable`（文件在但读不出；内容有问题已降级成 loadIssues 不退）/ `home_dir_unresolved` / `run_returned`（理论上到不了，记下来才看得见）。一次性子命令的 os.Exit / log.Fatalf 不在此列。App 侧同款前缀记在 `lifecycle` 分类（`AppExit.swift`）：`menu_quit` / `restart_after_config_change` / `sparkle_install`（`SparkleUpdaterManager.isInstallingUpdate` 认出）/ `sigterm` / `external_request`（⌘Q、Dock 退出、AppleScript、被新实例请走）/ `followed_player_quit`（「跟随播放器退出」宽限到点，见 02 章「播放器联动」）/ `unregister_login_item_helper`（`lyrimuse --unregister-login-item` 辅助模式，卸载脚本调，注销完登录项即退，2026-09-06），新实例请走旧实例那一侧另记 `terminating older instance pid=… reason=older_instance_replaced forced=…`；所有主动 terminate 只准经 `AppExit.request`，日志在 `applicationShouldTerminate` 汇合点打一次。⚠️ App 对 SIGTERM 从「AppKit 默认直接死、delegate 都不叫」改成 `AppExit.installSigtermHandler` 用 DispatchSource 接住后走正常 terminate——顺带让 `applicationShouldTerminate` 里那次未保存配置的落盘也有机会跑到。新加一个原因码就补进这一条。⚠️ **已知盲区**：SIGTERM 落在 collector 启动阶段（`signal.NotifyContext` 装上之前——加载缓存 / lyrics 导入调和那十几秒）仍是 Go 默认处置、静默退出；2026-09-03 装机时 build.sh 连续两次重启都撞在这个窗口里，日志只有「loaded … caches」没有 exiting 行，第三次起完才正常。没把 NotifyContext 提前：提前后启动期收到的信号要等启动跑完才处理，超过 launchd 的 ExitTimeOut 就是 SIGKILL，得不偿失。selftest contracts 组「退出原因」守着两侧（App 的 terminate 只在 AppExit、AppDelegate 无 NSLog；main.go 无裸 log.Fatal、唯一 os.Exit 是锁那条）。
 
 ### 4. 日报/周报推送（可选，默认关）
 
 - **daily.go**：每天到 `dailyDigestTriggerHour` 后的第一次检查（半小时一查）推一条当日收听摘要；按 `features.DailyDigestSource` 选数据源；状态文件记「已推送到哪一天」防重启重推。
-- **weekly.go**：每周一条（2 小时一查），按 Last.fm 图表周或 ISO 周边界；状态文件记已推送周。
 - **digest.go**：拼内容（Top 歌曲/歌手各取 `digestTopN` 条，Bark 锁屏预览要能读完；LB 翻页 100 条/页）。
   - **歌手归并（2026-08-30 加，此前完全没有）**：两条取数路径都按跟歌手榜（`topartists.go`）**同一套**口径归并再取 Top N。
     修之前 digest 直接把接口返回的歌手原样取前 N，于是同一个二进制里同一个人在推送里是两个、在榜单里是一个（实测这台机器 389 个歌手写法里 1 例真的踩中：`张震岳`/`张震嶽`）。
-    - Last.fm 路径：`digestTopArtists` → `mergeAliasedArtists`（名字键 + mbid 并查集，走 `cacheOnlyArtistIdentity`，**只读本地缓存、零网络请求**，不给后台推送加延迟）。
     - ListenBrainz 路径：LB 的收听记录里没有 mbid，并查集第二个信号用不上，只能按 `artistMergeNameKey` 分桶；展示名走 `artistMergeDisplayName`（只把已知罗马字艺名换成中文本名，**不**做繁简/大小写折叠——那两步只是判同一个人时内部用的，不该篡改用户库里原本的书写）。
     - ⚠️ **归并必须发生在截断之前**，否则被截掉那条的次数永远加不回本尊身上；且 `mergeAliasedArtists` 结尾的 `sort.SliceStable` 是取 Top N 的前提（合并会让次数相加、名次变动）。两条都有断言钉着（`digestmerge_test.go`），并做过变异验证。
-    - 抽出 `digestTopArtists` 这个纯函数、而不是内联在 `lastfmDigestStats` 里，是因为后者要打网络、测不了：内联的话把归并那行删掉，单测照样全绿。
     - 已知取舍（用户拍板）：合并后名次/次数会跟**历史推送**对不上，接受——一次性台阶好过两处口径永久不一致。
 - **notify.go/alerter.go**：推送通道，支持 Bark/钉钉(签名)/企业微信/Discord/飞书(签名)/Server酱（除 Server酱表单编码外都是 webhook+JSON 模子）。原「连续失败 N 次告警」能力已整体下线，alerter 只剩 push 载体。
 
 ### 5. 健康检查与诊断
 
-- `collector healthcheck`：CLI 汇总各子系统状态（配置/歌词来源开关/缓存/导出目录/ListenBrainz·Last.fm 配置，外加真拿两首探测曲实测各歌词源可用性 + 网络整体是否看起来通），供人工/脚本排查；2026-08-27 起也被 App 侧诊断导出直接调用，见第 14 章。
 - App 侧诊断导出（第 14 章）；collector 日志在 `~/Library/Logs/lyrimuse.log`，App 进程的 launchd stderr 在 `~/Library/Logs/lyrimuse-app.log`（2026-09-05 起分开，正常几乎为空）。排「为什么自己退了」：两侧日志 grep `exiting reason=` 即可（原因码表见 §3「退出原因日志」）。
-- **不做「设置页实时日志视图」（2026-09-04，用户拍板）**：被参考的做法是调试页 300 条环 + 四级筛选 + 自动滚底。评估时实测两侧体量：collector 约 30 行/分，其中九成是 `api call` 审计行（Last.fm 每 5 秒轮询一次 `user.getrecenttracks`），App 侧约 10 行/分；300 条环不做入环折叠 10 分钟就被轮询行灌满。collector 走 Go 标准库 log 没有等级字段，「四级筛选」只对 App 侧有意义。成本 M 且有常驻开销（文件 tail 处理轮转换 inode、OSLogStore 每秒增量查询必须在后台线程且本身有几秒延迟、逐行脱敏折叠、视图不在前台必须停流、约 10 条新文案 × 两种语言）。不做的理由：真实用户是作者自己排查，终端 `tail -f` + `log stream` 就是同一件事；普通用户走「导出诊断」贴 issue，实时看日志对他们不可操作；被参考项目做调试页是因为 Tauri 没有现成的日志查看途径，macOS 有 Console.app。若要「看一眼现在在发生什么」的入口，S 级替代是诊断与数据卡里加「在控制台中打开日志」用 Console.app 打开 collector 日志文件（自带实时跟随 / 搜索 / 过滤，零环形缓冲、零轮询、零脱敏责任）。**若将来推翻**：挂侧栏「实验室功能」折叠组不开顶层分类；入环前先按模板折叠再脱敏；collector 行统一当 info、筛选只分来源和 App 等级；视图离开即停两条流；OSLogStore 查询不进主线程；文件 tail 收到 rename / delete 按路径重开。
 - **日志规范（2026-09-04）**：两侧日志按业界通用范式写——正文英文、`component: message key=value`、App 侧只走统一 subsystem 的 `Logger`（`NSLog` 的日志进不了诊断导出，`LanguagePackRow` 那两行就是这样漏掉的，同日改掉）。规则在 AGENTS.md「容易踩的具体坑 → 日志」，selftest contracts 组「日志规范」守着。当天把 collector 23 条、App 侧 21 条中文日志改成英文，翻这天之前的旧日志时中文关键词仍在。
-- **日志出口重做（2026-09-05，用户拍板「全做」）**：起因是评估「设置页实时日志视图」时拿两天 40k 行真实日志数了一遍——63% 是 `api call` 逐次审计行（Last.fm 每 5 秒一次的 `user.getrecenttracks` 一项 4219 行）、同一首歌的 "reusing existing entry" 打了 1158 遍、ListenBrainz 超时重试串上千行、没有等级只能靠前缀 grep、时间戳是 UTC 却不带标记（当天就有人读错）；App 侧 24 小时 2152 行 **error 级**的 `overlay-debug`（08-29 标注「排查完就删」的临时探针）占落盘量一半，`snapshot failed` 把「Music 没开」记成 error 且尾巴是中文 `<private>`；两个 launchd 任务的 stderr 还写同一个文件，launchctl 子进程的报错没时间戳没来源地漏进 collector 日志（两天 59 次）。做了七件事：① collector 出口换标准库 `log/slog`（logsink.go）——`slog.SetDefault` 桥接，173 处 `log.Printf` 零改动按 Info 进链，行首 `time=<UTC RFC3339 毫秒 Z> level=… msg=…`，等级 config.json `log_level` / 环境变量 `LYRIMUSE_LOG_LEVEL`（优先）；⚠️ `slog.SetDefault` 会把 log 包的 flags 清零、由 handler 打时间，所以原来那句 `log.SetFlags(LUTC)` 删了，谁再加回来就是双时间戳。② 审计日志按分钟聚合（14 章「对外请求审计日志」），逐次成功 Debug、失败 Warn。③ 出口级连续重复折叠 `repeatSquelcher`（syslog 语义：第一条立即写、后续连续同模板只计数、换行或超 60s 结算成 `last message repeated N times`；模板口径 = 去 time= 属性 + 抹数字，跟诊断导出 `collapseRepeatedLines` 一致）。④ 运行期轮转（下一条）。⑤ 调用点清理：`enrich: reusing existing entry` 按 key 只记首次；启动 `loaded N cached …` 八处补 `cache:` 前缀。⑥ App 侧：删 `overlay-debug` 探针（要看点击几何临时加回来跑 `log stream`）；`snapshot failed` 改 notice、尾巴改 `streak=N` 并显式 `.public`；`SpaceDiagnostics`（09-03 的探针）**没动**——那个「切全屏 Space 被弹回桌面」还没定位到根因，它就是为此存在的，846 行/天是它的工作量不是噪音。⑦ App 与 collector 的 launchd stderr 分家：`LoginItemManager` 写的 plist 指到 `lyrimuse-app.log`（每次启动重写；⚠️ launchd 只在 job bootstrap 时读 plist，kickstart 不重读——装机当天 `launchctl print` 里 stderr 仍是旧文件，要到下次登录或 bootout + bootstrap 才切过去），`CollectorControl` 的 launchctl kickstart 子进程 stdout/stderr 接到 nullDevice；诊断导出多一段 App stderr 最后 100 行，collector 日志的时间戳解析下沉到 Core `CollectorLogLine`（两种格式都认）。**不动的**：`menubar-item` 的 slot rebuild notice（13 条决策要的事后现场）、App 侧 `network-audit`（用户要求且量小）。守卫：contracts 组「日志规范」的 Go 扫描把 `slog.*` 也算进日志字面量；Go 测试 logsink_test.go（等级解析 / 时间格式 / 模板口径 / 折叠 / 运行期轮转 / 子命令判定）+ networkobs_test.go 审计汇总；selftest ops-diagnostics 组 CollectorLogLine 两种格式。⚠️ 常驻模式下 collector **自己打开**日志文件写（不再只靠 launchd 把 stderr 指过去），子命令（healthcheck 等）仍写 stderr——判据 `isDaemonInvocation`（有子命令名就不是常驻）。顺带把 go.mod 的 `go` 指令从 1.21 提到 1.22（测试里 `slog.SetLogLoggerLevel` 需要；工具链本就钉着 1.24.4，只是语言版本门槛跟上）。
 - **日志轮转（2026-08-27 加）**：`installLogSink`（main 启动时最早调的那一步，logsink.go；2026-09-05 之前叫 `installLogScrubbing`）顺带调 `rotateLogIfNeeded`（logrotate.go）——超过 30MB 就把旧文件归档成 `lyrimuse.log.old`（覆盖式，只留一份）、开一份新的。之前这个文件完全没有轮转过（`lyricstrace.go` 注释早就点名过这一先例），实测涨到过 13.5MB。原来只在**进程启动时**检查一次（理由是 collector 本来就会被相对频繁地重启）；**2026-09-05 起运行期也轮转**：常驻模式由 collector 自己打开日志文件写（logsink.go `rotatingLogFile`），每次写之前按自己累计的字节数判断、越过上限就 `archiveAndReopen`（跟启动期同一套动作）再写，轮转事件那一行直接写在新文件开头。一个常驻很久的进程从此不会无限涨。故意不用系统级 `newsyslog`：那需要 root 权限写 `/etc/newsyslog.d/`，跟这个项目"尽量不依赖需要管理员权限的官方机制"的一贯取向（ad-hoc 签名放弃 SMAppService 走文件系统方案是同一个理由，见第 14 章已知坑）不搭。⚠️ 不能简单 `os.Rename` 完事：进程的 `os.Stderr` 此刻已经指向旧文件的 inode（launchd 通过 `StandardErrorPath` 打开、fork/exec 时继承给我们），rename 只改目录项，不会让已经打开的 fd 转向新路径下的新文件，必须显式 `os.OpenFile` 一份新文件再 `log.SetOutput` 过去。
 - `MediaControlHealth`：App 侧对 media-control 二进制做可用性探测。
 
 ### 6. 音量横幅（VolumeMonitor）
 
-CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音量变化时在灵动岛闪音量横幅（经 NotchTransientCenter，第 05 章）。
 
 ### 7. 卸载（uninstall.sh）
 
@@ -177,7 +164,6 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
 
 | 主题 | 位置 |
 |---|---|
-| 构建部署 | lyrimuse/build.sh；打包 lyrimuse/package.sh；发布 .github/workflows/release.yml（tag 构建前硬校验 .github/scripts/check_release_tag.sh、双语拆分 split_release_notes.py、appcast 自检 check_appcast.py） |
 | 卸载 | lyrimuse/scripts/uninstall.sh（`has_defaults` / purge 段）、lyrimuse/scripts/uninstall_test.sh |
 | 服务管理 | Settings/CollectorServiceManager.swift（`install` / `reconcileAfterLaunch` / `recordInstalledFingerprint` / `currentBinaryFingerprint`）、LyricsManager/CollectorControl.swift、LyrimuseCore/Local/LaunchdJobState.swift、CollectorStatus.swift |
 | 单实例 | lyrimuse-collector/singleinstance.go |
@@ -208,41 +194,24 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
    - **默认值为什么是 `"dev"` 不是某个版本号**：这次事故最坏的形态就是「一个看起来完全正常、实际早就过时的版本号」——没有任何人会起疑。一眼假的值让「没走发布构建」自己暴露。同一条原则见 build.sh 里 `APP_VERSION` 退到 `0.0.0` 那段注释。
    - **设置页那张卡（`bundledCollectorVersion`）本身是有效的**：它正是抓到 v1.5.0 这次的机制（2026-08-31 才加，起因就是 v1.3.0 那次）。它没做错什么，只是时机在**发版之后**；这次把同一个检查提前到了构建期。
 
-10. **本机 `defaults` 里的 `SUFeedURL` 覆盖会让所有更新检查静默失败，本地验完 appcast 必须删（2026-09-03 实测）**：
-    Sparkle 读 feed 地址时**用户偏好优先于 Info.plist**。此前某次本地验证 release.yml 的 appcast 切分逻辑用了「假 appcast +
-    `defaults write me.yudaotor.lyrimuse SUFeedURL http://127.0.0.1:8791/appcast.xml`」的配方（见记忆库发版笔记），验完没有 `defaults delete`，
     于是这台机器上之后**每一次**定时检查都在连一个没人监听的本地端口——定时检查失败不弹窗、`SULastCheckTime` 照样更新，
     从外面看完全像"检查过了、没有新版本"。这次是为演示菜单栏面板「有新版本」把本地版本号压成 1.3.9、手动点「检查更新」弹出
     「获取升级信息时出现错误」才暴露。**定位方法**：统一日志在这台机器上查不到 App 记录（`log show` 对 lyrimuse 进程恒返回 0 行，
-    原因未查），改用一个链接 App 内 `Sparkle.framework`、以 `/Applications/Lyrimuse.app` 为 hostBundle 的 `SPUUpdater` 诊断小程序
     （`SPUUserDriver` 全部方法只打印、`showUpdateFound` 回 `.dismiss`），`updater.feedURL` 直接暴露实际生效地址，
     `showUpdaterError` 给出完整 NSError 链（`NSURLErrorDomain -1004` → 127.0.0.1:8791）。**修法**：`defaults delete me.yudaotor.lyrimuse SUFeedURL`，
     删后同一诊断程序立刻 `didFindValidUpdate 1.4.0`。**规则**：以后任何走 `defaults write SUFeedURL` 的本地验证，收尾必须成对 `defaults delete`，
     并把「`defaults read me.yudaotor.lyrimuse SUFeedURL` 应报不存在」写进验证清单；「导出诊断」的 `Auto-update checks` 行也应带上实际生效的 feed 地址（待做）。
 
-11. **含 `-` 的 tag 标 prerelease、构建号与展示版本分家、App 内「接收测试版更新」开关（2026-09-05，用户拍板，借鉴清单 #32）**：
-    起因：`release.yml` 对任何 `v*` tag 都发成正式 Release，而 `SUFeedURL` 指 `releases/latest/download/appcast.xml`，于是「发一个只给
     自己另一台机器试的版本」没有安全路径——带后缀的 tag 会成为 latest、把全体用户推到测试版且退不回来。**三层改法**：
     ① CI：版本步用 `lyrimuse/scripts/build-version.sh` 校验 tag 形态（`vX.Y.Z` / `vX.Y.Z-(alpha|beta|rc).N`，其它构建前拒），含 `-`
-    即 `prerelease: true`（GitHub 的 latest 不含 prerelease，正式用户读的 appcast 不变）；enclosure 从 `releases/latest/download/<zip>`
-    改成 `releases/download/<tag>/<zip>`（预发布不是 latest，旧写法在它的 appcast 里会 404；正式版两种写法指同一文件，顺带消掉
-    「刚拿到 appcast 就撞上下一版发布」那个小竞态）；预发布 item 带 `<sparkle:channel>beta</sparkle:channel>`；`check_appcast.py`
     新增 tag / 展示版本 / 构建号 / 预发布四项断言；发布后新增一步对三个下载地址 `curl -I` 探活。
-    ② 构建号：**Sparkle 的 `SUStandardVersionComparator` 实测把 `-` 之后全部忽略**（`1.6.0-beta.1 == 1.6.0`、`beta.2 == beta.1`，
-    拿 Sparkle.framework 编了个小程序量出来的），预发布若拿 tag 当 `sparkle:version`，beta 用户永远收不到 beta.2、也收不到同号正式版。
-    所以 CFBundleShortVersionString 保留 tag 原文给人看，CFBundleVersion / `sparkle:version` 另算四段纯数字：正式 `X.Y.Z.1000`、alpha `N`、
     beta `100+N`、rc `500+N`；映射只在 `build-version.sh` 一份（build.sh 写 plist，release.yml 从 zip 里的 plist 回读并与版本步交叉核对），
     Core `ReleaseVersion` 是运行时镜像，selftest update-channel 组拿一张表跑 shell 与 Swift 逐个比。老用户机上的三段 `1.5.0` 跟四段新号
     比到第二段就分出大小，不受影响；本机装机核过 Info.plist 是 `1.5.0.1000` / `1.5.0`。
     ③ App：`AppSettings.receiveBetaUpdates`（机器专属键，不随配置搬家——测试版本来就是给「自己另一台机器」的）。开着时
-    `SparkleUpdaterManager` 每小时最多查一次 GitHub Release 列表（`api.github.com`，匿名，审计日志 `operation=releases`，限流退避照
     star 数那套），挑非 draft、tag 能解析、版本最高的那个 Release（**可能是正式版**——同号正式版出来后 beta 用户也被带回正式频道），
-    把它 tag 目录下的 appcast 经 `SPUUpdaterDelegate.feedURLString(for:)` 交给 Sparkle，并经 `allowedChannels(for:)` 放行 `beta`；关着
-    两者都不做，Sparkle 回到 Info.plist 的 latest。地址缓存在 UserDefaults，委托闭包直接读它（不捕获 self，Sparkle 起 updater 前就能答）。
     开关切换立刻刷新并 `checkForUpdatesInBackground` 给即时反馈；关掉不会把已装测试版退回，等下一个版本号更高的正式版。
-    **为什么不能只靠 channel**：appcast 每个 Release 自带一份、只列自己，预发布的那份没有稳定地址，正式用户读的 latest 永远不含它——
     channel 只能做第二道保险（防手动 `defaults write` 指错 feed）。**验证**：selftest 19 组 3062 条 ALL PASS（新组 update-channel 86 条
-    + `LYRIMUSE_LIVE_GITHUB=1` 真网核对 2 条，挑出 v1.5.0）；`check_appcast.py` 正反样本各跑过；release.yml 过 YAML 解析；装机无崩溃。
     **CI 链路只能靠真实 tag 验**，第一个 `-beta.1` tag 推上去时按 docs/releasing.md「六」逐条对。
 
 12. **开发构建隔离成独立 identifier 的「Lyrimuse Dev」，身份与路径全部收口到一处（2026-09-05，用户拍板，借鉴清单 #33）**：
@@ -261,11 +230,7 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
     environment 处数必须相等。
     第二步 `build.sh --dev`：全部分叉集中在开头「变体身份」一段（APP_NAME / LABEL / COLLECTOR_LABEL / CONFIG_DIR_NAME / URL_SCHEME /
     DEFAULT_INSTALL_DIR / 两段 plist 片段），后面不再有第二个 `if DEV`；Info.plist 写 `LyrimuseVariant=dev`、CFBundleDisplayName「Lyrimuse Dev」、
-    scheme `lyrimuse-dev`、**不写 Sparkle 键**；图标由 `scripts/badge-app-icon.swift` 从 AppIcon.icns 现画一个橙色 DEV 角标（十档 iconset →
     iconutil）；装到 `~/Applications`；首次装机 rsync 快照 `~/.config/lyrimuse` → `-dev`（**排除 config.json**——账号凭据，带过去两个
-    collector 会各自 scrobble；也排除 collector.lock），并把正式版 UserDefaults 复制进 Dev 域（去掉 `KeyboardShortcuts_*`——两个 App 抢同一
-    组合会静默失败、`np:collectorInstalledFingerprint`——Dev 要自己装 .dev 的 job、`SU*`——Sparkle 状态；`np:launchAtLoginEnabled` 置关）。
-    App 侧按 `LyrimuseIdentity.isDev` 门控：Sparkle updater 不启动、更新卡只留一句「开发构建不检查更新」、关于页名字与配置文件夹副标题
     按变体、开机启动默认关；companion launch 的 collector 改 `open -b appBundleID()`（Dev 的 collector 若拿写死的正式 id，播放器一起来
     就把正式版拉起来）。uninstall.sh 加 `--dev`（同一套名字，正式版一个字节不碰）。
     **验证**：selftest 20 组 3134 条 ALL PASS（identity 46 + contracts 「身份收口」「Dev 构建对齐」）；`go test` 过；正式版装机后
@@ -278,27 +243,22 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
     本身没有角标；④ Logger subsystem 两个变体相同，`log show` 要按 `processImagePath` 区分。**协作口径同日改**：AI 会话真机验证一律
     `./build.sh --dev`，正式版只在用户要求「装到正式版」时才 `./build.sh`（AGENTS.md「构建与验证」、CLAUDE.md 第 3 条、verify-ui skill）。
     **2026-09-06 整体回退（用户拍板）**：Dev 模式装上不到一天就撞了三件事——① 用户在 Dev 的设置页恢复了一份配置备份，账号凭据随归档进了
-    `~/.config/lyrimuse-dev`，两个 collector 对同一首歌各 scrobble 一次（Last.fm 上「Tick, Tick, Bang」「I Am You」各两条；重复项只能在 Last.fm 网站上手删——公开 API 没有删除方法，`library.removeScrobble` 09-06 带有效 api_key 实测返回 error 3「Invalid Method」）；② 同事会话照旧跑
     不带 `--dev` 的 `build.sh`，把还没真机验过的改动装进了正式版，隔离形同虚设；③ 用户分不清手里的正式版是哪个二进制、什么时候会被拉起
     （正式 collector 的 companion launch 按可执行名判「在不在跑」，两个变体同名）。用户结论：「做这个 dev 版本出来没有任何收益，反而会导致
     一些问题」，回到「改完直接 `./build.sh` 装正式版」的老模式。**回退范围**：卸掉本机 `Lyrimuse Dev.app`、`com.lyrimuse.collector.dev` job、
     Dev 偏好域与日志（`~/.config/lyrimuse-dev` 09-06 02:20 按用户指示整目录删除，连带里面那份带凭据的 `config.json.disabled-*`）；删 `build.sh --dev` /
     `uninstall.sh --dev` / `scripts/badge-app-icon.swift` / Info.plist 的 `LyrimuseVariant`；`LyrimuseIdentity` 收成一套固定名字（`Resolved`
-    保留给 selftest 整体断言）、去掉 `isDev` 与所有按它的门控（Sparkle 照常启动、更新卡恢复、开机启动默认开）；contracts「Dev 构建对齐」块
     删除，identity 组只剩正式版断言；AGENTS.md / CLAUDE.md / verify-ui 与 triage skill 改回。**保留**第一步的路径收口：`LyrimusePaths` /
     `LogFiles` / Go `paths.go` 的环境变量下发（正式版传的就是默认值），它消掉了 45 处字面量、有守卫钉着，与变体无关。教训：隔离方案要在
     「谁来装、装哪个」的协作口径真的换过去之后才有效，一半人还在按老习惯装正式版时，多一个变体只是多一个出事的地方。
 13. **tag 构建前硬校验：annotated / 正文非空 / 能拆成中英两份，判据一份、本地与 CI 同跑（2026-09-05，用户拍板，借鉴清单 #45）**：
     起因：`release.yml` 原来只在构建完之后读 tag 正文，且三种坏形态全部静默降级——轻量 tag 的 `%(contents)` 是 commit message，
-    照发；正文为空被 appcast 那步兜底成一句「See the GitHub release page」；拆不出双语退回单份 `<description>`——都要等十几分钟构建
     跑完、Release 发出去了才在页面上看见（v1.0.0/v1.0.1 因浅克隆把 tag 剥成 commit，正文就这样静默丢过一次）。**做法**：Checkout 之后、
     Set up Go 之前新增「Validate release tag」步，调 `.github/scripts/check_release_tag.sh`：形态委托 `build-version.sh`、
     `git cat-file -t` 必须是 `tag`、正文非空、`split_release_notes.py` 拆得开（标记式与交错式都认，判据是两边都有实质内容）；
-    原「Extract tag changelog」步并入，正文只读一次，appcast 与 Create Release 引用同一个输出；appcast 的单份兜底分支保留作安全阀但
     实际走不到。脚本本地可跑（docs/releasing.md「四」要求 push 前先过），「CI 链路只能靠真实 tag 验」的缺口至少堵住了脚本这一半。
     **两个实测坑**：① bash 3.2 的 `${BODY//[[:space:]]/}` 对 18KB 含中文的 v1.5.0 正文要跑 **98 秒**（模式替换按多字节字符逐个扫，
     二次方级），改 `tr -d '[:space:]'` 后 0.1 秒——release.yml 里 `escape_cdata` 至今仍用同一写法处理整段正文，同样体量下同样慢，
-    这次不碰 appcast 生成逻辑所以没顺手改；② 拆分脚本的哨兵原来两边各 ≥200 字符，量了 v1.1.0–v1.5.0 五份正文，中英字数比稳定在 0.38，
     中文侧按 200 卡等于要求英文 ≥520，一份四条 bullet 的标记式日志（英 416 / 中 175）会被拒，所以中文阈值改 80、英文不动；
     一两行的 hotfix 日志（v1.0.0 那种 39 字节）仍会被拒，这是有意的——发版日志本来就要求手写双语改动清单。
     **验证**：临时仓库九种样本（形态错 ×2、轻量 ×2、空正文、纯英文、交错式、标记式、beta 标记式）判定全部符合预期，`--body-out`
@@ -314,5 +274,3 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
     **修法（2026-09-12 已落地，用户拍板「做」）**：kill 前把旧 pid 记进 `OLD_PIDS`，`open -g` 之后要求新 pid ≠ 旧 pid，不满足就打红字（`旧实例没有退出…最常见的原因：App 有 modal sheet 开着`，并给出核实用的 `/usr/bin/log show … | grep 'blocked by'`）并 `exit 1`，让调用方——人或别的会话——看得见。
     **没有**选另一条「把 5 秒改成等到退出为止、上限 60 秒」：AppKit 是在调 delegate 之前就把 terminate 整个取消掉的，SIGTERM 又已被 SIG_IGN，等多久都不会退（实测再等 10 秒仍在），那条路只会把失败推迟 60 秒、还让人以为脚本卡死。
     **仍未处理**：App 侧 `.terminateLater` 没有超时兜底（ls-Laurie 指出的同形状隐患）。修法仍是给它加看门狗，例如 2 秒后无条件 `NSApp.reply(toApplicationShouldTerminate: true)`——卡住的落盘不该把终止流程永久别死。这条这次没动，因为它跟本次现场无关（本次是 modal sheet，不是落盘卡住）。
-
-15. **更新界面改成 App 内「软件更新」页，Sparkle 换自定义 `SPUUserDriver`（2026-09-12，用户拍板方案 B）**：`SPUStandardUpdaterController` 换成 `SPUUpdater(hostBundle:applicationBundle:userDriver:delegate:)` + `Settings/SoftwareUpdateDriver.swift`；发现 / 下载 / 解包 / 待装 / 安装中 / 失败全部显示在设置窗口的「软件更新」页，一个 Sparkle 弹窗都不弹。发布链路（appcast 生成、双语 `<description xml:lang>`、beta 通道、tag 校验）一个字节没动——页面上的发版日志读的就是那份 `<description>`（Sparkle 按系统语言挑好），ⓘ 打开 appcast 的 link / fullReleaseNotesLink、都没有就按 tag 拼 Release 页。Sparkle 语义上要记住的三条：reply 闭包必须且只能答一次；「下完待装」那步 dismiss = 退出时安装；周期检查发现更新时我们立刻 dismiss 只留信息，用户真要装时再查一次并自动答 install。界面、意图机制、窗口关闭收尾与深链 `lyrimuse://settings/software-update` 的完整记录在 14 章决策 #25。

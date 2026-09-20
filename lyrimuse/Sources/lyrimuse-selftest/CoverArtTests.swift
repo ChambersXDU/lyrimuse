@@ -162,35 +162,6 @@ func runCoverArtTests() {
     }
 
     do {
-        func lift(_ r: Double, _ g: Double, _ b: Double) -> (r: Double, g: Double, b: Double) {
-            LocalPlaybackSource.accentForDarkBackdrop(r: r, g: g, b: b)
-        }
-        func luma(_ c: (r: Double, g: Double, b: Double)) -> Double {
-            0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
-        }
-
-        let blue = lift(0, 0, 1)
-        expectEqual(abs(luma(blue) - 0.62) < 0.001, true)
-        expectEqual(blue.b > blue.r && abs(blue.r - blue.g) < 0.001, true)
-
-        let warm = lift(0.9, 0.7, 0.4)
-        expectEqual(warm == (r: 0.9, g: 0.7, b: 0.4), true)
-        expectEqual(lift(1, 1, 1) == (r: 1.0, g: 1.0, b: 1.0), true)
-
-        var bad = 0
-        for i in 0 ... 20 {
-            for j in 0 ... 20 {
-                for k in [0.0, 0.25, 0.5, 0.75, 1.0] {
-                    let c = lift(Double(i) / 20, Double(j) / 20, k)
-                    if c.r < 0 || c.r > 1 || c.g < 0 || c.g > 1 || c.b < 0 || c.b > 1 { bad += 1 }
-                    if luma(c) < 0.619 { bad += 1 }
-                }
-            }
-        }
-        expectEqual(bad, 0)
-    }
-
-    do {
 
         expectEqual(MediaControlSnapshot.trackKey(artist: "周杰伦", title: "以父之名"),
                     "周杰伦|以父之名")
@@ -275,60 +246,6 @@ func runCoverArtTests() {
         }
         expectEqual(bad, 0)
         expectEqual(unreachable, 0)
-    }
-
-    do {
-
-        let realCoverRGB = (r: 0.734, g: 0.646, b: 0.372)
-
-        let step1 = LocalPlaybackSource.brightenedAccent(
-            r: realCoverRGB.r, g: realCoverRGB.g, b: realCoverRGB.b)
-        let candidateBeforeFix = LocalPlaybackSource.accentForDarkBackdrop(
-            r: step1.r, g: step1.g, b: step1.b)
-        expectEqual(candidateBeforeFix == realCoverRGB, true)
-
-        let dim = 1 - LocalPlaybackSource.notchCoverArtOverlayOpacity
-        let approxBackground = (r: realCoverRGB.r * dim, g: realCoverRGB.g * dim, b: realCoverRGB.b * dim)
-        let contrastBeforeFix = LocalPlaybackSource.contrastRatio(
-            LocalPlaybackSource.relativeLuminance(r: candidateBeforeFix.r, g: candidateBeforeFix.g, b: candidateBeforeFix.b),
-            LocalPlaybackSource.relativeLuminance(r: approxBackground.r, g: approxBackground.g, b: approxBackground.b))
-        expectEqual(abs(contrastBeforeFix - 2.78) < 0.02, true)
-
-        let fixed = LocalPlaybackSource.accentForCoverArtBackground(
-            r: candidateBeforeFix.r, g: candidateBeforeFix.g, b: candidateBeforeFix.b,
-            rawR: realCoverRGB.r, rawG: realCoverRGB.g, rawB: realCoverRGB.b)
-        let contrastAfterFix = LocalPlaybackSource.contrastRatio(
-            LocalPlaybackSource.relativeLuminance(r: fixed.r, g: fixed.g, b: fixed.b),
-            LocalPlaybackSource.relativeLuminance(r: approxBackground.r, g: approxBackground.g, b: approxBackground.b))
-        expectEqual(contrastAfterFix >= 4.49, true)
-
-        expectEqual(fixed.r >= fixed.g && fixed.g >= fixed.b, true)
-
-        let trulyDarkBackground = (r: 0.02, g: 0.02, b: 0.02)
-        let alreadyFine = LocalPlaybackSource.accentForCoverArtBackground(
-            r: candidateBeforeFix.r, g: candidateBeforeFix.g, b: candidateBeforeFix.b,
-            rawR: trulyDarkBackground.r / dim, rawG: trulyDarkBackground.g / dim, rawB: trulyDarkBackground.b / dim)
-        expectEqual(alreadyFine == candidateBeforeFix, true)
-
-        expectEqual(LocalPlaybackSource.notchCoverArtOverlayOpacity, 0.45)
-    }
-
-    do {
-
-        let hongdouRGB = (r: 0.8936, g: 0.8953, b: 0.9069)
-        let step1 = LocalPlaybackSource.brightenedAccent(r: hongdouRGB.r, g: hongdouRGB.g, b: hongdouRGB.b)
-        let candidateBeforeFix = LocalPlaybackSource.accentForDarkBackdrop(r: step1.r, g: step1.g, b: step1.b)
-        expectEqual(candidateBeforeFix == hongdouRGB, true)
-
-        let fixed = LocalPlaybackSource.accentForCoverArtBackground(
-            r: candidateBeforeFix.r, g: candidateBeforeFix.g, b: candidateBeforeFix.b,
-            rawR: hongdouRGB.r, rawG: hongdouRGB.g, rawB: hongdouRGB.b)
-        let dim = 1 - LocalPlaybackSource.notchCoverArtOverlayOpacity
-        let approxBackground = (r: hongdouRGB.r * dim, g: hongdouRGB.g * dim, b: hongdouRGB.b * dim)
-        let bgLum = LocalPlaybackSource.relativeLuminance(r: approxBackground.r, g: approxBackground.g, b: approxBackground.b)
-        let fixedLum = LocalPlaybackSource.relativeLuminance(r: fixed.r, g: fixed.g, b: fixed.b)
-        expectEqual(fixedLum > bgLum, true)
-        expectEqual(LocalPlaybackSource.contrastRatio(bgLum, fixedLum) >= 4.0, true)
     }
 
     do {

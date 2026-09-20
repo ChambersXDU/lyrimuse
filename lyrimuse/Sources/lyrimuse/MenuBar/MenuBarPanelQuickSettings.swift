@@ -8,7 +8,6 @@ extension LyricsSurface {
     var symbolName: String {
         switch self {
         case .overlay: return "captions.bubble"
-        case .notch: return "rectangle.topthird.inset.filled"
         case .menuBar: return "menubar.rectangle"
         }
     }
@@ -16,8 +15,6 @@ extension LyricsSurface {
     var panelTitle: String {
         switch self {
         case .overlay: return L10n.t("悬浮歌词")
-
-        case .notch: return L10n.t("灵动岛歌词")
         case .menuBar: return L10n.t("菜单栏歌词")
         }
     }
@@ -25,7 +22,6 @@ extension LyricsSurface {
     var isEnabled: Bool {
         switch self {
         case .overlay: return AppSettings.shared.classicOverlayEnabled
-        case .notch: return AppSettings.shared.notchOverlayEnabled
         case .menuBar: return AppSettings.shared.showLyricsInMenuBar
         }
     }
@@ -221,41 +217,6 @@ struct PanelQuickSettings: View {
                                 LyricsOverlayWindowController.shared.setLocked(newValue)
                             }
                         }))
-        case .notch:
-            row(L10n.t("风格")) {
-                Picker("", selection: $settings.notchCardStyle) {
-                    ForEach(NotchCardStyle.allCases, id: \.self) { style in
-                        Text(style.displayName).tag(style)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .controlSize(.small)
-                .fixedSize()
-            }
-
-            sliderRow(L10n.t("宽度"), value: Binding(
-                get: { settings.notchContentWidth },
-                set: { NotchEditorStage.commitWidths(steady: $0) }
-            ), range: NotchEditorStage.usableWidthRangeOnCurrentScreen, step: 10,
-               displayValue: { NotchEditorStage.effectiveWidth(baseWidth: $0) })
-
-            sliderRow(L10n.t("展开宽度"), value: Binding(
-                get: { settings.notchExpandedContentWidth },
-                set: { NotchEditorStage.commitWidths(expanded: $0) }
-            ), range: NotchEditorStage.usableExpandedWidthRangeOnCurrentScreen, step: 10,
-               displayValue: {
-                   NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth,
-                                                           expandedBase: $0)
-               })
-
-            toggleRow(L10n.t("显示歌词"), isOn: $settings.notchShowLyrics)
-
-            if settings.notchShowLyrics {
-                alignmentRow(selection: $settings.notchLyricsAlignment,
-                             options: LyricsRestingAlignment.notchOptions,
-                             label: LyricsAlignmentSegmentedControl.label(for:))
-            }
         case .menuBar:
             row(L10n.t("宽度模式")) {
                 Picker("", selection: $settings.menuBarLyricsWidthMode) {

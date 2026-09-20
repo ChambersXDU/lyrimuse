@@ -19,8 +19,8 @@ of the actively maintained open-source options:
   for Apple Music, Spotify **and the Chinese players (QQ Music, NetEase Cloud Music, Kugou)**, plus
   YouTube Music / Spotify Web playing in any browser; 9 lyric sources checked automatically, with
   **every candidate scored on one scale so the best match wins** (and the decision shown per
-  track); translation, pinyin / Cantonese Jyutping / furigana; Last.fm & ListenBrainz scrobbling
-  with local listening stats. macOS 14+, Apple Silicon and Intel.
+  track); translation, pinyin / Cantonese Jyutping / furigana; optional ListenBrainz submissions.
+  macOS 14+, Apple Silicon and Intel.
 
 **What about OSD Lyrics?** It's a Linux desktop-lyrics app, not a macOS one — it shows up in
 "LyricsX alternative" lists but won't run on a Mac.
@@ -41,8 +41,8 @@ of the actively maintained open-source options:
 | Romanization | per-line pinyin, **Cantonese Jyutping**, Japanese furigana | — | — |
 | Simplified ⇄ Traditional Chinese | yes, independent of UI language | yes | — |
 | Duet / multi-singer line splitting | yes, when the source marks parts | — | — |
-| Scrobbling & listening stats | Last.fm + ListenBrainz scrobbling, backfill, local history, charts, listening heatmap | — | — |
-| Display surfaces | floating overlay, Dynamic-Island-style capsule, menu bar lyrics, full lyrics window | desktop + menu bar | menu bar, fullscreen view, karaoke popup |
+| Listening submissions | optional ListenBrainz submissions | — | — |
+| Display surfaces | floating overlay and menu bar lyrics | desktop + menu bar | menu bar, fullscreen view, karaoke popup |
 | UI languages | English, Simplified Chinese, Traditional Chinese | multiple (Crowdin) | English, Simplified Chinese |
 
 ## Where Lyrimuse fits
@@ -51,8 +51,8 @@ Lyrimuse is built for listeners the other two don't fully cover: you play music 
 **QQ Music, NetEase Cloud Music or Kugou** (not just Apple Music / Spotify); you play
 **YouTube Music or Spotify in a browser** and still want desktop lyrics synced to the page's own
 progress; you want **Cantonese Jyutping or Japanese furigana** readings alongside the original
-lines; or you want **Last.fm / ListenBrainz scrobbling and listening stats** in the same app that
-shows your lyrics — all of it free, open source, and actively maintained.
+lines; or you want optional **ListenBrainz submissions** alongside the same app that shows your
+lyrics — all of it free, open source, and actively maintained.
 
 Matching is also **score-driven rather than first-hit**: anyone who has used multi-source lyrics
 apps knows the pain of a wrong version getting picked. Lyrimuse ranks every candidate from every

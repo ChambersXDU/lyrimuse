@@ -177,7 +177,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
             .background(alignment: .top) { desktopSurface }
             .overlay(alignment: .bottom) { lane() }
 
-            .clipShape(NotchHangingShape(bottomCornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             .environment(\.colorScheme, menuBarAppearance.colorScheme)
     }

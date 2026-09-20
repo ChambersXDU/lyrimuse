@@ -35,8 +35,6 @@
 
 ### 3. Top10 歌手（topartists.go）
 
-- 24 小时检查一次（`topArtistsCheckInterval`），最终展示 10 个（`topArtistsN`），从 Last.fm 拉 30 个原始条目的池子（`topArtistsFetchPool`）再归并。
-- **别名归并**（mergeAliasedArtists，2026-08-18 扩成三信号并查集）：①名字键（合唱取第一位＋手工别名表＋繁简＋大小写折叠）；②mbid——Last.fm 自带的，或 **MusicBrainz 身份解析**补上的（`resolveArtistIdentityMB`：任何写法 → mbid＋中文名，置信度 ≥90、中文名过中华圈 country 门槛，永久缓存 `lyrimuse-artist-identity-cache.json`）；③解析出的中文名的名字键（桥接「A 解析出中文名、B 本来就用中文名」）。显示名优先级：桶内真实出现过的中文成员名 > 解析出的中文名 > 合 credit 段数最少的成员名。
 - **身份解析的延迟纪律**：daily 推送在 poll 循环里同步跑，归并本体**只读缓存**；缓存由 `warmArtistIdentityCache` 后台 goroutine 预热（MusicBrainz 全局 1.1s 限速，整池 ~1 分钟），次日归并自然收敛。CLI 默认 `-mb-budget 0`（App 统计页保持毫秒级），手动导出可传大预算现场解析。
 - 头像源优先级：QQ 音乐 → Deezer 兜底（Apple Music 需付费 API 不可行）。
 - 池子不够 10 个不动态补拉，少于 10 直接展示。
@@ -76,7 +74,6 @@ state-worker（/push 接收、/now 供网页与 feishu-bot、KV 缓存、LB 兜�
 
 | 主题 | 位置 |
 |---|---|
-| 状态构造/推送 | lyrimuse-collector/relay.go `relayState`；poller.go `pushRelayState` `pushScrobble` |
 | Top10 | lyrimuse-collector/topartists.go `mergeAliasedArtists`；topartistscli.go、avatarcli.go |
 | 网页 | web/index.html（`computeArtScrim`、卡拉OK渐变、今日统计等函数级注释）、web/sw.js |
 | 飞书 | feishu-bot/main.go `buildInline`、README.md |

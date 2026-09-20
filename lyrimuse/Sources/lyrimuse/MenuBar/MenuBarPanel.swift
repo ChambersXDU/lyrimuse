@@ -34,7 +34,6 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var trackLyricsOffsetMs = 0
 
     @Published private(set) var classicOverlayEnabled = false
-    @Published private(set) var notchOverlayEnabled = false
     @Published private(set) var showLyricsInMenuBar = false
     @Published private(set) var lyricsOffsetStepMs = 200
     private var subs: [AnyCancellable] = []
@@ -73,7 +72,6 @@ private final class PanelPlayback: ObservableObject {
             p.$currentDurationMs.removeDuplicates().sink { [weak self] in self?.currentDurationMs = $0 },
             p.$trackLyricsOffsetMs.removeDuplicates().sink { [weak self] in self?.trackLyricsOffsetMs = $0 },
             s.$classicOverlayEnabled.removeDuplicates().sink { [weak self] in self?.classicOverlayEnabled = $0 },
-            s.$notchOverlayEnabled.removeDuplicates().sink { [weak self] in self?.notchOverlayEnabled = $0 },
             s.$showLyricsInMenuBar.removeDuplicates().sink { [weak self] in self?.showLyricsInMenuBar = $0 },
             s.$lyricsOffsetStepMs.removeDuplicates().sink { [weak self] in self?.lyricsOffsetStepMs = $0 },
         ]
@@ -177,10 +175,6 @@ private struct MenuBarPanelView: View {
 
     @Environment(\.displayScale) private var displayScale
 
-    @State private var lastfmStatus: DestinationStatus?
-
-    @State private var pendingUpdate: SparkleUpdaterManager.AvailableUpdate?
-
     var body: some View {
         VStack(spacing: 9) {
             nowPlayingCard
@@ -199,15 +193,6 @@ private struct MenuBarPanelView: View {
         .padding(10)
         .frame(width: 336)
 
-        .onAppear {
-            pendingUpdate = SparkleUpdaterManager.shared.availableUpdate
-            lastfmStatus = destinationStatus(
-                for: .lastfm,
-                config: .shared,
-                lastfmConnect: .shared,
-
-                mirrorInfo: LastfmMirrorStatus.current)
-        }
     }
 
     private func setQuickTarget(_ surface: LyricsSurface?) {
@@ -219,10 +204,6 @@ private struct MenuBarPanelView: View {
         case .overlay:
             return {
                 LyricsOverlayWindowController.shared.setVisible(!AppSettings.shared.classicOverlayEnabled)
-            }
-        case .notch:
-            return {
-                NotchLyricsWindowController.shared.setVisible(!AppSettings.shared.notchOverlayEnabled)
             }
         case .menuBar:
             return {
@@ -241,16 +222,9 @@ private struct MenuBarPanelView: View {
 
             HStack(spacing: 9) {
                 surfaceTile(.overlay)
-                surfaceTile(.notch)
                 surfaceTile(.menuBar)
             }
             HStack(spacing: 9) {
-
-                knobTile(symbol: "text.quote", title: L10n.t("歌词窗口"), on: false) {
-                    close()
-                    AppActions.shared.openLyricsWindow?()
-                }
-
                 knobTile(symbol: "music.note.list", title: L10n.t("歌词管理"), on: false) {
                     close()
                     AppActions.shared.openLyricsManager?()
@@ -290,14 +264,7 @@ private struct MenuBarPanelView: View {
     private var trackHeader: some View {
         HStack(alignment: .top, spacing: 9) {
 
-            Button {
-                close()
-                AppActions.shared.openLyricsWindow?()
-            } label: {
-                coverView
-            }
-            .buttonStyle(.plain)
-            .help(L10n.t("打开歌词窗口"))
+            coverView
             VStack(alignment: .leading, spacing: 2) {
                 Text(displayTitle)
                     .font(.system(size: 12, weight: .semibold))
@@ -565,65 +532,20 @@ private struct MenuBarPanelView: View {
                 close()
                 AppActions.shared.openSettings?()
             }
-            lastfmFooterItem
             versionFooterItem
         }
     }
 
     @ViewBuilder private var versionFooterItem: some View {
-        if let update = pendingUpdate {
-            footerItem(
-
-                title: String(format: update.downloaded ? L10n.t("%@ 已下载，点击安装") : L10n.t("有新版本 %@"),
-                              update.version),
-                tint: .accentColor, help: L10n.t("打开软件更新"),
-                icon: { Image(systemName: "arrow.down.circle.fill").font(.system(size: 10.5)) }
-            ) {
-                close()
-
-                AppActions.shared.requestSettings(.softwareUpdate)
-                AppActions.shared.openSettings?()
-            }
-        } else {
-            footerItem(
-                title: String(format: L10n.t("版本 %@"), SparkleUpdaterManager.appVersionString),
-                tint: .secondary, help: L10n.t("关于 Lyrimuse"),
-                icon: { Image(systemName: "info.circle").font(.system(size: 10.5)) }
-            ) {
-                close()
-
-                AppActions.shared.requestSettings(.tab(.about))
-                AppActions.shared.openSettings?()
-            }
-        }
-    }
-
-    @ViewBuilder private var lastfmFooterItem: some View {
-        switch lastfmStatus {
-        case .active:
-            lastfmButton(tint: .secondary, help: nil) {
-
-                lastfmBadge(size: 11)
-            }
-        case .error(let message), .missingCreds(let message):
-
-            lastfmButton(tint: .orange, help: message) {
-                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10))
-            }
-
-        case .notConfigured, .disabled, .none:
-            EmptyView()
-        }
-    }
-
-    private func lastfmButton<Icon: View>(tint: Color, help: String?,
-                                          @ViewBuilder icon: @escaping () -> Icon) -> some View {
-        let name = lastfmDisplayName(config: .shared)
-        return footerItem(title: name.isEmpty ? "Last.fm" : name, tint: tint, help: help,
-                          icon: icon) {
+        footerItem(
+            title: String(format: L10n.t("版本 %@"),
+                          Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"),
+            tint: .secondary, help: L10n.t("关于 Lyrimuse"),
+            icon: { Image(systemName: "info.circle").font(.system(size: 10.5)) }
+        ) {
             close()
 
-            AppActions.shared.requestSettings(.account(.lastfm))
+            AppActions.shared.requestSettings(.tab(.about))
             AppActions.shared.openSettings?()
         }
     }

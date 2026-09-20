@@ -3,7 +3,6 @@ import SwiftUI
 
 enum AutoHideSurface {
     case desktopOverlay
-    case notch
 }
 
 enum AutoHideItem: String, CaseIterable, Identifiable {
@@ -60,25 +59,6 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
                     settings.hideWhenNotPlaying = newValue
                     if settings.classicOverlayEnabled {
                         LyricsOverlayWindowController.shared.setHideWhenNotPlaying(newValue)
-                    }
-                })
-        case (.notch, .duringScreenCapture):
-            return Binding(
-                get: { settings.notchHideDuringScreenCapture },
-                set: { newValue in
-                    settings.notchHideDuringScreenCapture = newValue
-                    if settings.notchOverlayEnabled {
-                        NotchLyricsWindowController.shared.setHiddenFromCapture(newValue)
-                    }
-                })
-
-        case (.notch, .whenNotPlaying):
-            return Binding(
-                get: { settings.notchHideWhenNotPlaying },
-                set: { newValue in
-                    settings.notchHideWhenNotPlaying = newValue
-                    if settings.notchOverlayEnabled {
-                        NotchLyricsWindowController.shared.setHideWhenNotPlaying(newValue)
                     }
                 })
         }

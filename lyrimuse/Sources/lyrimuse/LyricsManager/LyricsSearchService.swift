@@ -83,7 +83,7 @@ final class LyricsSearchService {
             case "rejectDurationMismatch":
                 return L10n.t("最后一句的时间跟曲长差了 25% 以上，多半是另一个版本")
             case "rejectPlainTextOnly":
-                return L10n.t("这个源确实收录了这首歌，但只有不带时间戳的纯文本——可以在「歌词窗口」里当静态文字阅读，无法逐字/逐行跟随播放高亮")
+                return L10n.t("这个源确实收录了这首歌，但只有不带时间戳的纯文本——可以作为静态文字阅读，无法逐字/逐行跟随播放高亮")
             default: return ""
             }
         }

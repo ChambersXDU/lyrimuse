@@ -137,12 +137,10 @@ func runSettingsInteractionTests() {
 
     do {
         typealias P = CollectorRestartPolicy
-        expectEqual(P.needsRestart(changedKeys: ["lastfm_excluded_bundles"]), false)
-        expectEqual(P.needsRestart(changedKeys: ["lastfm_excluded_bundles", "players"]), true)
-        expectEqual(P.needsRestart(changedKeys: ["scrobble_short_tracks"]), true)
+        expectEqual(P.needsRestart(changedKeys: ["players"]), true)
         expectEqual(P.needsRestart(changedKeys: []), true)
 
-        expectEqual(P.hotReloadedKeys.isEmpty, false)
+        expectEqual(P.hotReloadedKeys.isEmpty, true)
 
         expectEqual(P.changedKeys(from: ["a": 1, "b": "x"], to: ["a": 1, "b": "x"]), [])
         expectEqual(P.changedKeys(from: ["a": 1], to: ["a": 2]), ["a"])

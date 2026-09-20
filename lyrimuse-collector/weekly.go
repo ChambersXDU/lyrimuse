@@ -1,13 +1,9 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	neturl "net/url"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -45,104 +41,6 @@ func (s weeklyDigestState) save(lastTo int64) {
 
 var weeklyDigestPath string
 
-type lastfmChartWeek struct{ From, To int64 }
-
-type lastfmChartEntry struct {
-	Name, Artist string
-	PlayCount    int
-	Mbid         string
-}
-
-func lastfmAPIGet(ctx context.Context, params neturl.Values, out any) error {
-	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
-	defer cancel()
-	params.Set("format", "json")
-	u := "https://ws.audioscrobbler.com/2.0/?" + params.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := doHTTPTracked(http.DefaultClient, req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("lastfm status %d", resp.StatusCode)
-	}
-	return json.NewDecoder(resp.Body).Decode(out)
-}
-
-func lastfmWeeklyChartList(ctx context.Context, user, apiKey string) ([]lastfmChartWeek, error) {
-	var out struct {
-		WeeklyChartList struct {
-			Chart []struct{ From, To string } `json:"chart"`
-		} `json:"weeklychartlist"`
-	}
-	params := neturl.Values{"method": {"user.getWeeklyChartList"}, "user": {user}, "api_key": {apiKey}}
-	if err := lastfmAPIGet(ctx, params, &out); err != nil {
-		return nil, err
-	}
-	weeks := make([]lastfmChartWeek, 0, len(out.WeeklyChartList.Chart))
-	for _, c := range out.WeeklyChartList.Chart {
-		from, _ := strconv.ParseInt(c.From, 10, 64)
-		to, _ := strconv.ParseInt(c.To, 10, 64)
-		weeks = append(weeks, lastfmChartWeek{From: from, To: to})
-	}
-	return weeks, nil
-}
-
-func lastfmWeeklyTopTracks(ctx context.Context, user, apiKey string, from, to int64) ([]lastfmChartEntry, error) {
-	var out struct {
-		WeeklyTrackChart struct {
-			Track []struct {
-				Name      string `json:"name"`
-				PlayCount string `json:"playcount"`
-				Artist    struct {
-					Text string `json:"#text"`
-				} `json:"artist"`
-			} `json:"track"`
-		} `json:"weeklytrackchart"`
-	}
-	params := neturl.Values{
-		"method": {"user.getWeeklyTrackChart"}, "user": {user}, "api_key": {apiKey},
-		"from": {strconv.FormatInt(from, 10)}, "to": {strconv.FormatInt(to, 10)},
-	}
-	if err := lastfmAPIGet(ctx, params, &out); err != nil {
-		return nil, err
-	}
-	entries := make([]lastfmChartEntry, 0, len(out.WeeklyTrackChart.Track))
-	for _, t := range out.WeeklyTrackChart.Track {
-		pc, _ := strconv.Atoi(t.PlayCount)
-		entries = append(entries, lastfmChartEntry{Name: t.Name, Artist: t.Artist.Text, PlayCount: pc})
-	}
-	return entries, nil
-}
-
-func lastfmWeeklyTopArtists(ctx context.Context, user, apiKey string, from, to int64) ([]lastfmChartEntry, error) {
-	var out struct {
-		WeeklyArtistChart struct {
-			Artist []struct {
-				Name      string `json:"name"`
-				PlayCount string `json:"playcount"`
-			} `json:"artist"`
-		} `json:"weeklyartistchart"`
-	}
-	params := neturl.Values{
-		"method": {"user.getWeeklyArtistChart"}, "user": {user}, "api_key": {apiKey},
-		"from": {strconv.FormatInt(from, 10)}, "to": {strconv.FormatInt(to, 10)},
-	}
-	if err := lastfmAPIGet(ctx, params, &out); err != nil {
-		return nil, err
-	}
-	entries := make([]lastfmChartEntry, 0, len(out.WeeklyArtistChart.Artist))
-	for _, a := range out.WeeklyArtistChart.Artist {
-		pc, _ := strconv.Atoi(a.PlayCount)
-		entries = append(entries, lastfmChartEntry{Name: a.Name, PlayCount: pc})
-	}
-	return entries, nil
-}
-
 func mostRecentMonday(t time.Time) time.Time {
 	wd := int(t.Weekday())
 	if wd == 0 {
@@ -162,39 +60,17 @@ func (p *poller) weeklyDigest(now time.Time) {
 	}
 	p.weeklyLastCheckedAt = now
 
-	lastfmConfigured := p.cfg.LastfmUser != "" && p.cfg.lastfmBridgeAPIKey() != ""
-	lbConfigured := p.cfg.User != "" && p.cfg.Token != ""
-	source := resolveDigestSource(features.WeeklyDigestSource, lastfmConfigured, lbConfigured)
-	if source == "" {
+	if p.cfg.User == "" || p.cfg.Token == "" {
 		return
 	}
 
-	var from, to int64
-	if source == digestSourceLastfm {
-		weeks, err := lastfmWeeklyChartList(p.ctx, p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey())
-		if err != nil || len(weeks) == 0 {
-			return
-		}
-		latest := weeks[len(weeks)-1]
-		if latest.To > now.Unix() {
-			return
-		}
-		from, to = latest.From, latest.To
-	} else {
-		thisMonday := mostRecentMonday(now)
-		from, to = thisMonday.AddDate(0, 0, -7).Unix(), thisMonday.Unix()
-	}
+	thisMonday := mostRecentMonday(now)
+	from, to := thisMonday.AddDate(0, 0, -7).Unix(), thisMonday.Unix()
 	if to <= p.weeklyState.load() {
 		return
 	}
 
-	var stats digestStats
-	var err error
-	if source == digestSourceLastfm {
-		stats, err = lastfmDigestStats(p.ctx, p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey(), from, to)
-	} else {
-		stats, err = listenbrainzDigestStats(p.ctx, p.lb.root, p.cfg.User, from, to)
-	}
+	stats, err := listenbrainzDigestStats(p.ctx, p.lb.root, p.cfg.User, from, to)
 	if err != nil {
 		return
 	}

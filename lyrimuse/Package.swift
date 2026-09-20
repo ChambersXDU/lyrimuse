@@ -11,7 +11,6 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", exact: "1.15.0"),
 
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
     ],
     targets: [
         .target(
@@ -20,7 +19,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "lyrimuse",
-            dependencies: ["LyrimuseCore", "KeyboardShortcuts", "Sparkle"],
+            dependencies: ["LyrimuseCore", "KeyboardShortcuts"],
             path: "Sources/lyrimuse",
             resources: [.process("Resources")]
         ),

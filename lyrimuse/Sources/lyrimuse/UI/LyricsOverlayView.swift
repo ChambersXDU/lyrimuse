@@ -548,7 +548,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             Rectangle()
                 .fill(Color.white.opacity(0.18))
                 .frame(width: 1, height: 12)
-            iconButton(.expandToLyricsWindow, "arrow.up.left.and.arrow.down.right")
             iconButton(.settingsMenu, "gearshape.fill")
             iconButton(.lock, "lock.open.fill")
             iconButton(.closeOverlay, "xmark")

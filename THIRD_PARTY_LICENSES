@@ -8,13 +8,12 @@ Contents/Resources/。
 打包进 .app 的组件:
 
   1. media-control / mediaremote-adapter  — BSD-3-Clause  (Contents/Resources/media-control/)
-  2. Sparkle                              — MIT           (Contents/Frameworks/Sparkle.framework)
-  3. KeyboardShortcuts                    — MIT           (静态链接进主可执行文件)
+  2. KeyboardShortcuts                    — MIT           (静态链接进主可执行文件)
 
 以源码/数据形式内嵌的组件:
 
-  4. OpenCC 繁简词典数据                   — Apache-2.0    (内嵌于 collector,见 t2s.go)
-  5. rime-cantonese 粤拼词典数据(单字+词级) — CC-BY-4.0     (内嵌于 collector,见 jyutping.go)
+  3. OpenCC 繁简词典数据                   — Apache-2.0    (内嵌于 collector,见 t2s.go)
+  4. rime-cantonese 粤拼词典数据(单字+词级) — CC-BY-4.0     (内嵌于 collector,见 jyutping.go)
 
 ================================================================================
 1. media-control / mediaremote-adapter
@@ -52,38 +51,6 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-================================================================================
-2. Sparkle
-   https://github.com/sparkle-project/Sparkle
-   应用内自动更新。以 Sparkle.framework 形式嵌入。
-================================================================================
-
-Copyright (c) 2006-2013 Andy Matuschak.
-Copyright (c) 2009-2013 Elgato Systems GmbH.
-Copyright (c) 2011-2014 Kornel Lesiński.
-Copyright (c) 2015-2017 Mayur Pawashe.
-Copyright (c) 2014 C.W. Betts.
-Copyright (c) 2014 Petroules Corporation.
-Copyright (c) 2014 Big Nerd Ranch.
-All rights reserved.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 =================
 EXTERNAL LICENSES
@@ -277,7 +244,7 @@ You may add Your own copyright statement to Your modifications and may provide a
 END OF TERMS AND CONDITIONS
 
 ================================================================================
-5. rime-cantonese 粵拼詞庫
+4. rime-cantonese 粵拼詞庫
    https://github.com/rime/rime-cantonese
    单字级(jyut6ping3.chars.dict.yaml)+ 词级(jyut6ping3.words.dict.yaml,2026-08-30
    加,用于多音字消歧——同一个字在不同词里读音可能不同,如"重要"zung6 jiu3 vs
@@ -303,4 +270,3 @@ https://creativecommons.org/licenses/by/4.0/legalcode
 
 CC BY 4.0 的合规要求是署名 + 注明许可证 + 提供许可证链接(不要求像 BSD/MIT 那样
 在分发物里逐字重印完整法律文本),上面这段属名声明连同许可证链接即满足该要求。
-

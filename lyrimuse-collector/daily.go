@@ -60,21 +60,12 @@ func (p *poller) dailyDigest(now time.Time) {
 		return
 	}
 
-	lastfmConfigured := p.cfg.LastfmUser != "" && p.cfg.lastfmBridgeAPIKey() != ""
-	lbConfigured := p.cfg.User != "" && p.cfg.Token != ""
-	source := resolveDigestSource(features.DailyDigestSource, lastfmConfigured, lbConfigured)
-	if source == "" {
+	if p.cfg.User == "" || p.cfg.Token == "" {
 		return
 	}
 
 	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	var stats digestStats
-	var err error
-	if source == digestSourceLastfm {
-		stats, err = lastfmDigestStats(p.ctx, p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey(), midnight.Unix(), now.Unix())
-	} else {
-		stats, err = listenbrainzDigestStats(p.ctx, p.lb.root, p.cfg.User, midnight.Unix(), now.Unix())
-	}
+	stats, err := listenbrainzDigestStats(p.ctx, p.lb.root, p.cfg.User, midnight.Unix(), now.Unix())
 	if err != nil {
 		return
 	}

@@ -3,15 +3,12 @@
 
 ## 定位
 
-App 侧「从磁盘缓存到屏幕」的整条歌词处理链:collector(独立 Go 进程)把解析好的歌词写进磁盘缓存,本章讲 Swift App 怎么把它读出来、解析、过滤、按播放位置定位到当前行,并以 20Hz 发布给各个展示面。它是所有歌词展示面(悬浮窗、灵动岛、歌词窗口、菜单栏)共享的唯一数据管线。
 
 ## 入口与展示面
 
 这条链本身没有直接的用户入口,用户通过它的**消费面**接触它:
 
 - **桌面悬浮歌词**(`LyricsOverlayView`):当前行 + 可选的下一句预览、逐字填色、罗马音/译文。
-- **灵动岛**(`NotchLyricsView`):当前行(逐字或整行)。
-- **歌词窗口**(`LyricsWindowView`):整份歌词列表(`allLines`)+ 当前行高亮定位(`currentLineIndex`),点击某行可 seek。
 - **菜单栏歌词**(`MenuBarStatusItem`):当前行纯文本(`plainText`),跑马灯用 `currentLineDwellSeconds` 配速。
 - **设置页**「歌词 → 效果」分组:中文繁简、罗马音语言开关、时间轴偏移(下拉框选作用于哪个播放器 + Stepper)。(「卡拉OK效果」2026-09-06 从这里撤掉——它不再是引擎层的开关,见下表。)
   「双行显示」2026-08-29 移到「歌词显示 → 悬浮歌词」段(它只影响悬浮歌词这一种展示面,
@@ -49,7 +46,6 @@ PlaybackCoordinator (UI 层唯一入口) → 各展示面
 - **key 归一化**:查询前必须过 `EnrichCacheKeys.normalizedKey`(cleanTag 折空白/删零宽字符 + normalizedTitle 剥歌名结尾的译名括号、版本词保留)。跟 collector 的 `enrichkey.go` 逐字节对应,selftest 用同一组用例锁死。不归一化的后果是「悬浮窗整首歌查不到词」而不是显示旧内容。
 - **宽松匹配兜底**:精确 key miss 时,按「忽略空格/大小写/繁简」(`EnrichCacheKeys.looseKey`,繁简用 CFStringTransform)再扫一遍;多个候选取 key 字典序最小的那条(Dictionary 遍历顺序不稳定,不能撞见谁用谁)。繁简折叠**刻意只放在这层兜底、绝不进 key 构造**:Go 侧 OpenCC 和 Swift 侧 ICU 对部分字取舍不同,折进 key 就是整首没词,放兜底层折不对只是退化成多一条重复条目。
 - **resolved 语义**:`ts > 0` 代表「联网解析完整跑完一轮」——找不到歌词也会写一条只有 ts 的记录。不能用「key 存在」当判据:外围字段补全路径(封面等)也写这个 key 但不动 ts。
-- **封面索引**:`coverURL(artist:title:album:)` 三级查找(精确 → 宽松 → 忽略专辑的 `coverByArtistTitle()` 索引,索引跟 mtime 缓存同寿命),给「最近播放」列表和 `PlaybackCoordinator` 的高清封面替代当 Last.fm 之外的兜底;`nativeSizedCoverURL` 只对网易云图床剥 `param=` 尺寸参数拿原图。
 
 ### 解析(LRCParser / YRCParser)
 
@@ -66,7 +62,6 @@ PlaybackCoordinator (UI 层唯一入口) → 各展示面
    - **先认身份、再过滤署名、最后剥离**,顺序不能反 —— 「每句都带标记」的对唱歌天然满足署名过滤"命中 ≥3 行且过半"的闸门,先过滤就是整首被删空。`LyricDuet.speakers(in:)` 的结果作为 `speakerExemptions` 喂给 `strippingCreditLines`,在所有规则**最前面**放行。
    - **两条路径分别认**:整行走 `LyricDuet.plan`、逐字走 `LyricDuet.planWords`。逐字侧判定必须在**整行词拼起来**的文本上做 —— 真实 YRC 里标记的切分形态不固定(`男：周` / `男`+`：` / `周`+`杰`+`伦`+`：`),只看第一个词会漏掉绝大多数(重写前 13 首带标记的歌里 11 首因此归零)。剥离按**字符数**从词序列前端剥,剥到一半的词改文本、保留时间戳。
    - **独占一行的标记整行丢掉**(`dropped`):它带着自己的时间戳,不丢就是屏幕上凭空多出一句词。⚠️ 过滤 `sides` 只能 filter+map,不能 compactMap —— 元素本身是 `Side?`,nil 是正常值,compactMap 会把它们连同被丢的行一起摘掉、整条归属错位一格。
-   - 左右按标记**首次出现顺序**分(先出现靠左),合唱类居中且**不参与交替状态机**(否则「男-合-女」会把侧算反);同一位歌手的不同写法(男/男声/男合)先归并成同一身份再排席位。第一个标记之前的行 side 为 nil(= 没有对唱信息,各视图自己兜底:歌词窗口 `?? .leading`、悬浮窗 `?? .center`)。
 4. `romaLines`/`trLines` 独立解析,**不过署名行过滤、不做简繁转换**(罗马音是拉丁字母;译文的转换在送进来之前已由 LocalPlaybackSource 做了)。
 5. 整首粒度判一次 `songLooksJapanese` 和 `songScript`(japanese/korean/chinese/other,给按语言的罗马音开关用);解析酷狗 `[kana:]` 假名标注(对不齐就整份弃用);清空罗马音/词组两个按行缓存。
    ⚠️ 判定样本是**过滤掉署名行之后的正文**(`filteredBase`/`candidateWords`),不是原始 lyrics/lyricsYRC —— 2026-08-20 改。原来刻意把署名行算进去(理由写的是「一首歌出现过假名就确证日文」),而**中文翻唱的署名行带日文原作者名是常态**:实测泠鸢yousa《神的随波逐流》整首歌唯一的假名就是「词：れるりり」「曲：れるりり」两行,正文全中文,却被判成日文 —— 于是用户关着的「中文」罗马音开关根本没机会说话(闸看的是整首歌的语言),每行中文都被标上东西:日语分词器给得出读音的出日文读音(词典外的字原样留着,表现为「有些字有有些字没有」),给不出的退到 ICU 音译出拼音,同一首歌两种形态混着出。署名行说的是「谁写的」,本来就不是「这首歌唱的是什么语言」的证据;真日文歌正文假名遍地,判定结果不变。两份正文都空时退回原始字段。selftest 用真实歌词片段钉了四条:署名行被过滤、中文关着时一行罗马音都没有、用户主动开中文时照样给、真日文歌不受误伤。
@@ -136,7 +131,6 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 - **`lrcOffsetMs` 跟 `offsetMs` 分开存**,`effectiveOffsetMs = offsetMs + lrcOffsetMs` 才是定位用的总偏移(五个查询入口全部改用它)。分开的理由:那个是用户手调的三层合成结果,这个是歌词内容的属性;混在一起的话换一份歌词时旧的 LRC offset 会残留在用户那层,而且设置页显示的数字会莫名多出几百毫秒。分开还有个实际好处——**万一某个源的符号约定跟规范相反,用户用单曲微调抵消即可**,不需要我们去猜哪个源该取反。
 - **量级闸 `maxOffsetMs = 10_000`**:超出一律当 0。见过畸形数据把整份歌词推到几十秒开外,那种"修正"比不修正糟得多。多个 offset 标签**取第一个**(文件头部才是元信息区)。
 - **整行为空时从 YRC 取**:酷狗那两首非零的实测里 `.lrc` 和 `.yrc` 两份头部带的是同一个值(KRC 母版转出来的两种形态),所以逐字模式同样吃它。
-- ⚠️ **`currentLyricsOffsetMs` 必须含这一层**(`applyOffsets()` 里 `effective + syncEngine.lrcOffsetMs`):它的唯一用途是"把歌词时间轴换算到播放位置",而歌词窗口点某一行反算 seek 目标用的就是 `行时间 − currentLyricsOffsetMs`,漏掉这层的话带非零 offset 的歌点行会跳到隔壁行。而用户可见的那两个数(设置页的基准、菜单里的单曲值)**不**含它 —— LRC offset 不是用户调出来的,不该出现在"你调了多少"里。
 - ⚠️ **时序**:`applyOffsets()` 读 `syncEngine.lrcOffsetMs`,所以它必须排在 `syncEngine.load()` **之后**(`reloadCurrentLyrics` 里本来就是这个顺序);反过来会套用上一首歌的 offset。`load()` 的指纹早退不影响 —— 早退时内容没变,这一层的值本来就该保持。
 - selftest 覆盖 19 条(解析的各种形态 + 量级闸 + 两层相加 + 换歌归零 + 从 YRC 取)。
 - **2026-09-01 全链路复核**(用户问「[offset:] 是否都处理好了」),把所有消费歌词时间戳的
@@ -157,7 +151,6 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
     头部带**同一个** offset(KRC 母版转出),raw 对 raw 恰好抵消;网易云/Musixmatch 从不带;
   - 机翻译文/罗马音抄的是原文 LRC 的原始时间戳,引擎与网页配对时两边都是 raw,一致;
   - 歌词导出/导入(lyrics/ 文件夹)对元数据行原样保留,offset 标签随文件完整往返;
-  - 四个展示面 + 歌词窗口点行反算 seek 全走 `effectiveOffsetMs`/`currentLyricsOffsetMs`,
     08-22 已覆盖。
 
 ### 查询接口(按播放位置定位)
@@ -166,8 +159,6 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 
 - `activeLine(atMs:)` → `SyncedLyricLine`:逐字模式给 `words`(+可选 `wordGroups`)、整行模式给 `mainText`,两者只有一个非空(`plainText` 按此取值);`translation` 先按**内容**查(`trTextByPlainText`:load 时把译文行按精确 timeMs 配到整行 LRC 的行、以 `contentMatchKey(原文)` 为键;键只留字母数字、统一小写——2026-08-27 加、09-01 去空白、**09-04 去标点/大小写**,见已知坑「YRC 与 LRC 不是同一套时间轴」),查不到才退回 `nearestText(trLines, 行时间戳, 容差700ms)` 最近邻贴行,两条路都 miss 该行就没有译文;`romanization` 同理(见下节);`side` 为对唱分栏。位置还没到第一句时返回 nil。
 - `upcomingLineText(afterMs:)`:下一行纯文本(双行预览用)。**故意**不要求当前行存在——还没到第一句时(idx=-1)直接把第一句真歌词当预览提前露出(署名行过滤上线后这个窗口更常见)。
-- `activeLineIndex(atMs:)`:当前行下标(歌词窗口滚动定位用)。故意不用「拿 activeLine 内容去 allLines 找」——副歌重复句内容相同,必须按时间戳直接扫下标。
-- `allLines(idPrefix:)`:整首歌全部行一次性构造(歌词窗口用),每行同样贴罗马音/译文。id = `"\(idPrefix)#\(行号)"`,idPrefix 由调用方传曲目标识(实际传 `currentOffsetKey`)——保证换歌后 id 集合整体不同,SwiftUI ForEach 做干净整体替换而不是逐行「变形」旧内容(否则换歌瞬间串行/闪烁)。
 
 ### 罗马音(Romanizer)
 
@@ -176,7 +167,6 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 - **日文必须走形态分析**(CFStringTokenizer + ja_JP locale),不能用 ICU Any-Latin:汉字是中日共用文字,Any-Latin 一律按普通话读成拼音。判据 `songLooksJapanese` 按整首传入。非日文非中文文字 Any-Latin 本来就无歧义,继续用;输出等于输入(本来就是拉丁字母)时返回 nil,不展示一行重复文字。
 - **助词修正**:单独成 token 的 は/へ/を 读 wa/e/o;こんにちは 等整词固定语单列。促音「っ」的字面 "~tsu" 按赫本式双写后一个辅音归并(`mergeSokuon`)。
 - **假名标注优先**:酷狗 `[kana:]` 标注(`KanaAnnotation`)给出多音词的实际读音(「明日」到底念 asu 还是 ashita),优先于分词器;按行文本索引,对不齐整份弃用退回形态分析(半对半错比不标更糟)。逐音节时间戳目前只解析不使用。
-- **逐词分组**(`wordGroups` / `buildWordGroups`):Apple Music 式「罗马音标在对应内容正下方」。整行一次性分词再按 UTF-16 范围对回逐字词(日文读音吃上下文,不能逐词单独求);分词边界跟歌词源逐字切分不对齐时把跨边界的词并成一组,一组共享一段罗马音,组的起止时间给下面那行罗马音算填色。只对日文产出;一组罗马音都配不上时返回 nil,视图退回整行罗马音。受同一道语言开关管辖。消费方是悬浮窗和歌词窗口(灵动岛/菜单栏只用纯文本)。
 - **三个按行缓存**:`romanizerFallbackCache`(20Hz tick 每次都会重新构造当前行,不缓存的话纯英文歌每秒 20 次重跑 ICU 音译,实测拖慢到「本地歌词肉眼可见比网页慢」)、`wordGroupCache`(分词是纯 CPU 活;⚠️ key 是「首词时间戳+行文本」不是裸文本——词组内嵌**绝对**时间戳,只按文本缓存会让副歌重复句借用第一次出现的时间轴,2026-08-20 对抗审查抓出的预存在 bug,selftest 钉住)和 `segmentsCache`(2026-08-20:整行读音兜底与逐词分组共用**同一次** CFStringTokenizer 分词——原来两条管线对同一行各分一遍,日文歌 allLines 构建的分词次数直接翻倍;整行读音由 `Romanizer.readingFromSegments` 从片段派生,与旧 `japaneseReading` 管线逐位等价,selftest 有一致性断言;两个消费方的启用门不同——逐词分组要求行内有假名、整行读音只要有汉字——所以缓存在两道门之前、按纯文本 key,时间无关可安全共享)。换歌词内容时清空(纯内存卫生,不清也不会算错)。
 - **按行下标记忆化**(2026-08-19):`activeLine`/`upcomingLineText` 缓存上一次构建的整份结果,下标没变直接返回同一实例——20Hz 调用约 99% 命中同一行,原来每 tick 都白做词数组 map、两次整行拼接和两次最近邻扫描,构建完即被调用方 `!=` 丢弃;返回同一实例还让深比较走存储同一性快路径。定位扫描统一走 `activeIndexCorrected`(数组按 timeMs 升序,越过 posMs 即 break;2026-08-20 再加 `lastScanIdx` **单调窗口记忆化**——播放位置单调推进,~99% 的 tick 落在上次命中行的时间窗内,O(1) 验证即返回,seek/换行/offset 变化时验证失败自动回退全扫)。缓存在 `load()` 失效(⚠️ 忘了失效会把上一首歌的行返回出去,selftest 钉住);offsetMs 只影响下标不影响某行内容,偏移变化天然安全。
 - **tickQuery 打包查询**(2026-08-20):fastTick 要的当前行/下一句/行下标/间奏下标是同一个 posMs 的同一次定位,原来四个入口各自独立扫一遍——`tickQuery(atMs:)` 下标只算一次、四个值一起返回(与四个独立入口逐位一致,selftest 双向对拍含倒退 seek),调用方从四行收敛成一次调用。四个独立入口保留(其它调用方仍在用)。
@@ -223,9 +213,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
   - **为什么系统里量不出来**:MediaRemote `NowPlayingInfo` 的全部 18 个字段(pyatv 从协议逆出来)里没有任何一个表示"当前曲目在这条流里的起点";media-control 读的 `startTime` 键 Music.app 在电台上不填(实测载荷里没有这个键)。ShazamKit 那条自动路要 `com.apple.developer.shazamkit` 授权,ad-hoc 签名拿不到(实测 `Code=202 Missing entitlements` + 401)。同类软件里也没有任何一个处理电台:`radioStationHash` 在 GitHub 上的全部命中都是协议定义/头文件转储,翻过的几个同类实现全部零处理,Apple Music 自己在电台上也不给逐行歌词。
   - **key 里必须带台标哈希**:δ 是"这首歌在这档节目里的投递延迟",换个台未必一样。用户 2026-09-11 明确要求"仅适用于这个电台里播放的歌"。扣错一个偏移比不扣更糟——不扣只是照旧慢一点,扣错是往反方向错。
   - **绝不能落进单曲那层**:用户实测同一首歌**正常播放是准的**,把电台上量出来的 δ 套到正常播放会把对的搞错。`nudgeLyricsOffset`/`resetLyricsOffset` 在电台时分流到这一层(源码守卫钉住);「歌词管理」那个输入框仍写单曲层——那是"编辑某首歌"的语境,不是"正在放电台"。
-  - **不碰 LyricsPinStore**:钉住的语义是"这份歌词内容是用户认过的",而这一层调的是钟不是内容,钉它会顺带让 collector 停止自动更新这首歌的歌词源。
   - **清空入口单独一个**(「歌词管理」工具栏,只在 `radioOffsetCount > 0` 时出现):跟另外三层互不连带,理由同上面那条。
-- **两个对外属性**:`currentLyricsOffsetMs` = 实际生效总和(所有「歌词时间轴 ↔ 播放位置」换算用它,如歌词窗口点行 seek 时 `item.timeMs - currentLyricsOffsetMs` 反算);`trackLyricsOffsetMs` = **只属于这首歌那一层**(菜单标题「歌词时间轴(+0.6s)」和「重置」按钮认它——显示总和会出现「点了重置数字却不归零」)。**放电台时它报的是电台那一档**——用户此刻按加减键改的就是它,显示另一个数会让人以为没生效。全局与按播放器两层都只进 `currentLyricsOffsetMs`、不进 `trackLyricsOffsetMs`;代价是它们在菜单里完全不可见(跟全局那层的既有现状一致),只在设置页那一行看得到。
 - 存储:三份值都在 UserDefaults(`np:lyricsOffsetsByTrackJSON` 与 `np:lyricsOffsetsByPlayerJSON` 存 JSON 字符串方便 `defaults read` 调试;`np:lyricsGlobalOffsetMs` 是裸 Int),**故意不放进** EnrichCacheStore 的「清空全部缓存」波及范围——校正值是用户手动调出来的个人偏好。清它有**单独**的入口:歌词管理工具栏那个「占用」菜单里的「清空全部时间轴校正」(`clearAllTrackOffsets`),只清单曲那一份,「全部」基准和按播放器那份都不受连带(selftest 各有断言钉住)。
 
 ### key 前两段必须归一化(2026-08-20 修的真 bug)
@@ -247,11 +235,9 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 
 ### 20Hz 发布机制(LocalPlaybackSource)
 
-- **fastTimer** 20Hz(挂 `.common` mode,否则开菜单/拖窗时停摆),只在「有 `anchor`(正在播放)且引擎有内容」时运行;暂停/停止时停掉。锁屏时也停(`setScreenLocked`,只停这条——2s poll 必须继续跑,否则锁屏听歌丢 scrobble)。「在播但没词」(纯音乐/广告/还没解析出来)也停(2026-08-19):每一拍都扫空数组、不可能产出任何 @Published 变化,一首 4 分钟无词歌原来要白唤醒约 5000 次;collector 中途解析出歌词靠 enrich mtime 变化在下一轮 apply(≤2s)拉起,「歌词管理」保存走 `forceReloadLyricsForCurrentTrack` 当场拉起。
 - **fastTick()**:从 anchor 外推当前位置 → `tickQuery` 一次打包查询(2026-08-20,原来四个入口各查一遍)→ **值变才赋值**。这些都是 @Published,SwiftUI 不比较新旧值,无条件赋值会让所有订阅视图每秒重算 body 20 次(实测卡顿根因)。绝大多数 tick 还是同一行,赋值实际很少发生。顺带维护 `currentLineFillSettled`(当前行填色是否已定格,悬浮窗 TimelineView 的停表条件,阈值算法在 `KaraokeFill.lineFillSettledMs`;2026-08-20 起阈值按行记忆化——它是行级常量,原来每 tick 对全行词+组重算一遍浮点循环,现在换行才算一次、tick 退化为一次整数比较)。
 - **暂停不清行**:anchor 为 nil 但有冻结位置(`pausedPositionMs`)时按冻结位置解一次当前行(`resolveLinesForPausedPosition`,apply 和 fastTick 两个入口共用一处——曾经两处各写一份清空逻辑错开过:暂停下拖进度条行被清掉)。用户按暂停的典型场景正是「这句是什么,我看一下」。真没位置或没内容才清空。
 - **重读时机**:`apply()` 在「换歌 || 引擎无内容 || 缓存文件 mtime 变了」时 `reloadCurrentLyrics()`。mtime 那条是为了同一首歌中途 collector 补译文/换更好的歌词能立刻生效;**不要**加「已有译文就不盯」的闸门(译文会被顶替,不只从无到有)。**内容等值闸**(2026-08-20):mtime 是全库单文件的,collector 给**别的歌**写盘(专辑预取最多 30 首逐个落盘/译文回填/重打分)也会触发重读——闸在 lookup 之后比较「曲目身份+五个歌词字段+简繁偏好+卡拉OK开关+罗马音语言开关」的完整快照,逐字节没变就直接 return,跳过简繁转换×3/引擎 load/整曲 allLines+gapMarkers 重建(单次 10-50ms 主线程,正撞 30Hz 填色渲染)。⚠️ 三个不变量:快照必含曲目身份(两首都没歌词的歌五字段全空相等,不带身份会串偏移校正);`sawChineseLyrics` 粘性置位在闸前;`clearIfWasPlaying` 清发布状态时必须连带 `lastReloadSnapshot = nil`(否则停播后重播同一首歌 allLines 永远回不来)。「搜索中→暂无歌词」的翻转经 resolved/instrumental 进快照,必穿闸。`allLines` 只在 reload 时重新构造(同一首歌歌词不变),且 Equatable 比较后才赋值(「还没解析完、每轮重试」的分支会反复调 reload,结果都是同一个空)。
-- **停止播放清场**(`clearIfWasPlaying`):真停(nil 快照,非暂停)时清曲目/歌词/封面/各判定,**必须连 lastKey 一起清**——否则同一首歌恢复播放时 `trackChanged=false`,allLines/封面两条重建路径全跳过,歌词窗口和悬浮窗显示互相矛盾。
 - **UI 状态字段**:`hasLyricsContent`(引擎有无内容)、`isCurrentTrackInstrumental`(纯音乐确证)、`currentTrackHasNoLyrics`(resolved 且无内容且非纯音乐 且 **非 searchIncomplete** =「搜过了确实没有」;最后那一位 2026-09-09 加 —— 那一轮有源因熔断被整个跳过时,「跑完了」不等于「问过了」,collector 还欠一次快速补搜,见 09 章第 48 条)、`collectorNetworkDown`(collector 报网络不通)、`isCurrentTrackAdBreak`(Spotify 广告:album 空 + bundle id 是 Spotify)。展示面的分支顺序要求:广告/纯音乐/暂无歌词都必须排在「搜索歌词中…」之前,否则永远卡在搜索中。
 
 ### PlaybackCoordinator(转发层)
@@ -266,9 +252,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 
 | 设置位置 | 项 | 改什么行为 |
 |---|---|---|
-| 歌词显示 → 悬浮歌词「文字」/ 灵动岛「歌词行」/ 菜单栏「配色」 | 卡拉OK效果(`overlayLyricsKaraoke` / `notchLyricsKaraoke` / `menuBarLyricsKaraoke`,2026-09-06) | **引擎不再参与**:`load` 始终解析 YRC(`preferWordLevel:` 入参与全局键 `np:preferWordLevelKaraoke` 已删,旧键在 `AppSettings.init` 迁成三面同值后由 `pruneObsoleteDefaults` 清掉)。各展示面在自己的 playback 模型订阅行时按开关用 `SyncedLyricLine.lineLevel` 把行压成整行(words/wordGroups 清掉、正文落 mainText、译文/罗马音/声部保留,selftest `sync-engine` 组「整行压平」);歌词窗口始终逐字 |
 | 设置 → 歌词 → 显示 | 繁简转换(`lyricsChineseVariant`) | 不转换/简体/繁体,只影响显示不动缓存;条件显示(见行为规格);立刻 reload |
-| 设置 → 歌词 → 显示 | 显示罗马音(japanese/korean/chinese 三个复选框,`romanizationScripts`) | 按整首歌文字种类开关罗马音(服务端字段+客户端兜底一起管);只影响悬浮窗和歌词窗口;立刻 reload |
 | 设置 → 歌词显示 → 悬浮歌词 → 排版 | 双行显示(`showNextLinePreview`) | 悬浮窗在当前句下方显示 `nextLineText` 预览;只影响悬浮窗(2026-08-29 从「歌词 → 效果」移来,2026-08-31 从「文字」组移到「排版」组) |
 | 设置 → 歌词 → 显示 | 时间轴偏移(播放器下拉框 + Stepper ±5s,步长 0.05s) | 下拉选「全部播放器」→ `LyricsOffsetStore.globalOffsetMs`;选具体播放器 → `playerOffsets[bundleID]`。两档**二选一不相加**,再与单曲微调相加;标题/副标题/help 是**固定文案**、不随选中项变;下拉框选中态是纯 `@State`、**不持久化** |
 | 设置 → 快捷键 | 步长(`lyricsOffsetStepMs`,默认 200ms) | 菜单/快捷键每次 nudge 的幅度(不影响设置页全局偏移的 0.05s 步长) |
@@ -280,9 +264,6 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 
 - **collector(进程边界)**:歌词内容的唯一生产方,独立进程写 `lyrimuse-enrich-cache.json`;App 侧靠 mtime 感知重写(同一首歌中途补译文/换歌词自动生效)。key 归一化两侧必须逐字节一致,selftest 锁死。署名行过滤跟 collector 侧 `match.go` 是同一条结构正则、不同爆炸半径(那边整份拒收计数、这边逐行展示过滤),规则**不能原样搬**。
 - **歌词管理窗口**:保存/删除歌词后调 `PlaybackCoordinator.refreshLyricsForCurrentTrack()` 强制重读(默认只在换歌时 reload);偏移输入框直接写 `LyricsOffsetStore.setOffset`,再调 `refreshLyricsOffsetForCurrentTrack()`;它算 offset key 用的是**磁盘持久化后**的歌词内容(内容指纹要跟引擎读到的一致)。用户在歌词管理里换/改歌词 → 内容指纹变 → 该歌旧微调自动失效(查不到即 0)。
-- **播放进度链(第 07 章方向)**:本章的行定位完全依赖 `anchor`/`pausedPositionMs`(位置平滑、伺服校正、seek 陈旧读数拒收都在 LocalPlaybackSource 位置侧);逐字填色是 View 层拿 anchor + `SyncedLyricWord` 时间戳现算,不经过 currentLine。歌词窗口点行 seek 用 `timeMs - currentLyricsOffsetMs` 反算目标——必须用引擎实际生效的总偏移。
-- **对唱分栏(LyricDuet)**:`SyncedLyricLine.side` 由 load 时算好,悬浮窗/歌词窗口按 side 排版并叠加 `LyricDuetLayout` 的两侧内缩,nil 各自兜底、且不吃内缩。灵动岛/菜单栏面板/菜单栏状态项**刻意不做**对唱(单行显示靠对齐表达不了,2026-08-23 产品决定)。
-- **封面链**:`EnrichCacheReader.coverURL/nativeSizedCoverURL` 被 `PlaybackCoordinator.refreshHighResCover()`(系统封面 <300px 时找高清替代)和 `LastfmStatsService`(最近播放列表封面兜底)消费——歌词缓存文件同时是封面数据源。
 - **菜单栏跑马灯**:`currentLineDwellSeconds` 配速;菜单栏歌词只消费 `plainText`。
 - **诊断导出**:`lastResolvedBundleID`/`resolvedPlayerDescription` 报实际在播的播放器(与歌词无直接关系,但同在这条转发层)。
 
@@ -295,7 +276,6 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 | `~/.config/lyrimuse/lyrimuse-lyrics-pins.json` | App 写(collector 只读) | 已校准名单:归一化 enrich key → 记下这条 pin 的 unix 秒。collector 靠它一票否决自动重选歌词源 |
 | UserDefaults `np:lyricsGlobalOffsetMs` | 读写 | 全局偏移(裸 Int,缺失即 0) |
 | UserDefaults `np:lyricsOffsetsByPlayerJSON` | 读写 | 按播放器偏移字典的 JSON 字符串(key 是 bundleID;零值不落盘,所以字典里就是真的配过的那几个播放器) |
-| UserDefaults `np:overlayLyricsKaraoke` / `np:notchLyricsKaraoke` / `np:menuBarLyricsKaraoke` / `np:romanizationScripts` / `np:hasSeenChineseLyrics` / `np:lyricsOffsetStepMs` | 读写(经 AppSettings) | 显示相关设置持久化;繁简档位同为 AppSettings 持久化(`lyricsChineseVariant`) |
 
 进程边界:collector(Go,launchd 常驻)负责联网解析并写缓存;App 进程只读缓存 + 读 `CollectorStatus`(网络状态)。引擎全链在主线程(@MainActor),缓存文件读取本身同步(mtime 缓存把代价压到只有文件变了才解析)。
 
@@ -305,7 +285,6 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 |---|---|
 | 引擎主体/查询接口 | `lyrimuse/Sources/LyrimuseCore/Lyrics/LyricsSyncEngine.swift` — `LyricsSyncEngine.load/activeLine/activeLineIndex/upcomingLineText/allLines`、`offsetMs` |
 | 署名行过滤规则族 | 同上 — `creditLinePattern`、`creditRoleWords`/`matchesRoleWordCredit`、`matchesEnglishCredit`、`matchesLatinCreditPattern`、`looksLikeHeaderLine`、`speakerLabels`、`shouldApplyStructuralCreditFilter`、`strippingCreditLines` |
-| 行/词数据模型 | 同上 — `SyncedLyricWord`、`SyncedLyricWordGroup`、`SyncedLyricLine`、`LyricsWindowLine` |
 | LRC 解析(含 CRLF) | `LyrimuseCore/Lyrics/LRCParser.swift` — `LRCParser.parse` |
 | YRC 解析(含畸形元组) | `LyrimuseCore/Lyrics/YRCParser.swift` — `YRCParser.parse`、`wordRegex`、`malformedTupleRegex` |
 | 逐字时间轴合法性归一化 | `LyrimuseCore/Lyrics/LyricTimelineNormalizer.swift` — `LyricTimelineNormalizer.normalize/maxClampMs/tailWindowMs/DegradeReason/Report/logSummary`;调用点 `LyricsSyncEngine.load`(紧跟 `YRCParser.parse`) |

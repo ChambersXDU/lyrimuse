@@ -7,7 +7,6 @@ final class AppActions {
 
     var openSettings: (() -> Void)?
     var openLyricsManager: (() -> Void)?
-    var openLyricsWindow: (() -> Void)?
     var openOnboarding: (() -> Void)?
 
     var openLyricsQuickSearch: (() -> Void)?
@@ -18,12 +17,12 @@ final class AppActions {
 
     let selectionRequests = PassthroughSubject<SettingsSidebarItem, Never>()
 
+    var suppressLyricsOnReopenUntil: Date?
+
     func requestSettings(_ item: SettingsSidebarItem) {
         pendingSettingsSelection = item
         selectionRequests.send(item)
     }
-
-    var suppressLyricsOnReopenUntil: Date?
 
     private init() {}
 }

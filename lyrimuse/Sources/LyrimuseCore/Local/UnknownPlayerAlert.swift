@@ -71,8 +71,6 @@ public enum UnknownPlayerAlert {
         return parts.isEmpty ? nil : parts.joined(separator: " - ")
     }
 
-    public static let notchAlertDuration: TimeInterval = 8
-
     public static let stableWindow: TimeInterval = 6
     public static let stableHitsNeeded = 3
 }

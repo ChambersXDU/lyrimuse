@@ -1,5 +1,4 @@
 import AppKit
-import CoreImage
 import Foundation
 import Combine
 import LyrimuseCore
@@ -7,37 +6,6 @@ import SwiftUI
 import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "coordinator")
-
-final class WindowBackgroundLayers: Equatable {
-
-    let base: NSImage
-
-    let glows: [NSImage]
-
-    struct GlowPose {
-        let initialAngle: Double
-        let spinDuration: Double
-        let anchor: UnitPoint
-        let scale: CGFloat
-    }
-    let poses: [GlowPose]
-
-    let tintHue: Double
-    let tintSaturation: Double
-    let tintBrightness: Double
-
-    init(base: NSImage, glows: [NSImage], poses: [GlowPose],
-         tintHue: Double = 0, tintSaturation: Double = 0, tintBrightness: Double = 0) {
-        self.base = base
-        self.glows = glows
-        self.poses = poses
-        self.tintHue = tintHue
-        self.tintSaturation = tintSaturation
-        self.tintBrightness = tintBrightness
-    }
-
-    static func == (l: WindowBackgroundLayers, r: WindowBackgroundLayers) -> Bool { l === r }
-}
 
 @MainActor
 final class PlaybackCoordinator: ObservableObject {
@@ -86,7 +54,7 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var compactDwellMs: Int?
 
     @Published private(set) var compactLeadInMs: Int?
-    @Published private(set) var allLines: [LyricsWindowLine] = []
+    @Published private(set) var allLines: [MenuBarLyricLine] = []
 
     @Published private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
     @Published private(set) var currentGapIndex: Int?
@@ -101,18 +69,12 @@ final class PlaybackCoordinator: ObservableObject {
 
     @Published private(set) var highResArtworkThumbnail: NSImage?
 
-    @Published private(set) var blurredArtworkImage: NSImage?
-
-    @Published private(set) var windowBackgroundLayers: WindowBackgroundLayers?
-
     @Published private(set) var highResAverageHex: String?
 
     @Published private(set) var motionCoverFile: URL?
     private var motionCoverTask: Task<Void, Never>?
 
     @Published private(set) var artworkAccentColor: Color?
-
-    @Published private(set) var notchAccentColor: Color?
 
     @Published private(set) var currentLyricsOffsetMs: Int = 0
 
@@ -533,24 +495,6 @@ final class PlaybackCoordinator: ObservableObject {
         .removeDuplicates()
         .assign(to: &$artworkAccentColor)
 
-        Publishers.CombineLatest3(s.$artworkAverageHex, $highResAverageHex, settings.$notchCardStyle)
-            .map { systemHex, highResHex, cardStyle -> Color? in
-                guard let hex = highResHex ?? systemHex,
-                      let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
-                let rawR = ns.redComponent, rawG = ns.greenComponent, rawB = ns.blueComponent
-                let base = LocalPlaybackSource.brightenedAccent(r: rawR, g: rawG, b: rawB)
-                var lifted = LocalPlaybackSource.accentForDarkBackdrop(
-                    r: base.r, g: base.g, b: base.b)
-                if cardStyle == .coverArt {
-                    lifted = LocalPlaybackSource.accentForCoverArtBackground(
-                        r: lifted.r, g: lifted.g, b: lifted.b,
-                        rawR: rawR, rawG: rawG, rawB: rawB)
-                }
-                return Color(.sRGB, red: lifted.r, green: lifted.g, blue: lifted.b)
-            }
-            .removeDuplicates()
-            .assign(to: &$notchAccentColor)
-
         s.$currentLyricsOffsetMs.assign(to: &$currentLyricsOffsetMs)
         s.$trackLyricsOffsetMs.assign(to: &$trackLyricsOffsetMs)
         s.$pausedPositionMs.assign(to: &$pausedPositionMs)
@@ -599,290 +543,7 @@ final class PlaybackCoordinator: ObservableObject {
                 .debounce(for: .milliseconds(350), scheduler: RunLoop.main)
                 .sink { [weak self] url, _ in self?.refreshSpotifyOriginalCover(url) },
 
-            Publishers.CombineLatest($artworkImage, $highResArtworkImage)
-                .map { system, high in high ?? system }
-
-                .removeDuplicates(by: { $0 === $1 })
-                .sink { [weak self] source in self?.rebakeBlurredArtwork(from: source) },
         ]
-    }
-
-    private var blurBakeTask: Task<Void, Never>?
-
-    private nonisolated static let blurBakeContext = CIContext()
-
-    private func rebakeBlurredArtwork(from source: NSImage?) {
-        blurBakeTask?.cancel()
-        blurBakeTask = nil
-        guard let source,
-              let cg = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            if blurredArtworkImage != nil { blurredArtworkImage = nil }
-            if windowBackgroundLayers != nil { windowBackgroundLayers = nil }
-            return
-        }
-
-        let s = LocalPlaybackSource.shared
-        let seed = Self.stableSeed("\(s.artist)|\(s.title)")
-        blurBakeTask = Task { [weak self] in
-
-            let baked = await Task.detached(priority: .utility) {
-                (notch: Self.bakeBackgroundBlur(cgImage: cg, targetWidth: 720, sigma: 40, saturation: nil),
-                 window: Self.bakeWindowBackgroundLayers(cgImage: cg, seed: seed))
-            }.value
-            guard let self, !Task.isCancelled else { return }
-            if let notch = baked.notch { self.blurredArtworkImage = notch }
-            if let window = baked.window { self.windowBackgroundLayers = window }
-        }
-    }
-
-    nonisolated private static func stableSeed(_ s: String) -> UInt64 {
-        var h: UInt64 = 0xcbf2_9ce4_8422_2325
-        for b in s.utf8 { h = (h ^ UInt64(b)) &* 0x0000_0100_0000_01b3 }
-        return h
-    }
-
-    nonisolated private static func bakeWindowBackgroundLayers(cgImage: CGImage, seed: UInt64) -> WindowBackgroundLayers? {
-        let W: CGFloat = 720
-        let frame = CGRect(x: 0, y: 0, width: W, height: W)
-
-        guard let cs = CGColorSpace(name: CGColorSpace.sRGB),
-              let cgctx = CGContext(data: nil, width: 6, height: 6, bitsPerComponent: 8,
-                                    bytesPerRow: 6 * 4, space: cs,
-                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-        else { return nil }
-        cgctx.interpolationQuality = .medium
-        cgctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: 6, height: 6))
-        guard let data = cgctx.data else { return nil }
-        let px = data.bindMemory(to: UInt8.self, capacity: 36 * 4)
-
-        var cellLuma = [Double](repeating: 0, count: 36)
-        for i in 0..<36 {
-            let o = i * 4
-            cellLuma[i] = (0.299 * Double(px[o]) + 0.587 * Double(px[o + 1]) + 0.114 * Double(px[o + 2])) / 255
-        }
-        let meanLuma = cellLuma.reduce(0, +) / 36
-        let homog = 0.55
-        for i in 0..<36 {
-            let f0 = meanLuma / max(0.02, cellLuma[i])
-            let f = (1 - homog) + homog * min(3.5, max(0.4, f0))
-            for ch in 0..<3 {
-                px[i * 4 + ch] = UInt8(min(255, Double(px[i * 4 + ch]) * f))
-            }
-            px[i * 4 + 3] = 255
-        }
-
-        var cellSat = [Double](repeating: 0, count: 36)
-        for i in 0..<36 {
-            let o = i * 4
-            let mx = Double(max(px[o], max(px[o + 1], px[o + 2])))
-            let mn = Double(min(px[o], min(px[o + 1], px[o + 2])))
-            cellSat[i] = mx > 0 ? (mx - mn) / mx : 0
-        }
-
-        func rgbToHSV(_ r: Double, _ g: Double, _ b: Double) -> (h: Double, s: Double, v: Double) {
-            let mx = Swift.max(r, g, b), mn = Swift.min(r, g, b), d = mx - mn
-            var h = 0.0
-            if d > 0 {
-                if mx == r { h = (g - b) / d } else if mx == g { h = (b - r) / d + 2 } else { h = (r - g) / d + 4 }
-                h *= 60
-                if h < 0 { h += 360 }
-            }
-            return (h, mx > 0 ? d / mx : 0, mx)
-        }
-        func hsvToRGB(_ h: Double, _ s: Double, _ v: Double) -> (r: Double, g: Double, b: Double) {
-            let hh = (h.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360) / 60
-            let i = Int(hh), f = hh - Double(i)
-            let p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f))
-            switch i {
-            case 0: return (v, t, p)
-            case 1: return (q, v, p)
-            case 2: return (p, v, t)
-            case 3: return (p, q, v)
-            case 4: return (t, p, v)
-            default: return (v, p, q)
-            }
-        }
-
-        let darkLumaFloor = 0.08
-        var hueSin = 0.0, hueCos = 0.0
-        for i in 0..<36 where cellSat[i] > 0.05 && cellLuma[i] > darkLumaFloor {
-            let o = i * 4
-            let (h, s, _) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
-            hueSin += sin(h * .pi / 180) * s * s
-            hueCos += cos(h * .pi / 180) * s * s
-        }
-
-        var hueCoherenceScale = 1.0
-        if hueSin != 0 || hueCos != 0 {
-            let hDom = atan2(hueSin, hueCos) * 180 / .pi
-
-            var totalHueWeight = 0.0, offHueWeight = 0.0
-            for i in 0..<36 where cellSat[i] > 0.05 && cellLuma[i] > darkLumaFloor {
-                let o = i * 4
-                let (h, s, _) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
-                var d = h - hDom
-                while d > 180 { d -= 360 }
-                while d < -180 { d += 360 }
-                totalHueWeight += s * s
-
-                if abs(d) > 60 && abs(d) <= 120 { offHueWeight += s * s }
-            }
-            let offHueFraction = totalHueWeight > 0 ? offHueWeight / totalHueWeight : 0
-            if totalHueWeight > 0 {
-                let resultantMag = (hueSin * hueSin + hueCos * hueCos).squareRoot()
-                let coherenceLinear = min(1, (resultantMag / totalHueWeight) / 0.4)
-                hueCoherenceScale = coherenceLinear * coherenceLinear
-            }
-            if offHueFraction < 0.2 {
-                for i in 0..<36 where cellSat[i] > 0.05 && cellLuma[i] > darkLumaFloor {
-                    let o = i * 4
-                    let (h, s, v) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
-                    var d = h - hDom
-                    while d > 180 { d -= 360 }
-                    while d < -180 { d += 360 }
-
-                    guard abs(d) > 60, abs(d) <= 120 else { continue }
-                    let (r, g, b) = hsvToRGB(hDom + (d > 0 ? 60 : -60), s, v)
-                    px[o] = UInt8(min(255, max(0, r * 255)))
-                    px[o + 1] = UInt8(min(255, max(0, g * 255)))
-                    px[o + 2] = UInt8(min(255, max(0, b * 255)))
-                }
-            }
-        }
-
-        let brightIdx = (0..<36).filter { cellLuma[$0] > darkLumaFloor }
-        let satP75: Double
-        if brightIdx.count >= 9 {
-            let sats = brightIdx.map { cellSat[$0] }.sorted()
-            satP75 = sats[min(sats.count - 1, Int(Double(sats.count) * 26.0 / 36.0))]
-        } else {
-            satP75 = cellSat.sorted()[26]
-        }
-
-        let satTarget = min(0.95, 1.029 * pow(satP75, 1.433)) * hueCoherenceScale
-        for i in 0..<36 where cellSat[i] > 0.01 && cellSat[i] < satTarget && cellLuma[i] > darkLumaFloor {
-            let target = satTarget
-            let k = target / cellSat[i]
-            let o = i * 4
-            let mx = Double(max(px[o], max(px[o + 1], px[o + 2])))
-            for ch in 0..<3 {
-                let c = Double(px[o + ch])
-                px[o + ch] = UInt8(min(255, max(0, mx - (mx - c) * k)))
-            }
-        }
-        guard let fieldCG = cgctx.makeImage() else { return nil }
-
-        func clamp(_ img: CIImage) -> CIImage {
-            img.applyingFilter("CIColorClamp", parameters: [
-                "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
-                "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
-            ])
-        }
-        func render(_ img: CIImage) -> NSImage? {
-            guard let out = blurBakeContext.createCGImage(img, from: frame) else { return nil }
-            return NSImage(cgImage: out, size: NSSize(width: frame.width / 2, height: frame.height / 2))
-        }
-
-        let field = CIImage(cgImage: fieldCG)
-            .transformed(by: CGAffineTransform(scaleX: W / 6, y: W / 6))
-            .clampedToExtent()
-            .applyingGaussianBlur(sigma: 35)
-            .cropped(to: frame)
-
-        var satMul = 0.85
-        let fieldAvg = field.applyingFilter("CIAreaAverage", parameters: [
-            kCIInputExtentKey: CIVector(cgRect: frame),
-        ])
-        if let avgCG = blurBakeContext.createCGImage(fieldAvg, from: CGRect(x: 0, y: 0, width: 1, height: 1)),
-           let d = avgCG.dataProvider?.data as Data?, d.count >= 3 {
-            let mx = Double(max(d[0], max(d[1], d[2])))
-            let mn = Double(min(d[0], min(d[1], d[2])))
-            let fieldS = mx > 0 ? (mx - mn) / mx : 0
-
-            if fieldS > 0.02 {
-                satMul = min(1.6 * max(0.4, hueCoherenceScale), max(0.35 * hueCoherenceScale, satTarget / fieldS))
-            }
-        }
-        let vivified = field
-            .applyingFilter("CIVibrance", parameters: ["inputAmount": 0.4 * hueCoherenceScale])
-            .applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: satMul])
-
-        let baseImage = clamp(vivified
-            .applyingFilter("CIExposureAdjust", parameters: ["inputEV": -0.15]))
-        guard let base = render(baseImage) else { return nil }
-
-        var tintHue: Double = 0
-        var tintSat: Double = 0
-        var tintBright: Double = 0
-        let avg = baseImage.applyingFilter("CIAreaAverage", parameters: [
-            kCIInputExtentKey: CIVector(cgRect: frame),
-        ])
-        if let avgCG = blurBakeContext.createCGImage(avg, from: CGRect(x: 0, y: 0, width: 1, height: 1)),
-           let data = avgCG.dataProvider?.data as Data?, data.count >= 3 {
-            let color = NSColor(
-                red: CGFloat(data[0]) / 255, green: CGFloat(data[1]) / 255,
-                blue: CGFloat(data[2]) / 255, alpha: 1)
-            var h: CGFloat = 0, s: CGFloat = 0, v: CGFloat = 0
-            color.usingColorSpace(.sRGB)?.getHue(&h, saturation: &s, brightness: &v, alpha: nil)
-            tintHue = Double(h)
-            tintSat = Double(s)
-
-            tintBright = Double(v) * 0.85
-        }
-
-        let brightest = (0..<36).max(by: { cellLuma[$0] < cellLuma[$1] }) ?? 14
-        let bx = (Double(brightest % 6) + 0.5) / 6.0
-        let by = 1.0 - (Double(brightest / 6) + 0.5) / 6.0
-        guard let mask = CIFilter(name: "CIRadialGradient", parameters: [
-            "inputCenter": CIVector(x: bx * frame.width, y: by * frame.height),
-            "inputRadius0": frame.width * 0.08,
-            "inputRadius1": frame.width * 0.7,
-            "inputColor0": CIColor(red: 1, green: 1, blue: 1, alpha: 1),
-            "inputColor1": CIColor(red: 1, green: 1, blue: 1, alpha: 0),
-        ])?.outputImage?.cropped(to: frame) else { return nil }
-        let glowImage = clamp(vivified.applyingFilter("CIBlendWithAlphaMask", parameters: [
-            kCIInputMaskImageKey: mask,
-            kCIInputBackgroundImageKey: CIImage(color: .clear).cropped(to: frame),
-        ]))
-        guard let glow = render(glowImage) else { return nil }
-
-        var state = seed == 0 ? 0x9e37_79b9_7f4a_7c15 : seed
-        func next() -> Double {
-            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
-            return Double(state >> 11) / Double(UInt64(1) << 53)
-        }
-
-        let periods: [Double] = [55, 75, 95]
-        var poses: [WindowBackgroundLayers.GlowPose] = []
-        for i in 0..<3 {
-            poses.append(WindowBackgroundLayers.GlowPose(
-                initialAngle: (next() - 0.5) * 30,
-                spinDuration: periods[i],
-                anchor: UnitPoint(x: 0.4 + next() * 0.2, y: 0.4 + next() * 0.2),
-                scale: 1.0 + next() * 0.25
-            ))
-        }
-        return WindowBackgroundLayers(base: base, glows: [glow, glow, glow], poses: poses,
-                                      tintHue: tintHue, tintSaturation: tintSat,
-                                      tintBrightness: tintBright)
-    }
-
-    nonisolated private static func bakeBackgroundBlur(
-        cgImage: CGImage, targetWidth: CGFloat, sigma: Double, saturation: Double?
-    ) -> NSImage? {
-        var image = CIImage(cgImage: cgImage)
-        let scale = targetWidth / max(1, image.extent.width)
-        image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        if let saturation {
-            image = image.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: saturation])
-        }
-        let blurred = image.clampedToExtent()
-            .applyingGaussianBlur(sigma: sigma)
-            .cropped(to: image.extent)
-        guard let out = blurBakeContext.createCGImage(blurred, from: blurred.extent) else { return nil }
-
-        return NSImage(cgImage: out, size: NSSize(width: blurred.extent.width / 2,
-                                                  height: blurred.extent.height / 2))
     }
 
     private static let lowResArtworkThreshold = 300

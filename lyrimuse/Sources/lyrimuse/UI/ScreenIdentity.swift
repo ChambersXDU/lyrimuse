@@ -17,8 +17,4 @@ enum ScreenIdentity {
         guard !id.isEmpty else { return nil }
         return NSScreen.screens.first { self.id(of: $0) == id }
     }
-
-    static var notched: NSScreen? {
-        NSScreen.screens.first { $0.safeAreaInsets.top > 0 }
-    }
 }

@@ -19,17 +19,6 @@ struct LyrimuseApp: App {
             LyricsQuickSearchWindow()
         }
 
-        Window(L10n.t("歌词窗口"), id: "lyrics-window") {
-
-            if #available(macOS 15.0, *) {
-                LyricsWindowView().windowFullScreenBehavior(.enabled)
-            } else {
-                LyricsWindowView()
-            }
-        }
-
-        .windowStyle(.hiddenTitleBar)
-
         Window(L10n.t("欢迎使用 Lyrimuse"), id: "onboarding") {
             OnboardingView()
         }

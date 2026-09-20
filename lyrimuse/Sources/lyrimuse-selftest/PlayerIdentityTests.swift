@@ -587,8 +587,6 @@ func runPlayerIdentityTests() {
         }
         expectEqual(announce(bundle: "com.apple.podcasts") || qualifies(bundle: "com.apple.podcasts"), false)
 
-        expectEqual(A.notchAlertDuration, 8)
-
         expectEqual(A.nowPlayingDescription(artist: "热可可", title: "28. 对话行烟烟"), "热可可 - 28. 对话行烟烟")
         expectEqual(A.nowPlayingDescription(artist: "", title: "只有歌名"), "只有歌名")
         expectEqual(A.nowPlayingDescription(artist: "  ", title: " "), nil)

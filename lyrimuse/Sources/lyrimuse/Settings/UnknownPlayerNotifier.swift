@@ -54,9 +54,8 @@ final class UnknownPlayerNotifier: NSObject {
     }
 
     private func tick() {
-        let prompt = NotchUnknownPlayerPrompt.shared
         guard let seen = MediaControlClient.lastUngatedNowPlaying else {
-            resetPending(); prompt.update(offer: nil); return
+            resetPending(); return
         }
         let features = FeatureSettingsStore.shared
 
@@ -64,7 +63,7 @@ final class UnknownPlayerNotifier: NSObject {
             bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
             observedAt: seen.at, isAutoDetect: features.players.contains(.auto), now: Date(),
             isAccepted: { TrustedPlayers.isAccepted($0) })
-        else { resetPending(); prompt.update(offer: nil); return }
+        else { resetPending(); return }
 
         if pendingBundleID != seen.bundleID {
             pendingBundleID = seen.bundleID
@@ -74,20 +73,6 @@ final class UnknownPlayerNotifier: NSObject {
         pendingHits += 1
         let stableFor = pendingSince.map { Date().timeIntervalSince($0) } ?? 0
         let displayName = FeatureSettingsStore.appDisplayName(forBundleID: seen.bundleID)
-
-        let qualifies = UnknownPlayerAlert.qualifiesForAnnounce(
-            bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
-            observedAt: seen.at, isAutoDetect: true, now: Date(),
-            isAccepted: { TrustedPlayers.isAccepted($0) },
-            hasDisplayName: displayName != nil, stableFor: stableFor, stableHits: pendingHits)
-        if qualifies, AppSettings.shared.notchOverlayEnabled {
-            prompt.update(offer: .init(
-                bundleID: seen.bundleID, displayName: displayName ?? seen.bundleID,
-                nowPlayingText: UnknownPlayerAlert.nowPlayingDescription(artist: seen.artist, title: seen.title)
-                    ?? seen.bundleID))
-        } else {
-            prompt.update(offer: nil)
-        }
 
         guard UnknownPlayerAlert.shouldAnnounce(
             bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
@@ -107,9 +92,8 @@ final class UnknownPlayerNotifier: NSObject {
     }
 
     private func announce(_ seen: MediaControlClient.UngatedNowPlaying) async {
-        let alerted = NotchUnknownPlayerPrompt.shared.alert()
         let notified = await deliverNotification(seen)
-        if alerted || notified { recordAnnounced(seen.bundleID) }
+        if notified { recordAnnounced(seen.bundleID) }
     }
 
     private func deliverNotification(_ seen: MediaControlClient.UngatedNowPlaying) async -> Bool {

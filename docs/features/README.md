@@ -10,16 +10,13 @@
 | 02 | [播放数据源与播放器支持](02-playback-source.md) | media-control、各播放器、位置精度/伺服、广告检测、权限 |
 | 03 | [封面链路](03-artwork.md) | 系统封面获取、陈旧防御、高清替代、取色管线、四个消费面 |
 | 04 | [桌面悬浮歌词](04-desktop-overlay.md) | 逐字卡拉OK、换行/跑马灯、对唱、注音、样式、窗口行为 |
-| 05 | [灵动岛歌词](05-notch.md) | 两态卡片、风格/跟随封面、强调色、多屏、瞬态横幅 |
 | 06 | [菜单栏：歌词、图标与菜单](06-menubar.md) | 跑马灯歌词、12 款图标+动画、状态菜单各项 |
-| 07 | [歌词窗口](07-lyrics-window.md) | 整份歌词列表、自动滚动、封面背景/卡、进度拖拽 |
 | 08 | [歌词同步引擎（App 侧）](08-lyrics-engine.md) | 缓存直读、SyncEngine、LRC/YRC 解析、时间轴偏移（全部/按播放器 二选一 + 单曲）、署名行过滤 |
 | 09 | [歌词解析决策（collector）](09-lyrics-resolution.md) | 十源检索、守卫、打分 v3、挑选模式、决策留痕、自愈 |
 | 10 | [译文与罗马音](10-translation-romanization.md) | 社区译文、机翻兜底、语言包、罗马音标注 |
 | 11 | [歌词管理窗口](11-lyrics-manager.md) | 列表/筛选/编辑/删除、联网重搜、决策查看、歌词文件夹 |
-| 12 | [账号连接与收听记录](12-scrobble-accounts.md) | ListenBrainz、Last.fm 镜像/统计/回填、收听日志/去重 |
 | 13 | [网页展示与中继](13-web-relay.md) | relay 推送、网页、Top10 歌手、feishu-bot、workers 边界 |
-| 14 | [设置、配置与本地化](14-settings-config.md) | 设置信息架构、两套配置存储、快捷键、备份、更新、L10n |
+| 14 | [设置、配置与本地化](14-settings-config.md) | 设置信息架构、两套配置存储、快捷键、备份、L10n |
 | 15 | [运行、部署与后台任务](15-ops-background.md) | build.sh、launchd、健康检查、daily/weekly、诊断 |
 
 ## 维护约定

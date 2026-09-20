@@ -198,38 +198,6 @@ else
   echo "!! media-control not found (brew install media-control) — QQ 音乐支持这次构建不可用,Apple Music 不受影响" >&2
 fi
 
-SPM_SCRATCH="${LYRIMUSE_SPM_SCRATCH_PATH:-.build}"
-SPARKLE_FW_SRC="$(find "$SPM_SCRATCH/artifacts" -type d -name "Sparkle.framework" -path "*/Sparkle.xcframework/*" 2>/dev/null | head -1)"
-if [ -z "$SPARKLE_FW_SRC" ] && ! grep -q 'sparkle-project/Sparkle' Package.swift; then
-  echo "    Sparkle not a dependency — skipping framework embed (no in-app updater)"
-  SPARKLE_SKIPPED=1
-fi
-if [ "${SPARKLE_SKIPPED:-0}" = 0 ] && [ ! -d "$SPARKLE_FW_SRC" ]; then
-  echo "!! Sparkle.framework not found under $SPM_SCRATCH/artifacts — did 'swift package resolve' run?" >&2
-  exit 1
-fi
-if [ "${SPARKLE_SKIPPED:-0}" = 0 ]; then
-mkdir -p "$APP_DIR/Contents/Frameworks"
-rm -rf "$APP_DIR/Contents/Frameworks/Sparkle.framework"
-ditto "$SPARKLE_FW_SRC" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
-if [ "$UNIVERSAL" = 0 ]; then
-  while IFS= read -r f; do
-    archs="$(lipo -archs "$f" 2>/dev/null || true)"
-    case "$archs" in
-      *" "*) lipo -thin "$ARCHES" "$f" -output "$f.thin" && mv "$f.thin" "$f" ;;
-    esac
-  done < <(find "$APP_DIR/Contents/Frameworks/Sparkle.framework" -type f)
-  echo "    Sparkle.framework thinned to $ARCHES"
-fi
-if ! otool -l "$BIN" | grep -q "@executable_path/../Frameworks"; then
-  install_name_tool -add_rpath "@executable_path/../Frameworks" "$BIN"
-fi
-find "$APP_DIR/Contents/Frameworks/Sparkle.framework" \
-    \( -name "*.xpc" -o -name "*.app" -o -name "Autoupdate" \) \
-    -exec codesign --force --sign "$SIGN_ID" {} \;
-codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
-echo "    Sparkle.framework embedded + signed"
-fi
 rm -rf "$APP_DIR/Contents/Resources/zh-hans.lproj" "$APP_DIR/Contents/Resources/zh-hant.lproj" "$APP_DIR/Contents/Resources/en.lproj"
 cp -R Sources/lyrimuse/Resources/zh-hans.lproj "$APP_DIR/Contents/Resources/zh-hans.lproj"
 cp -R Sources/lyrimuse/Resources/zh-hant.lproj "$APP_DIR/Contents/Resources/zh-hant.lproj"
@@ -272,27 +240,6 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <!-- Explains purpose when prompting for Apple Events automation permission (Music/browsers). -->
     <key>NSAppleEventsUsageDescription</key>
     <string>Lyrimuse needs to send Apple Events to media players and browsers to read the currently playing track and show synced lyrics.</string>
-    <!-- URL scheme for Last.fm OAuth callback (lyrimuse://lastfm-auth-callback). -->
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>${LABEL}</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>lyrimuse</string>
-            </array>
-        </dict>
-    </array>
-    <key>SUFeedURL</key>
-    <string>https://github.com/Yudaotor/lyrimuse/releases/latest/download/appcast.xml</string>
-    <key>SUPublicEDKey</key>
-    <string>xTGKkA2z7gn42F0oyb6Qe4YyL+G/RTsKu5jvvsfytTE=</string>
-    <key>SUEnableAutomaticChecks</key>
-    <true/>
-    <!-- Default preferences for Sparkle automatic update checking and installation. -->
-    <key>SUAutomaticallyUpdate</key>
-    <true/>
 </dict>
 </plist>
 PLIST

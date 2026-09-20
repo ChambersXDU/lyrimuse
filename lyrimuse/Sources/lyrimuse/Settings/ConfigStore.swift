@@ -67,14 +67,6 @@ public final class ConfigStore: ObservableObject {
     @Published public var listenbrainzUser = ""
     @Published public var stateRelayURL = ""
     @Published public var stateRelayToken = ""
-    @Published public var lastfmUser = ""
-
-    @Published public var lastfmAPIKey = ""
-    @Published public var lastfmScrobbleAPIKey = ""
-    @Published public var lastfmScrobbleSecret = ""
-    @Published public var lastfmScrobbleSessionKey = ""
-
-    @Published public var lastfmScrobbleUsername = ""
     @Published public var notificationPlatform: NotificationPlatform = .bark
     @Published public var notificationWebhookURL = ""
 
@@ -96,8 +88,6 @@ public final class ConfigStore: ObservableObject {
     private struct Snapshot: Equatable {
         var listenbrainzToken, listenbrainzUser: String
         var stateRelayURL, stateRelayToken: String
-        var lastfmUser, lastfmAPIKey: String
-        var lastfmScrobbleAPIKey, lastfmScrobbleSecret, lastfmScrobbleSessionKey, lastfmScrobbleUsername: String
         var notificationPlatform: NotificationPlatform
         var notificationWebhookURL: String
         var dingtalkSignSecret: String
@@ -105,17 +95,12 @@ public final class ConfigStore: ObservableObject {
     }
     private var savedSnapshot = Snapshot(
         listenbrainzToken: "", listenbrainzUser: "", stateRelayURL: "", stateRelayToken: "",
-        lastfmUser: "", lastfmAPIKey: "", lastfmScrobbleAPIKey: "", lastfmScrobbleSecret: "",
-        lastfmScrobbleSessionKey: "", lastfmScrobbleUsername: "",
         notificationPlatform: .bark, notificationWebhookURL: "", dingtalkSignSecret: "", feishuSignSecret: ""
     )
     private var currentSnapshot: Snapshot {
         Snapshot(
             listenbrainzToken: listenbrainzToken, listenbrainzUser: listenbrainzUser,
             stateRelayURL: stateRelayURL, stateRelayToken: stateRelayToken,
-            lastfmUser: lastfmUser, lastfmAPIKey: lastfmAPIKey,
-            lastfmScrobbleAPIKey: lastfmScrobbleAPIKey, lastfmScrobbleSecret: lastfmScrobbleSecret,
-            lastfmScrobbleSessionKey: lastfmScrobbleSessionKey, lastfmScrobbleUsername: lastfmScrobbleUsername,
             notificationPlatform: notificationPlatform, notificationWebhookURL: notificationWebhookURL,
             dingtalkSignSecret: dingtalkSignSecret, feishuSignSecret: feishuSignSecret
         )
@@ -126,10 +111,6 @@ public final class ConfigStore: ObservableObject {
         [
             "listenbrainzToken": listenbrainzToken,
             "stateRelayToken": stateRelayToken,
-            "lastfmAPIKey": lastfmAPIKey,
-            "lastfmScrobbleAPIKey": lastfmScrobbleAPIKey,
-            "lastfmScrobbleSecret": lastfmScrobbleSecret,
-            "lastfmScrobbleSessionKey": lastfmScrobbleSessionKey,
             "notificationWebhookURL": notificationWebhookURL,
             "dingtalkSignSecret": dingtalkSignSecret,
             "feishuSignSecret": feishuSignSecret,
@@ -149,15 +130,6 @@ public final class ConfigStore: ObservableObject {
     public func stateRelayMissingHint() -> String? {
         if savedSnapshot.stateRelayURL.isEmpty { return L10n.t("还没填服务地址（可选）") }
         if savedSnapshot.stateRelayToken.isEmpty { return L10n.t("还没填访问令牌（可选）") }
-        return nil
-    }
-
-    public func lastfmBridgeMissingHint() -> String? {
-
-        if savedSnapshot.lastfmUser.isEmpty
-            || (savedSnapshot.lastfmScrobbleAPIKey.isEmpty && savedSnapshot.lastfmAPIKey.isEmpty) {
-            return L10n.t("还没连接 Last.fm 账号")
-        }
         return nil
     }
 
@@ -185,12 +157,6 @@ public final class ConfigStore: ObservableObject {
         listenbrainzUser = raw["listenbrainz_user"] as? String ?? ""
         stateRelayURL = raw["state_relay_url"] as? String ?? ""
         stateRelayToken = raw["state_relay_token"] as? String ?? ""
-        lastfmUser = raw["lastfm_user"] as? String ?? ""
-        lastfmAPIKey = raw["lastfm_api_key"] as? String ?? ""
-        lastfmScrobbleAPIKey = raw["lastfm_scrobble_api_key"] as? String ?? ""
-        lastfmScrobbleSecret = raw["lastfm_scrobble_secret"] as? String ?? ""
-        lastfmScrobbleSessionKey = raw["lastfm_scrobble_session_key"] as? String ?? ""
-        lastfmScrobbleUsername = raw["lastfm_scrobble_username"] as? String ?? ""
 
         notificationPlatform = (raw["notification_platform"] as? String).flatMap(NotificationPlatform.init) ?? .bark
 
@@ -206,12 +172,6 @@ public final class ConfigStore: ObservableObject {
             "listenbrainz_user": listenbrainzUser,
             "state_relay_url": stateRelayURL,
             "state_relay_token": stateRelayToken,
-            "lastfm_user": lastfmUser,
-            "lastfm_api_key": lastfmAPIKey,
-            "lastfm_scrobble_api_key": lastfmScrobbleAPIKey,
-            "lastfm_scrobble_secret": lastfmScrobbleSecret,
-            "lastfm_scrobble_session_key": lastfmScrobbleSessionKey,
-            "lastfm_scrobble_username": lastfmScrobbleUsername,
             "notification_platform": notificationPlatform.rawValue,
             "bark_url": notificationWebhookURL,
             "dingtalk_sign_secret": dingtalkSignSecret,
@@ -219,7 +179,11 @@ public final class ConfigStore: ObservableObject {
         ]
         do {
 
-            try document.save(fields: fields, secure: true)
+            let knownKeys = Set(fields.keys).union([
+                "lastfm_user", "lastfm_api_key", "lastfm_scrobble_api_key",
+                "lastfm_scrobble_secret", "lastfm_scrobble_session_key", "lastfm_scrobble_username",
+            ])
+            try document.save(fields: fields, knownKeys: knownKeys, secure: true)
         } catch JSONConfigDocument.Failure.refusedCorruptFile {
             throw ConfigFileSaveError.refusedCorruptFile
         } catch JSONConfigDocument.Failure.notSerializable {

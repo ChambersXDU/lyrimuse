@@ -124,105 +124,6 @@ jobs:
           path: lyrimuse/dist/*
           retention-days: 14
 
-      - name: Generate signed appcast
-        if: startsWith(github.ref, 'refs/tags/')
-        id: appcast
-        env:
-          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-          NOTES_RAW: ${{ steps.tag.outputs.body }}
-        run: |
-          SIGN_UPDATE=$(find lyrimuse/.build/artifacts/sparkle -type f -name sign_update | head -1)
-          if [ -z "$SIGN_UPDATE" ]; then
-            echo "sign_update not found under lyrimuse/.build/artifacts/sparkle -- did the build step resolve the Sparkle SPM dependency?" >&2
-            exit 1
-          fi
-          chmod +x "$SIGN_UPDATE"
-          VERSION="${{ steps.version.outputs.bundle_version }}"
-          ZIP_NAME="${{ steps.version.outputs.asset_base }}.zip"
-          INTEL_ZIP_NAME="${{ steps.version.outputs.asset_base }}-intel.zip"
-          for z in "$ZIP_NAME" "$INTEL_ZIP_NAME"; do
-            if [ ! -f "lyrimuse/dist/$z" ]; then
-              echo "expected release zip missing: lyrimuse/dist/$z" >&2
-              exit 1
-            fi
-          done
-          TAG="${{ steps.version.outputs.version }}"
-          BUILD_VERSION="$(unzip -p "lyrimuse/dist/${ZIP_NAME}" 'Lyrimuse.app/Contents/Info.plist' | plutil -extract CFBundleVersion raw -o - -)"
-          if [ "$BUILD_VERSION" != "${{ steps.version.outputs.build_version }}" ]; then
-            echo "CFBundleVersion inside the zip ($BUILD_VERSION) != build-version.sh (${{ steps.version.outputs.build_version }})" >&2
-            exit 1
-          fi
-          LENGTH=$(stat -f%z "lyrimuse/dist/${ZIP_NAME}")
-          SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "lyrimuse/dist/${ZIP_NAME}")
-          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ZIP_NAME}"
-          INTEL_LENGTH=$(stat -f%z "lyrimuse/dist/${INTEL_ZIP_NAME}")
-          INTEL_SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "lyrimuse/dist/${INTEL_ZIP_NAME}")
-          INTEL_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${INTEL_ZIP_NAME}"
-          PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
-          escape_cdata() {
-            local s="$1"
-            s="${s//]]>/]]]]><![CDATA[>}"
-            if [ -z "${s//[[:space:]]/}" ]; then
-              s="See the GitHub release page for details."
-            fi
-            printf '%s' "$s"
-          }
-          SPLIT_DIR="$RUNNER_TEMP/notes-split"
-          printf '%s\n' "$NOTES_RAW" > "$RUNNER_TEMP/notes-raw.md"
-          if python3 .github/scripts/split_release_notes.py "$RUNNER_TEMP/notes-raw.md" "$SPLIT_DIR"; then
-            EN_HTML=$(escape_cdata "$(cat "$SPLIT_DIR/notes.en.html")")
-            ZH_HTML=$(escape_cdata "$(cat "$SPLIT_DIR/notes.zh-Hans.html")")
-            DESCRIPTION_XML=$(
-              echo '      <description xml:lang="en"><![CDATA['
-              printf '%s\n' "$EN_HTML"
-              echo '      ]]></description>'
-              echo '      <description xml:lang="zh-Hans"><![CDATA['
-              printf '%s\n' "$ZH_HTML"
-              echo '      ]]></description>'
-            )
-          else
-            NOTES_HTML=$(escape_cdata "$NOTES_RAW")
-            DESCRIPTION_XML=$(
-              echo '      <description><![CDATA[<pre>'
-              printf '%s\n' "$NOTES_HTML"
-              echo '      </pre>]]></description>'
-            )
-          fi
-          emit_item() {
-            local url="$1" sig="$2" len="$3" arm64_only="$4"
-            echo '    <item>'
-            echo "      <title>${{ steps.version.outputs.version }}</title>"
-            echo "      <pubDate>${PUB_DATE}</pubDate>"
-            echo "      <sparkle:version>${BUILD_VERSION}</sparkle:version>"
-            echo "      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"
-            printf '%s\n' "$DESCRIPTION_XML"
-            echo '      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>'
-            if [ "${{ steps.version.outputs.is_prerelease }}" = "true" ]; then
-              echo '      <sparkle:channel>beta</sparkle:channel>'
-            fi
-            if [ "$arm64_only" = "yes" ]; then
-              echo '      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>'
-            fi
-            echo "      <enclosure url=\"${url}\" sparkle:version=\"${BUILD_VERSION}\" sparkle:edSignature=\"${sig}\" length=\"${len}\" type=\"application/octet-stream\" />"
-            echo '    </item>'
-          }
-          {
-            echo '<?xml version="1.0" encoding="utf-8"?>'
-            echo '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">'
-            echo '  <channel>'
-            echo '    <title>Lyrimuse Updates</title>'
-            echo "    <link>https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml</link>"
-            echo '    <description>Lyrimuse release feed</description>'
-            echo '    <language>en</language>'
-            emit_item "$DOWNLOAD_URL" "$SIGNATURE" "$LENGTH" yes
-            emit_item "$INTEL_DOWNLOAD_URL" "$INTEL_SIGNATURE" "$INTEL_LENGTH" no
-            echo '  </channel>'
-            echo '</rss>'
-          } > appcast.xml
-          echo "---- appcast.xml ----"
-          cat appcast.xml
-          python3 .github/scripts/check_appcast.py appcast.xml --tag "$TAG" --display-version "$VERSION" --build-version "$BUILD_VERSION" --prerelease "${{ steps.version.outputs.is_prerelease }}"
-
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
@@ -238,7 +139,6 @@ jobs:
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.zip
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.zip.sha256
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.dmg
-            appcast.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -247,7 +147,7 @@ jobs:
         run: |
           TAG="${{ steps.version.outputs.version }}"
           BASE="https://github.com/${{ github.repository }}/releases/download/${TAG}"
-          for name in "${{ steps.version.outputs.asset_base }}.zip" "${{ steps.version.outputs.asset_base }}-intel.zip" appcast.xml; do
+          for name in "${{ steps.version.outputs.asset_base }}.zip" "${{ steps.version.outputs.asset_base }}-intel.zip"; do
             ok=""
             for attempt in 1 2 3 4 5 6; do
               if curl -sSfIL --max-time 30 "${BASE}/${name}" -o /dev/null; then ok=1; break; fi

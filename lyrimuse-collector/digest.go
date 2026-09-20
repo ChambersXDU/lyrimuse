@@ -10,11 +10,6 @@ import (
 	"time"
 )
 
-const (
-	digestSourceLastfm       = "lastfm"
-	digestSourceListenBrainz = "listenbrainz"
-)
-
 const digestTopN = 3
 
 type digestTally struct {
@@ -28,63 +23,6 @@ type digestStats struct {
 
 	TopTracks  []digestTally
 	TopArtists []digestTally
-}
-
-func resolveDigestSource(preference string, lastfmConfigured, listenBrainzConfigured bool) string {
-	switch preference {
-	case digestSourceLastfm:
-		if lastfmConfigured {
-			return digestSourceLastfm
-		}
-	case digestSourceListenBrainz:
-		if listenBrainzConfigured {
-			return digestSourceListenBrainz
-		}
-	}
-
-	switch {
-	case lastfmConfigured:
-		return digestSourceLastfm
-	case listenBrainzConfigured:
-		return digestSourceListenBrainz
-	default:
-		return ""
-	}
-}
-
-func lastfmDigestStats(ctx context.Context, user, apiKey string, from, to int64) (digestStats, error) {
-	tracks, err := lastfmWeeklyTopTracks(ctx, user, apiKey, from, to)
-	if err != nil {
-		return digestStats{}, err
-	}
-	artists, err := lastfmWeeklyTopArtists(ctx, user, apiKey, from, to)
-	if err != nil {
-		return digestStats{}, err
-	}
-	var stats digestStats
-	for _, t := range tracks {
-		stats.TotalPlays += t.PlayCount
-	}
-	for i, t := range tracks {
-		if i >= digestTopN {
-			break
-		}
-		stats.TopTracks = append(stats.TopTracks, digestTally{Name: t.Name, Sub: t.Artist, Count: t.PlayCount})
-	}
-	stats.TopArtists = digestTopArtists(artists)
-	return stats, nil
-}
-
-func digestTopArtists(artists []lastfmChartEntry) []digestTally {
-	merged := mergeAliasedArtists(artists)
-	var out []digestTally
-	for i, a := range merged {
-		if i >= digestTopN {
-			break
-		}
-		out = append(out, digestTally{Name: a.Name, Count: a.PlayCount})
-	}
-	return out
 }
 
 type lbListenEntry struct {
