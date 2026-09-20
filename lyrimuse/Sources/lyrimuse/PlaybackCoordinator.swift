@@ -37,12 +37,6 @@ final class PlaybackCoordinator: ObservableObject {
 
     @Published private(set) var isCurrentTrackAdBreak: Bool = false
 
-    @Published private(set) var isRadioTalkBreak: Bool = false
-
-    @Published private(set) var radioStationName: String?
-    @Published private(set) var radioStationImage: NSImage?
-
-    @Published private(set) var currentAdSlot: YouTubeMusicAdProbe.AdSlot? = nil
     @Published private(set) var anchor: ProgressAnchor?
 
     @Published private(set) var currentLineIndex: Int?
@@ -70,9 +64,6 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var highResArtworkThumbnail: NSImage?
 
     @Published private(set) var highResAverageHex: String?
-
-    @Published private(set) var motionCoverFile: URL?
-    private var motionCoverTask: Task<Void, Never>?
 
     @Published private(set) var artworkAccentColor: Color?
 
@@ -134,23 +125,11 @@ final class PlaybackCoordinator: ObservableObject {
 
     var resolvedPlayerDisplayName: String? {
         guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
-        if let platformID = resolvedWebPlatformID,
-           let platform = BrowserPositionProbe.supportedPlatforms.first(where: { $0.id == platformID }) {
-            return platform.displayName
-        }
-        return PlaybackPlayer.allCases.first { $0 != .auto && $0.bundleIdentifier == id }?.displayName
-    }
-
-    var resolvedWebPlatformID: String? {
-        guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
-        return BrowserPositionProbe.shared.playingPlatformID(forBundleID: id)
+        return id == PlaybackPlayer.appleMusic.bundleIdentifier ? "Apple Music" : nil
     }
 
     var resolvedPlayerIcon: NSImage? {
         guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
-        if let platformID = resolvedWebPlatformID, let icon = WebPlatformIcon.image(platformID) {
-            return icon
-        }
         return AppIconResolver.icon(forBundleID: id)
     }
 
@@ -223,8 +202,8 @@ final class PlaybackCoordinator: ObservableObject {
     }
 
     private var currentPlayer: PlaybackPlayer? {
-        let bundleID = LocalPlaybackSource.shared.lastResolvedBundleID
-        return PlaybackPlayer.allCases.first { $0 != .auto && $0.bundleIdentifier == bundleID }
+        guard LocalPlaybackSource.shared.lastResolvedBundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return nil }
+        return .appleMusic
     }
 
     private var extendedControlPlayer: PlaybackPlayer? {
@@ -442,13 +421,6 @@ final class PlaybackCoordinator: ObservableObject {
         s.$currentTrackPlainLyrics.assign(to: &$currentTrackPlainLyrics)
         s.$collectorNetworkDown.assign(to: &$collectorNetworkDown)
         s.$isCurrentTrackAdBreak.assign(to: &$isCurrentTrackAdBreak)
-        s.$isRadioTalkBreak.assign(to: &$isRadioTalkBreak)
-        s.$radioStationName.assign(to: &$radioStationName)
-
-        s.$radioStationArtwork
-            .map { $0.flatMap { NSImage(data: $0) } }
-            .assign(to: &$radioStationImage)
-        s.$currentAdSlot.assign(to: &$currentAdSlot)
         s.$currentLineIndex.assign(to: &$currentLineIndex)
         s.$scrollLineIndex.assign(to: &$scrollLineIndex)
         s.$compactLine.assign(to: &$compactLine)
@@ -520,7 +492,6 @@ final class PlaybackCoordinator: ObservableObject {
                 .sink { [weak self] _, _, _, _ in
                     self?.refreshHighResCover()
 
-                    self?.refreshMotionCover()
                 },
 
             s.$enrichContentVersion
@@ -529,19 +500,7 @@ final class PlaybackCoordinator: ObservableObject {
                 .sink { [weak self] _ in
                     self?.refreshHighResCover(onlyIfMissing: true)
 
-                    self?.refreshMotionCover(onlyIfMissing: true)
                 },
-
-            settings.$motionCoverEnabled
-                .dropFirst()
-                .sink { [weak self] _ in self?.refreshMotionCover() },
-            NotificationCenter.default.publisher(for: NSNotification.Name.NSProcessInfoPowerStateDidChange)
-                .receive(on: RunLoop.main)
-                .sink { [weak self] _ in self?.refreshMotionCover() },
-
-            Publishers.CombineLatest(s.$spotifyArtworkURL, s.$artworkData)
-                .debounce(for: .milliseconds(350), scheduler: RunLoop.main)
-                .sink { [weak self] url, _ in self?.refreshSpotifyOriginalCover(url) },
 
         ]
     }
@@ -549,10 +508,6 @@ final class PlaybackCoordinator: ObservableObject {
     private static let lowResArtworkThreshold = 300
 
     private var highResCoverTask: Task<Void, Never>?
-
-    private var spotifyCoverTask: Task<Void, Never>?
-
-    private var spotifyCoverAppliedURL: URL?
 
     private func refreshHighResCover(onlyIfMissing: Bool = false) {
         if onlyIfMissing, highResArtworkImage != nil { return }
@@ -614,97 +569,6 @@ final class PlaybackCoordinator: ObservableObject {
             self?.highResArtworkImage = image
             self?.highResArtworkThumbnail = thumbnail
             self?.highResAverageHex = hex
-        }
-    }
-
-    private func refreshMotionCover(onlyIfMissing: Bool = false) {
-        if onlyIfMissing, motionCoverFile != nil { return }
-        motionCoverTask?.cancel()
-        motionCoverTask = nil
-        let s = LocalPlaybackSource.shared
-        let (title, artist, album) = (s.title, s.artist, s.album)
-        func clear() {
-            if motionCoverFile != nil { motionCoverFile = nil }
-        }
-        guard !title.isEmpty else {
-            clear()
-            return
-        }
-
-        guard AppSettings.shared.motionCoverEnabled,
-              !ProcessInfo.processInfo.isLowPowerModeEnabled else {
-            clear()
-            return
-        }
-        guard let found = EnrichCacheReader.albumMatchedMotionCover(artist: artist, title: title, album: album) else {
-            clear()
-            return
-        }
-        if let hit = MotionCoverStore.shared.cachedFile(master: found.master) {
-            if motionCoverFile != hit { motionCoverFile = hit }
-            return
-        }
-        clear()
-        motionCoverTask = Task { [weak self] in
-            let file = await MotionCoverStore.shared.prepare(master: found.master)
-            guard let file, !Task.isCancelled else { return }
-
-            guard LocalPlaybackSource.shared.title == title else { return }
-            self?.motionCoverFile = file
-        }
-    }
-
-    private func refreshSpotifyOriginalCover(_ url: URL?) {
-        spotifyCoverTask?.cancel()
-        spotifyCoverTask = nil
-        guard let url else {
-            spotifyCoverAppliedURL = nil
-            return
-        }
-        if spotifyCoverAppliedURL == url, highResArtworkImage != nil { return }
-        let s = LocalPlaybackSource.shared
-        let title = s.title
-        guard !title.isEmpty, s.spotifyArtworkURL == url else { return }
-
-        let systemWidth = artworkImage?.pixelWidth ?? 0
-        let candidates = SpotifyArtworkURL.downloadCandidates(for: url)
-        spotifyCoverTask = Task { [weak self] in
-            var loaded: NSImage?
-            for candidate in candidates {
-                if Task.isCancelled { return }
-
-                if let image = await ImageMemoryCache.shared.load(candidate, variant: .original) {
-                    loaded = image
-                    break
-                }
-            }
-            guard !Task.isCancelled else { return }
-            guard let image = loaded else {
-                logger.notice("spotify original cover: no candidate loaded for \(title, privacy: .public)")
-                return
-            }
-
-            guard LocalPlaybackSource.shared.title == title, LocalPlaybackSource.shared.spotifyArtworkURL == url else { return }
-
-            let width = image.pixelWidth
-            guard width > systemWidth else {
-                logger.notice("spotify original cover: \(width, privacy: .public)px is not larger than system \(systemWidth, privacy: .public)px, keeping system cover")
-                return
-            }
-            var hex: String?
-            var thumbnail: NSImage?
-            if let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                (hex, thumbnail) = await Task.detached {
-                    (LocalPlaybackSource.computeAverageHex(cgImage: cg),
-                     Self.downscaledThumbnail(cg, maxPixel: 256))
-                }.value
-            }
-            guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
-            logger.notice("spotify original cover: swapped in \(width, privacy: .public)px for \(title, privacy: .public) (system=\(systemWidth, privacy: .public)px)")
-            self?.highResArtworkImage = image
-            self?.highResArtworkThumbnail = thumbnail
-            self?.highResAverageHex = hex
-            self?.spotifyCoverAppliedURL = url
         }
     }
 

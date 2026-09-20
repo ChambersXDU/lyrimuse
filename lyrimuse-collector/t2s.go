@@ -7,22 +7,18 @@ import (
 	"strings"
 )
 
-//go:embed dictionary/TSCharacters.txt dictionary/TSPhrases.txt dictionary/STCharacters.txt
+//go:embed dictionary/TSCharacters.txt dictionary/TSPhrases.txt
 var t2sDictFS embed.FS
 
 var (
-
 	t2sCharMap      map[string]string
 	t2sPhraseMap    map[string]string
 	t2sMaxPhraseLen int
-
-	s2tCharMap map[string]string
 )
 
 func init() {
 	t2sCharMap = loadT2SDict("dictionary/TSCharacters.txt")
 	t2sPhraseMap = loadT2SDict("dictionary/TSPhrases.txt")
-	s2tCharMap = loadT2SDict("dictionary/STCharacters.txt")
 	for k := range t2sPhraseMap {
 		if n := len([]rune(k)); n > t2sMaxPhraseLen {
 			t2sMaxPhraseLen = n

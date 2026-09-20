@@ -12,10 +12,7 @@ public final class LyricsOffsetStore: ObservableObject {
 
     private static let playerDefaultsKey = "np:lyricsOffsetsByPlayerJSON"
 
-    private static let radioDefaultsKey = "np:lyricsRadioOffsetsJSON"
-
     private var offsets: [String: Int]
-    private var radioOffsets: [String: Int]
 
     private init() {
 
@@ -26,8 +23,6 @@ public final class LyricsOffsetStore: ObservableObject {
 
         globalOffsetMs = UserDefaults.standard.integer(forKey: Self.globalDefaultsKey)
         playerOffsets = Self.loadPlayerOffsets()
-        radioOffsets = Self.loadRadioOffsets()
-        radioOffsetCount = radioOffsets.count
 
         UserDefaults.standard.removeObject(forKey: "np:lyricsPlayerOffsetsJSON")
 
@@ -65,66 +60,8 @@ public final class LyricsOffsetStore: ObservableObject {
         return globalOffsetMs
     }
 
-    public func effectiveOffset(forKey key: String, bundleID: String? = nil, radioKey: String? = nil) -> Int {
-        baseOffsetMs(forBundleID: bundleID) + offset(forKey: key) + radioOffset(forKey: radioKey ?? "")
-    }
-
-    @Published public private(set) var radioOffsetCount: Int
-
-    public nonisolated static func radioKey(stationHash: String, trackKey: String) -> String {
-        let station = stationHash.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !station.isEmpty, !station.contains("|"),
-              !trackKey.replacingOccurrences(of: "|", with: "").isEmpty
-        else { return "" }
-        return "\(station)|\(trackKey)"
-    }
-
-    public func radioOffset(forKey key: String) -> Int {
-        guard !key.isEmpty else { return 0 }
-        return radioOffsets[key] ?? 0
-    }
-
-    @discardableResult
-    public func nudgeRadio(by deltaMs: Int, forKey key: String) -> Int {
-        let newValue = radioOffset(forKey: key) + deltaMs
-        setRadioOffset(newValue, forKey: key)
-        return newValue
-    }
-
-    public func setRadioOffset(_ ms: Int, forKey key: String) {
-        guard !key.isEmpty else { return }
-        guard radioOffsets[key] ?? 0 != ms else { return }
-        if ms == 0 {
-            radioOffsets.removeValue(forKey: key)
-        } else {
-            radioOffsets[key] = ms
-        }
-        radioOffsetCount = radioOffsets.count
-        persistRadioOffsets()
-    }
-
-    public func clearAllRadioOffsets() {
-        guard !radioOffsets.isEmpty else { return }
-        radioOffsets = [:]
-        radioOffsetCount = 0
-        persistRadioOffsets()
-    }
-
-    private func persistRadioOffsets() {
-        guard
-            let data = try? JSONEncoder().encode(radioOffsets),
-            let json = String(data: data, encoding: .utf8)
-        else { return }
-        UserDefaults.standard.set(json, forKey: Self.radioDefaultsKey)
-    }
-
-    private static func loadRadioOffsets() -> [String: Int] {
-        guard
-            let json = UserDefaults.standard.string(forKey: radioDefaultsKey),
-            let data = json.data(using: .utf8),
-            let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
-        else { return [:] }
-        return decoded.filter { $0.value != 0 }
+    public func effectiveOffset(forKey key: String, bundleID: String? = nil) -> Int {
+        baseOffsetMs(forBundleID: bundleID) + offset(forKey: key)
     }
 
     public nonisolated static func trackKey(artist: String, title: String, lyrics: String, lyricsYRC: String) -> String {

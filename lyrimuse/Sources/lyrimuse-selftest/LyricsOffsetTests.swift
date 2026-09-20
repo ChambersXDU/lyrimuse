@@ -82,82 +82,9 @@ func runLyricsOffsetTests() {
         expectEqual(store.offset(forKey: "||"), 0)
         expectEqual(store.effectiveOffset(forKey: "||"), 120)
 
-        let arc = "company.thebrowser.Browser"
-        let appleMusic = PlaybackPlayer.appleMusic.bundleIdentifier
-        store.setGlobalOffset(0)
-        store.reset(forKey: key, pinKey: "")
-
-        expectEqual(store.playerOffset(forBundleID: nil), 0)
-        expectEqual(store.playerOffset(forBundleID: ""), 0)
-        expectEqual(store.playerOffset(forBundleID: arc), 0)
-
-        store.setPlayerOffset(800, forBundleID: arc)
-        store.setGlobalOffset(100)
-        store.setOffset(-50, forKey: key, pinKey: "")
-
-        expectEqual(store.baseOffsetMs(forBundleID: arc), 800)
-        expectEqual(store.effectiveOffset(forKey: key, bundleID: arc), 750)
-
-        expectEqual(store.baseOffsetMs(forBundleID: appleMusic), 100)
-        expectEqual(store.effectiveOffset(forKey: key, bundleID: appleMusic), 50)
-        expectEqual(store.effectiveOffset(forKey: key), 50)
-
-        store.setPlayerOffset(0, forBundleID: arc)
-        expectEqual(store.baseOffsetMs(forBundleID: arc), 100)
-
-        store.setGlobalOffset(300)
-        store.setPlayerOffset(-200, forBundleID: arc)
-        store.setOffset(-50, forKey: key, pinKey: "")
-        expectEqual(store.effectiveOffset(forKey: key, bundleID: arc), -250)
-
-        store.setPlayerOffset(0, forBundleID: arc)
-        expectEqual(store.playerOffsets[arc] == nil, true)
-
-        store.setPlayerOffset(640, forBundleID: arc)
-        let playerJSON = UserDefaults.standard.string(forKey: "np:lyricsOffsetsByPlayerJSON") ?? ""
-        expectEqual(playerJSON.contains(arc), true)
-        expectEqual(playerJSON.contains("640"), true)
-        expectEqual(UserDefaults.standard.object(forKey: "np:lyricsPlayerOffsetsJSON") == nil, true)
-
         store.setGlobalOffset(0)
         store.reset(forKey: key, pinKey: "")
         for id in store.playerOffsets.keys { store.setPlayerOffset(0, forBundleID: id) }
-    }
-
-    do {
-        let arc = "company.thebrowser.Browser"
-        let uninstalled = "com.example.gone"
-        let builtinCount = PlaybackPlayer.allCases.filter { $0 != .auto }.count
-
-        let plain = LyricsOffsetScope.options(trusted: [:], configured: [], nowPlaying: nil)
-        expectEqual(plain.count, builtinCount)
-        expectEqual(plain.contains(""), false)
-        expectEqual(plain.first, PlaybackPlayer.appleMusic.bundleIdentifier)
-
-        let withTrusted = LyricsOffsetScope.options(trusted: [arc: "Arc"], configured: [], nowPlaying: nil)
-        expectEqual(withTrusted.count, builtinCount + 1)
-        expectEqual(withTrusted.last, arc)
-
-        let orphan = LyricsOffsetScope.options(trusted: [:], configured: [uninstalled], nowPlaying: nil)
-        expectEqual(orphan.contains(uninstalled), true)
-
-        let dedup = LyricsOffsetScope.options(trusted: [arc: "Arc"], configured: [arc], nowPlaying: arc)
-        expectEqual(dedup.filter { $0 == arc }.count, 1)
-
-        let am = PlaybackPlayer.appleMusic.bundleIdentifier
-        let dupBuiltin = LyricsOffsetScope.options(trusted: [am: "Music"], configured: [am], nowPlaying: am)
-        expectEqual(dupBuiltin.count, builtinCount)
-
-        let fresh = LyricsOffsetScope.options(trusted: [:], configured: [], nowPlaying: uninstalled)
-        expectEqual(fresh.last, uninstalled)
-
-        let blank = LyricsOffsetScope.options(trusted: [:], configured: [], nowPlaying: "")
-        expectEqual(blank.count, builtinCount)
-
-        let reordered = [PlaybackPlayer.spotify, .kugou, .netease, .qqMusic, .appleMusic, .auto]
-        let customOrder = LyricsOffsetScope.options(builtInOrder: reordered, trusted: [:], configured: [], nowPlaying: nil)
-        expectEqual(customOrder.first, PlaybackPlayer.spotify.bundleIdentifier)
-        expectEqual(customOrder.count, builtinCount)
     }
 
     MainActor.assumeIsolated {
@@ -225,49 +152,4 @@ func runLyricsOffsetTests() {
         for id in store.playerOffsets.keys { store.setPlayerOffset(0, forBundleID: id) }
     }
 
-    do {
-        typealias S = LyricsOffsetStore
-        let hashA = "CgkIBRoF0aDTpxkQBA"
-        let hashB = "CgkIBRoF6d-JrhkQBA"
-        let track = S.trackKey(artist: "Ariana Grande", title: "kiss me", lyrics: "[00:01.00]a\n", lyricsYRC: "")
-
-        expectEqual(S.radioKey(stationHash: "", trackKey: track), "")
-        expectEqual(S.radioKey(stationHash: hashA, trackKey: ""), "")
-        expectEqual(S.radioKey(stationHash: hashA, trackKey: "||"), "")
-        expectEqual(S.radioKey(stationHash: "带|竖线的台", trackKey: track), "")
-        expectEqual(S.radioKey(stationHash: hashA, trackKey: track), "\(hashA)|\(track)")
-
-        let store = S.shared
-        let keyA = S.radioKey(stationHash: hashA, trackKey: track)
-        let keyB = S.radioKey(stationHash: hashB, trackKey: track)
-        store.setGlobalOffset(0)
-        store.reset(forKey: track, pinKey: "")
-        store.clearAllRadioOffsets()
-        expectEqual(store.radioOffsetCount, 0)
-
-        store.nudgeRadio(by: 1500, forKey: keyA)
-        expectEqual(store.radioOffset(forKey: keyA), 1500)
-        expectEqual(store.radioOffset(forKey: keyB), 0)
-        expectEqual(store.radioOffsetCount, 1)
-
-        expectEqual(store.effectiveOffset(forKey: track), 0)
-        expectEqual(store.effectiveOffset(forKey: track, bundleID: nil, radioKey: keyA), 1500)
-
-        store.setGlobalOffset(300)
-        store.nudge(by: -100, forKey: track, pinKey: "")
-        expectEqual(store.effectiveOffset(forKey: track, bundleID: nil, radioKey: keyA), 300 - 100 + 1500)
-        expectEqual(store.effectiveOffset(forKey: track), 300 - 100)
-
-        store.setRadioOffset(0, forKey: keyA)
-        expectEqual(store.radioOffsetCount, 0)
-
-        store.nudgeRadio(by: 800, forKey: keyA)
-        store.clearAllRadioOffsets()
-        expectEqual(store.radioOffset(forKey: keyA), 0)
-        expectEqual(store.globalOffsetMs, 300)
-        expectEqual(store.offset(forKey: track), -100)
-
-        store.setGlobalOffset(0)
-        store.reset(forKey: track, pinKey: "")
-    }
 }

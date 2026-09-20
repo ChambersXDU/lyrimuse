@@ -129,7 +129,6 @@ func runResyncLyrics(keys []string, apply bool) int {
 		cur.LyricsDecision = buildLyricsDecision(
 			lyricsDecisionPathRescore, artist, title, album, duration, scored, picked,
 			!lyricsSame || !trSame || !romaSame)
-		traceLyricsDecision(key, cur.LyricsDecision)
 		cur.LyricsDecisionApplied = cur.LyricsDecision
 		cur.Lyrics = picked.Lyrics
 		cur.LyricsTr, cur.LyricsRoma, cur.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC

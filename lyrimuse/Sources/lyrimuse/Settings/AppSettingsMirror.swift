@@ -52,9 +52,6 @@ enum AppSettingsMirror {
     @discardableResult
     static func restoreIfPristine() -> Bool {
 
-        guard UserDefaults.standard.object(forKey: "np:hasCompletedOnboarding") == nil else {
-            return false
-        }
         guard let data = try? Data(contentsOf: fileURL),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               !dict.isEmpty

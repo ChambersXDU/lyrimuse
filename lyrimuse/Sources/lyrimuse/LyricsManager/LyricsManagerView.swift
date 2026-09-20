@@ -425,7 +425,6 @@ struct LyricsManagerView: View {
     @State private var showRefreshedFeedback = false
     @State private var showClearAllConfirm = false
     @State private var showClearOffsetsConfirm = false
-    @State private var showClearRadioOffsetsConfirm = false
     @State private var pendingRestoreSnapshot: LyricsBackupStore.Snapshot?
     @State private var showRestoreSnapshotConfirm = false
     @State private var restoreSnapshotResult: String?
@@ -981,18 +980,6 @@ struct LyricsManagerView: View {
                                             offsets.trackOffsetCount))
                             }
 
-                            if offsets.radioOffsetCount > 0 {
-                                Section {
-                                    Button(role: .destructive) {
-                                        showClearRadioOffsetsConfirm = true
-                                    } label: {
-                                        Label(L10n.t("清空全部电台校正"), systemImage: "dot.radiowaves.left.and.right")
-                                    }
-                                } header: {
-                                    Text(String(format: L10n.t("已校正 %d 首歌在电台上的时间轴"),
-                                                offsets.radioOffsetCount))
-                                }
-                            }
                             let snapshots = LyricsBackupStore.autoSnapshots()
                             if !snapshots.isEmpty {
                                 Section {
@@ -1087,20 +1074,6 @@ struct LyricsManagerView: View {
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
             Text(String(format: L10n.t("这会清掉你为 %d 首歌手动调出来的歌词时间轴校正值,无法撤销。歌词内容本身不受影响;设置里的全局偏移和按播放器补偿也不会被清掉。清掉之后,这些歌会重新交给后台自动更新歌词源"), offsets.trackOffsetCount))
-        }
-
-        .confirmationDialog(
-            L10n.t("确定要清空全部电台校正吗?"),
-            isPresented: $showClearRadioOffsetsConfirm,
-            titleVisibility: .visible
-        ) {
-            Button(L10n.t("清空全部电台校正"), role: .destructive) {
-                LyricsOffsetStore.shared.clearAllRadioOffsets()
-                PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
-            }
-            Button(L10n.t("取消"), role: .cancel) {}
-        } message: {
-            Text(String(format: L10n.t("这会清掉你在电台上为 %d 首歌调出来的时间轴校正,无法撤销。这些校正只在放电台时生效,清掉不影响你正常播放这些歌时的歌词"), offsets.radioOffsetCount))
         }
 
         .confirmationDialog(

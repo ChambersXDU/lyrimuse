@@ -5,7 +5,6 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
 
         case tab(String)
 
-        case account(String)
     }
 
     public let destination: Destination
@@ -34,7 +33,6 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
         let dest: String
         switch destination {
         case .tab(let raw): dest = "tab:\(raw)"
-        case .account(let name): dest = "account:\(name)"
         }
         return "\(dest)|\(sectionValue ?? "")|\(pathKeys.joined(separator: "/"))|\(titleKey)"
     }
@@ -48,7 +46,7 @@ public enum SettingsSearchCatalog {
 
     public static let lyricsSectionKey = "settings:lyricsSection"
 
-    public static let brandPathComponents: Set<String> = ["ListenBrainz"]
+    public static let brandPathComponents: Set<String> = []
 
     private static func lyrics(_ section: String, _ title: String, alt: [String] = [],
                                kw: [String] = [], group: String? = nil) -> SettingsSearchEntry {
@@ -100,13 +98,6 @@ public enum SettingsSearchCatalog {
                             pathKeys: ["关于", group])
     }
 
-    private static func account(_ name: String, path: [String], sectionValue: String? = nil, _ title: String,
-                                kw: [String] = []) -> SettingsSearchEntry {
-        SettingsSearchEntry(destination: .account(name),
-                            sectionKey: nil, sectionValue: sectionValue,
-                            titleKey: title, keywords: kw, pathKeys: path)
-    }
-
     public static let entries: [SettingsSearchEntry] = [
 
         lyrics("fetch", "歌词来源", kw: ["歌词源", "网易云音乐", "QQ音乐", "酷狗", "Musixmatch", "LRCLIB", "AMLL",
@@ -118,27 +109,17 @@ public enum SettingsSearchCatalog {
 
         lyrics("translation", "显示译文", kw: ["翻译"]),
         lyrics("translation", "译文语言", kw: ["翻译", "语言"]),
-        lyrics("translation", "系统兜底翻译", kw: ["机翻", "MyMemory", "翻译"]),
-        lyrics("translation", "翻译语言包", kw: ["下载", "语言包", "Apple 翻译"]),
 
         lyrics("display", "繁简转换", kw: ["繁体", "简体", "OpenCC"]),
-        lyrics("display", "显示罗马音", kw: ["罗马字", "注音", "拼音", "粤拼", "发音"]),
-        lyrics("display", "标注哪些语言", kw: ["日语", "韩语", "中文", "罗马音"]),
+        lyrics("display", "显示罗马音", kw: ["罗马字", "发音"]),
+        lyrics("display", "标注哪些语言", kw: ["日语", "韩语", "罗马音"]),
         lyrics("display", "全局时间轴偏移", kw: ["歌词偏移", "提前", "延后", "校准", "同步"]),
 
         lyrics("manage", "歌词库", kw: ["歌词管理", "统计", "缓存"]),
         lyrics("manage", "歌词文件夹", kw: ["lyrics", "自定义位置", "目录", "lrc"]),
 
-        player("播放器", kw: ["Apple Music", "QQ音乐", "网易云音乐", "酷狗音乐", "Spotify", "自动识别", "多选"]),
-        player("网页播放器", kw: ["YouTube Music", "Spotify", "浏览器", "Chrome", "Safari", "Edge", "Arc"]),
-        player("已信任的播放器", kw: ["信任列表", "其它播放器"]),
-        player("新播放器提醒", kw: ["通知", "未知播放器"]),
         player("Apple Music 自动化", kw: ["权限", "AppleScript", "自动化"]),
         player("后台采集服务", kw: ["collector", "launchd", "服务", "运行状态"]),
-        player("播放器联动", kw: ["启动", "退出", "联动"]),
-        player("打开 Lyrimuse 时启动", kw: ["联动", "启动播放器"], group: "播放器联动"),
-        player("跟随播放器启动", kw: ["联动", "自动启动"], group: "播放器联动"),
-        player("跟随播放器退出", kw: ["联动", "自动退出"], group: "播放器联动"),
 
         surface(.overlay, "桌面悬浮歌词", kw: ["开关", "悬浮窗", "总开关"], inDrawer: false),
         surface(.overlay, "跟随封面", kw: ["封面色", "取色", "配色"], group: "主题"),
@@ -199,11 +180,9 @@ public enum SettingsSearchCatalog {
         general("菜单栏图标", kw: ["图标", "状态栏", "12 款"], group: "菜单栏与 Dock"),
         general("随播放律动", kw: ["动画", "图标", "律动"], group: "菜单栏与 Dock"),
         general("在 Dock 中显示", kw: ["Dock", "程序坞", "图标"], group: "菜单栏与 Dock"),
-        general("语言", kw: ["简体中文", "繁體中文", "English", "跟随系统", "界面语言"], group: "语言与启动"),
+        general("语言", kw: ["简体中文", "English", "跟随系统", "界面语言"], group: "语言与启动"),
         general("开机启动", kw: ["登录项", "自动启动", "启动"], group: "语言与启动"),
-        general("iCloud 备份", alt: ["备份文件夹"], kw: ["备份", "迁移", "搬家", "同步", "文件夹"], group: "备份与迁移"),
         general("设置文件", kw: ["导出", "导入", "备份", "JSON"], group: "备份与迁移"),
-        general("动态封面", kw: ["封面", "动画", "motion", "artwork", "会动", "视频"], group: "封面"),
         general("清除所有设置", kw: ["重置", "恢复出厂", "删除"]),
 
         about("反馈问题", kw: ["issue", "bug", "反馈"], group: "反馈与社区"),
@@ -211,14 +190,8 @@ public enum SettingsSearchCatalog {
         about("版权说明", kw: ["版权", "歌词版权"], group: "许可与版权"),
         about("第三方许可", kw: ["许可证", "开源", "license"], group: "许可与版权"),
         about("开源许可证", kw: ["GPL", "许可证", "license"], group: "许可与版权"),
-        about("导出诊断", kw: ["诊断", "日志", "排查"], group: "诊断与数据"),
         about("配置文件夹", kw: ["config", "配置", "文件夹", "路径"], group: "诊断与数据"),
 
-        account("listenBrainz", path: ["ListenBrainz"], "账户信息", kw: ["ListenBrainz", "token", "令牌", "用户名", "连接"]),
-        account("stateRelay", path: ["网页推送"], "连接信息", kw: ["中继", "网页", "relay", "worker", "推送"]),
-        account("bark", path: ["推送提醒"], "提醒", kw: ["Bark", "推送", "webhook", "通知"]),
-        account("bark", path: ["推送提醒"], "每周听歌小结", kw: ["周报", "推送", "Bark"]),
-        account("bark", path: ["推送提醒"], "每日听歌报告", kw: ["日报", "推送", "Bark"]),
     ]
 }
 

@@ -81,7 +81,7 @@ func prefetchAlbumSiblings(ctx context.Context, currentArtist, currentTitle, alb
 			}
 			queued++
 
-			go resolveEnrichAsync(ctx, key, t.artist, t.title, album, "", t.duration, false)
+			go resolveEnrichAsync(ctx, key, t.artist, t.title, album, t.duration)
 		}
 
 		log.Printf("album prefetch: %q → %d tracks, %d queued", album, len(tracks), queued)

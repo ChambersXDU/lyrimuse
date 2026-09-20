@@ -84,7 +84,7 @@ func TestResolveEnrichAsyncCancelWritesNoLyricsEntry(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		resolveEnrichAsync(ctx, key, artist, title, album, "", 0, false)
+		resolveEnrichAsync(ctx, key, artist, title, album, 0)
 		close(done)
 	}()
 	select {

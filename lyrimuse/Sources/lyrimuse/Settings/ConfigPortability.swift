@@ -5,6 +5,18 @@ import OSLog
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config-portability")
 
+enum ConfigFileSaveError: LocalizedError {
+    case refusedCorruptFile
+    case notSerializable
+
+    var errorDescription: String? {
+        switch self {
+        case .refusedCorruptFile: return L10n.t("配置文件无法解析，为避免覆盖已放弃保存")
+        case .notSerializable: return L10n.t("内部数据不是合法 JSON，已放弃保存")
+        }
+    }
+}
+
 enum ConfigPortability {
     private static let configDir = LyrimusePaths.configDir
 
@@ -13,32 +25,23 @@ enum ConfigPortability {
     private static let featuresURL = configDir.appendingPathComponent("lyrimuse-features.json")
 
     private static let machineLocalDefaultsKeys: Set<String> = [
-        "np:hasCompletedOnboarding",
-        "np:hasShownAutomationOnboarding",
-        "np:hasOfferedICloudImport",
         "np:hasShownOverlayDragHint",
         "np:hasShownMenuBarPositionHint",
 
-        "np:unknownPlayerNotices",
         "np:overlayPositionTop",
         "np:overlayPositionOrigin",
         "np:launchAtLoginEnabled",
 
         "np:collectorServiceEnabled",
 
-        "np:spotifyProbeLeadByDevice",
-        "np:spotifyProbeLeadSecs",
-
         CollectorServiceManager.installedFingerprintKey,
 
-        ICloudConfigStore.customFolderKey,
     ]
 
     static let obsoleteDefaultsKeys: Set<String> = [
 
         "np:launchMusicOnLyrimuseOpen",
         "np:dataSourceMode",
-        "np:relayBaseURL",
         "np:textShadowColorHex",
         "np:textShadowEnabled",
         "np:useSystemTranslationFallback",
@@ -173,8 +176,7 @@ enum ConfigPortability {
         }
 
         if let configObj = bundle["config"] {
-            let sanitized = sanitizeImportedConfig(configObj)
-            if let configData = try? JSONSerialization.data(withJSONObject: sanitized, options: [.prettyPrinted]) {
+            if let configData = try? JSONSerialization.data(withJSONObject: configObj, options: [.prettyPrinted]) {
                 do {
 
                     try configData.writeSecurely(to: configURL)
@@ -212,19 +214,6 @@ enum ConfigPortability {
         let reloaded = await CollectorControl.restartAndWaitAsync()
         logger.info("importData: collector reload after import — ok=\(reloaded)")
         return true
-    }
-
-    private static func sanitizeImportedConfig(_ configObj: Any) -> Any {
-        guard var config = configObj as? [String: Any] else { return configObj }
-        if let raw = config["state_relay_url"] as? String,
-           !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           !ImportPolicy.isAcceptableRelayURL(raw) {
-
-            config["state_relay_url"] = ""
-            config["state_relay_token"] = ""
-            logger.warning("importData: dropped state_relay_url with an unacceptable scheme (and its token)")
-        }
-        return config
     }
 
     @discardableResult

@@ -19,20 +19,13 @@ let groups: [TestGroup] = [
     TestGroup(name: "cache-keys", summary: "缓存 key 归一化(与 collector 逐字节一致)/ 合唱 credit 归并", run: runCacheKeyTests),
     TestGroup(name: "lyrics-offset", summary: "歌词时间轴偏移:基准 + 单曲微调 / 作用域 / 已校准名单", run: runLyricsOffsetTests),
     TestGroup(name: "lyrics-manager", summary: "歌词管理:列宽 / 写回合并 / 备份归档 / 重匹配 / 锁定 / 排序", run: runLyricsManagerTests),
-    TestGroup(name: "playback-position", summary: "播放位置:外推伺服 / 锚点 / seek / 浏览器探针", run: runPlaybackPositionTests),
-    TestGroup(name: "players", summary: "播放器身份 / 信任列表 / 播放模式 / 多选 / 广告判据 / 健康徽标", run: runPlayerIdentityTests),
     TestGroup(name: "cover-art", summary: "封面取图 / 取色", run: runCoverArtTests),
-    TestGroup(name: "spotify-native", summary: "Spotify 原生客户端本机数据:图床换档 / 通知广告分类 / 位置探针输出解析", run: runSpotifyNativeTests),
-    TestGroup(name: "spotify-web-probe", summary: "网页版 Spotify:浏览器位置探针输出的封面地址段", run: runSpotifyWebProbeReadingTests),
     TestGroup(name: "menu-bar", summary: "菜单栏跑马灯 / 逐字染色 / 进度图标", run: runMenuBarTests),
     TestGroup(name: "overlay", summary: "桌面悬浮歌词的几何与命中测试", run: runOverlayTests),
-    TestGroup(name: "idle-page", summary: "停播页:第 N 次听换算 / 收听总览 / 选句 / 平台链接", run: runIdlePageTests),
     TestGroup(name: "identity", summary: "变体身份与落盘路径:正式 / Dev 两套名字、配置目录、日志、传给 collector 的环境变量", run: runIdentityTests),
     TestGroup(name: "settings-ui", summary: "设置页交互纯逻辑:顺序优先列表拖拽排序(滞回 / 让位 / 写回)", run: runSettingsInteractionTests),
     TestGroup(name: "settings-search", summary: "设置搜索:目录 ↔ 源码调用点 ↔ catalog 三方对账 / 匹配排序", run: runSettingsSearchTests),
-    TestGroup(name: "onboarding", summary: "首启引导:最后一页那阵撒花的几何(两头都落在画面外 / 同 seed 同一场雪)", run: runOnboardingTests),
     TestGroup(name: "contracts", summary: "跨文件契约:歌词表面、设置搜索与已移除功能清理", run: runSourceContractTests),
-    TestGroup(name: "ops-diagnostics", summary: "诊断脱敏 / 备份发现 / 导入策略 / 安全写文件 / launchd / 进程", run: runOpsDiagnosticsTests),
 ]
 
 let usage = """

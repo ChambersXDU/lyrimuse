@@ -191,12 +191,6 @@ func TestAppleAlbumHintHelpers(t *testing.T) {
 		t.Fatalf("都空则空:got %q", got)
 	}
 
-	if relayAlbumHintSuffix(snapshot{AlbumHint: "Prince"}) != "|a" ||
-		relayAlbumHintSuffix(snapshot{Album: "Prince", AlbumHint: "Prince"}) != "" ||
-		relayAlbumHintSuffix(snapshot{}) != "" {
-		t.Fatalf("relayAlbumHintSuffix 标记规则不对")
-	}
-
 	appleAlbumHintMu.Lock()
 	appleAlbumHintPath = ""
 	key := appleAlbumHintKey("王子", "Why You Wanna Treat Me So Bad?", 230.121)

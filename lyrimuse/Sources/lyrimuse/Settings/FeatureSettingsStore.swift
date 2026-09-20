@@ -42,53 +42,6 @@ public enum MusixmatchTranslationLanguage: String, CaseIterable, Identifiable, C
     }
 }
 
-extension PlaybackPlayer {
-    public var displayName: String {
-        switch self {
-        case .appleMusic: return "Apple Music"
-        case .qqMusic: return L10n.t("QQ 音乐")
-        case .netease: return L10n.t("网易云音乐")
-        case .kugou: return L10n.t("酷狗音乐")
-        case .spotify: return "Spotify"
-        case .auto: return L10n.t("自动识别")
-        }
-    }
-
-    public var tintColor: Color {
-        switch self {
-        case .appleMusic: return Color(red: 0.98, green: 0.20, blue: 0.35)
-        case .qqMusic: return sourceColor("qq")
-        case .netease: return sourceColor("netease")
-        case .kugou: return sourceColor("kugou")
-        case .spotify: return Color(red: 0.11, green: 0.73, blue: 0.33)
-        case .auto: return .secondary
-        }
-    }
-
-    public var fallbackSymbolName: String {
-        switch self {
-        case .auto: return "wand.and.stars"
-        default: return "music.note"
-        }
-    }
-
-    public var bundledIconResourceName: String? {
-        switch self {
-        case .qqMusic: return "QQMusicIcon"
-        case .netease: return "NeteaseIcon"
-        case .kugou: return "KugouIcon"
-        case .spotify: return "SpotifyIcon"
-        case .appleMusic, .auto: return nil
-        }
-    }
-
-    public static var displayOrder: [PlaybackPlayer] {
-        AppSettings.userReadsSimplifiedChinese
-            ? [.appleMusic, .qqMusic, .netease, .kugou, .spotify, .auto]
-            : [.appleMusic, .spotify, .qqMusic, .netease, .kugou, .auto]
-    }
-}
-
 public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
     case smart, priority
     public var id: Self { self }
@@ -102,19 +55,9 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
 
 struct FeatureFlagsFile: Codable, Equatable {
 
-    var player: String?
-
-    var players: [String]?
     var albumPrefetch: Bool?
 
     var lyricsAutoUpgrade: Bool?
-    var lyricsMachineTranslation: Bool?
-    var weeklyDigest: Bool?
-
-    var dailyDigest: Bool?
-
-    var weeklyDigestSource: String?
-    var dailyDigestSource: String?
     var lyricsSources: [String]?
 
     var amllLyrics: Bool?
@@ -132,22 +75,9 @@ struct FeatureFlagsFile: Codable, Equatable {
 
     var lyricsTranslationLanguage: String?
 
-    var launchLyrimuseOnMusicOpen: Bool?
-
-    var launchLyrimuseOnPlayers: [String]?
-
-    var trustedPlayers: [String: String]?
-
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case player
-        case players
         case albumPrefetch = "album_prefetch"
         case lyricsAutoUpgrade = "lyrics_auto_upgrade"
-        case lyricsMachineTranslation = "lyrics_machine_translation"
-        case weeklyDigest = "weekly_digest"
-        case dailyDigest = "daily_digest"
-        case weeklyDigestSource = "weekly_digest_source"
-        case dailyDigestSource = "daily_digest_source"
         case lyricsSources = "lyrics_sources"
         case amllLyrics = "amll_lyrics"
         case lyricFindLyrics = "lyricfind_lyrics"
@@ -158,9 +88,6 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
         case lyricsTranslationLanguage = "lyrics_translation_language"
-        case launchLyrimuseOnMusicOpen = "launch_lyrimuse_on_music_open"
-        case launchLyrimuseOnPlayers = "launch_lyrimuse_on_players"
-        case trustedPlayers = "trusted_players"
     }
 
     static let knownFileKeys: Set<String> = Set(CodingKeys.allCases.map(\.rawValue))
@@ -170,29 +97,10 @@ struct FeatureFlagsFile: Codable, Equatable {
 public final class FeatureSettingsStore: ObservableObject {
     public static let shared = FeatureSettingsStore()
 
-    @Published public var players: Set<PlaybackPlayer> = [.auto]
-
-    @MainActor
-    public func togglePlayer(_ player: PlaybackPlayer) {
-        if players.contains(player) {
-            guard players.count > 1 else { return }
-            players.remove(player)
-        } else {
-            players.insert(player)
-        }
-        Task { await save() }
-    }
-
     @Published public var albumPrefetch = true
 
     @Published public var lyricsAutoUpgrade = true
 
-    @Published public var lyricsMachineTranslation = false
-    @Published public var weeklyDigest = false
-    @Published public var dailyDigest = false
-
-    @Published public var weeklyDigestSource = ""
-    @Published public var dailyDigestSource = ""
     @Published public var lyricsSources: Set<LyricsSource> = Set(LyricsSource.allCases)
     @Published public var lyricsSourceMode: LyricsSourceMode = .smart
 
@@ -201,10 +109,6 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var lyricsDir = ""
 
     @Published public var lyricsTranslationLanguage: MusixmatchTranslationLanguage = .auto
-
-    @Published public var launchLyrimuseOnPlayers: Set<PlaybackPlayer> = []
-
-    @Published public private(set) var trustedPlayers: [String: String] = [:]
 
     @Published public private(set) var lastError: String?
 
@@ -218,13 +122,8 @@ public final class FeatureSettingsStore: ObservableObject {
     private var currentSnapshot: FeatureFlagsFile {
         FeatureFlagsFile(
 
-            players: players.map(\.rawValue).sorted(),
             albumPrefetch: albumPrefetch,
             lyricsAutoUpgrade: lyricsAutoUpgrade,
-            lyricsMachineTranslation: lyricsMachineTranslation,
-            weeklyDigest: weeklyDigest, dailyDigest: dailyDigest,
-            weeklyDigestSource: weeklyDigestSource.isEmpty ? nil : weeklyDigestSource,
-            dailyDigestSource: dailyDigestSource.isEmpty ? nil : dailyDigestSource,
             lyricsSources: lyricsSources.map(\.rawValue).sorted(),
 
             amllLyrics: lyricsSources.contains(.amll),
@@ -239,41 +138,8 @@ public final class FeatureSettingsStore: ObservableObject {
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
-            lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue,
-            launchLyrimuseOnMusicOpen: !launchLyrimuseOnPlayers.isEmpty,
-            launchLyrimuseOnPlayers: launchLyrimuseOnPlayers.map(\.rawValue).sorted(),
-            trustedPlayers: trustedPlayers.isEmpty ? nil : trustedPlayers
+            lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue
         )
-    }
-
-    public func trust(bundleID: String) async {
-        let id = bundleID.trimmingCharacters(in: .whitespaces)
-        guard !id.isEmpty, trustedPlayers[id] == nil else { return }
-
-        guard !PlaybackPlayer.allCases.contains(where: { $0 != .auto && $0.bundleIdentifier == id }) else { return }
-        trustedPlayers[id] = Self.appDisplayName(forBundleID: id) ?? ""
-        _ = await save()
-    }
-
-    public func untrust(bundleID: String) async {
-        guard trustedPlayers.removeValue(forKey: bundleID) != nil else { return }
-        _ = await save()
-    }
-
-    public static func appDisplayName(forBundleID bundleID: String) -> String? {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
-            return nil
-        }
-        if let info = Bundle(url: url)?.infoDictionary {
-            for key in ["CFBundleDisplayName", "CFBundleName"] {
-                if let name = info[key] as? String,
-                   !name.trimmingCharacters(in: .whitespaces).isEmpty {
-                    return name
-                }
-            }
-        }
-        let base = url.deletingPathExtension().lastPathComponent
-        return base.isEmpty ? nil : base
     }
 
     public var effectiveLyricsDir: URL {
@@ -324,22 +190,8 @@ public final class FeatureSettingsStore: ObservableObject {
             logger.notice("features.json carries \(unknownCount) key(s) this build doesn't know; they will be preserved on write")
         }
 
-        let decodedPlayers = Set((f.players ?? []).compactMap(PlaybackPlayer.init(rawValue:)))
-        if !decodedPlayers.isEmpty {
-            players = decodedPlayers
-        } else if let legacy = f.player.flatMap(PlaybackPlayer.init(rawValue:)) {
-            players = [legacy]
-        } else {
-            players = [.auto]
-        }
         albumPrefetch = f.albumPrefetch ?? true
         lyricsAutoUpgrade = f.lyricsAutoUpgrade ?? true
-        lyricsMachineTranslation = f.lyricsMachineTranslation ?? false
-        weeklyDigest = f.weeklyDigest ?? false
-        dailyDigest = f.dailyDigest ?? false
-        weeklyDigestSource = f.weeklyDigestSource == "listenbrainz" ? "listenbrainz" : ""
-        dailyDigestSource = f.dailyDigestSource == "listenbrainz" ? "listenbrainz" : ""
-
         let decodedSources = (f.lyricsSources ?? []).compactMap(LyricsSource.init(rawValue:))
         var enabled = Set(decodedSources)
         if enabled.isEmpty {
@@ -372,16 +224,8 @@ public final class FeatureSettingsStore: ObservableObject {
 
         let decodedOrder = (f.lyricsSourceOrder ?? []).compactMap(LyricsSource.init(rawValue:))
         lyricsSourceOrder = decodedOrder.count == LyricsSource.allCases.count ? decodedOrder : LyricsSource.allCases
-        trustedPlayers = f.trustedPlayers ?? [:]
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
-        if let raw = f.launchLyrimuseOnPlayers {
-            launchLyrimuseOnPlayers = Set(raw.compactMap(PlaybackPlayer.init(rawValue:)))
-        } else {
-
-            launchLyrimuseOnPlayers = PlayerLinkage.migratedLaunchSet(
-                legacyEnabled: f.launchLyrimuseOnMusicOpen ?? true, selectedPlayers: players, requiresSole: false)
-        }
         savedSnapshot = currentSnapshot
     }
 

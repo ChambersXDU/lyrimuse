@@ -15,7 +15,6 @@ import (
 const lyricsGoldenDir = "testdata/lyricsgolden"
 
 type goldenFixture struct {
-
 	ID string `json:"id"`
 
 	Category string `json:"category"`
@@ -54,8 +53,6 @@ type goldenSettings struct {
 	Sources     map[string]bool `json:"sources,omitempty"`
 	SourceMode  string          `json:"source_mode,omitempty"`
 	SourceOrder []string        `json:"source_order,omitempty"`
-
-	PlayerBundleID string `json:"player_bundle_id,omitempty"`
 
 	ArtistCJKHint string `json:"artist_cjk_hint,omitempty"`
 }
@@ -103,7 +100,6 @@ type goldenAMLL struct {
 }
 
 type goldenExpect struct {
-
 	Winner string `json:"winner"`
 
 	InstrumentalMarker string `json:"instrumental_marker,omitempty"`
@@ -126,7 +122,6 @@ type goldenRankedCandidate struct {
 }
 
 type goldenLabelEvidence struct {
-
 	ConsensusPeers int `json:"consensus_peers"`
 
 	TitleAccepted bool `json:"title_accepted"`
@@ -278,7 +273,6 @@ var goldenRequiredCategories = map[string]string{
 	"duration-corroborated":     "时长不吻合但跨源末尾印证救回",
 	"line-only-winner":          "没有逐字的冠军赢过带逐字的候选",
 	"amll-embedded-translation": "amll 按 ID 直取命中,内嵌译文可用",
-	"native-player-source":      "与当前播放器同源 +250",
 	"single-candidate":          "只有一个源应答",
 	"instrumental-marker":       "纯音乐标记搭车透传,没有歌词冠军",
 }
@@ -362,9 +356,6 @@ func goldenRawRound(fx *goldenFixture) map[string]lyricSourceResult {
 func applyGoldenSettings(t *testing.T, fx *goldenFixture) {
 	t.Helper()
 	savedFeatures := features
-	nativeLyricSourcesMu.Lock()
-	savedNative := nativeLyricSources
-	nativeLyricSourcesMu.Unlock()
 	artistAliasMu.Lock()
 	savedAlias, hadAlias := artistAliasCache[fx.Query.Artist]
 	artistAliasMu.Unlock()
@@ -372,9 +363,6 @@ func applyGoldenSettings(t *testing.T, fx *goldenFixture) {
 		featuresMu.Lock()
 		features = savedFeatures
 		featuresMu.Unlock()
-		nativeLyricSourcesMu.Lock()
-		nativeLyricSources = savedNative
-		nativeLyricSourcesMu.Unlock()
 		artistAliasMu.Lock()
 		if hadAlias {
 			artistAliasCache[fx.Query.Artist] = savedAlias
@@ -391,7 +379,6 @@ func applyGoldenSettings(t *testing.T, fx *goldenFixture) {
 	features.LyricsSourceMode = resolveLyricsSourceMode(s.SourceMode)
 	features.LyricsSourceOrder = resolveLyricsSourceOrder(s.SourceOrder)
 	featuresMu.Unlock()
-	setNativeLyricSourcesForPlayer(s.PlayerBundleID)
 	artistAliasMu.Lock()
 	if artistAliasCache == nil {
 		artistAliasCache = map[string]string{}
@@ -909,13 +896,6 @@ func goldenCategoryCheck(fx *goldenFixture, category string, e goldenExpect) err
 		}
 		if e.Winner != "amll" || !hasTerm(*winner, scoreTermTranslation) {
 			return fmt.Errorf("要求:冠军是 amll 且带 translation 加分")
-		}
-	case "native-player-source":
-		if err := needWinner(); err != nil {
-			return err
-		}
-		if fx.Settings.PlayerBundleID == "" || !hasTerm(*winner, scoreTermNativeSource) {
-			return fmt.Errorf("要求:记录了播放器且冠军带 nativeSource 加分")
 		}
 	case "single-candidate":
 		if err := needWinner(); err != nil {

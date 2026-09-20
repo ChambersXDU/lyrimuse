@@ -8,7 +8,6 @@ BASE = ROOT / "Sources/lyrimuse/Resources"
 FILES = {
     "zh-hans": BASE / "zh-hans.lproj/Localizable.strings",
     "en": BASE / "en.lproj/Localizable.strings",
-    "zh-hant": BASE / "zh-hant.lproj/Localizable.strings",
 }
 
 ENTRY = re.compile(r'^\s*"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;', re.M)
@@ -62,21 +61,15 @@ def main():
 
     import json
     catalog = json.loads((ROOT / "Localization/Localizable.xcstrings").read_text(encoding="utf-8"))
-    for lang in ("en", "zh-Hant"):
+    for lang in ("en", "zh-Hans"):
         lacking = sorted(k for k, v in (catalog.get("strings") or {}).items()
                          if not ((((v or {}).get("localizations") or {}).get(lang) or {}).get("stringUnit") or {}).get("value"))
         if lacking:
             ok = False
-            print(f"\n\u2717 catalog 里 {len(lacking)} 个键缺 {lang} 翻译(新加文案必须三语齐全,繁体规范见 Localization/zh-Hant-STYLE.md):")
+            print(f"\n\u2717 catalog 里 {len(lacking)} 个键缺 {lang} 翻译(新加文案必须中英齐全):")
             for k in lacking[:20]:
                 print(f"    {k[:80]}")
 
-    hant_mismatch = sorted(tables["zh-hant"] ^ tables["zh-hans"])
-    if hant_mismatch:
-        ok = False
-        print(f"\n\u2717 zh-hant 与 zh-hans 的 key 集不一致({len(hant_mismatch)} 条) —— 生成物只能由 generate-strings.py 生成:")
-        for k in hant_mismatch[:20]:
-            print(f"    {k}")
     for lang, ks in dupes.items():
         ok = False
         print(f"\n\u2717 {lang} 有重复 key({len(ks)} 条) —— .strings 只保留最后一条,前面的静默失效:")
@@ -96,7 +89,7 @@ def main():
         if len(unregistered) > 20:
             print(f"    …还有 {len(unregistered) - 20} 条")
 
-    print("\n\u2713 三份 .strings 的 key 一致,源码用到的串也都登记过" if ok
+    print("\n\u2713 两份 .strings 的 key 一致,源码用到的串也都登记过" if ok
           else "\n上面的差异会造成运行时静默 fallback,请补齐")
     return 0 if ok else 1
 

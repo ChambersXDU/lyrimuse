@@ -1,12 +1,3 @@
 {
-  "bundle_ids": ["com.apple.Music"],
-  "listenbrainz_token": "",
-  "listenbrainz_user": "",
-  "api_root": "",
-  "state_relay_url": "",
-  "state_relay_token": "",
-  "notification_platform": "",
-  "bark_url": "",
-  "dingtalk_sign_secret": "",
-  "feishu_sign_secret": ""
+  "log_level": "info"
 }

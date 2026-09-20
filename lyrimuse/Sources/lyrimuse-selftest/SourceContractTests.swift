@@ -9,12 +9,6 @@ func runSourceContractTests() {
     expectEqual(LyricsSurface(rawValue: "menuBar"), .menuBar)
     expectEqual(LyricsSurface(rawValue: "other"), nil)
 
-    let accountNames = Set(SettingsSearchCatalog.entries.compactMap { entry -> String? in
-        guard case .account(let name) = entry.destination else { return nil }
-        return name
-    })
-    expectEqual(accountNames, ["listenBrainz", "stateRelay", "bark"])
-
     let destinations = SettingsSearchCatalog.entries.map(\.destination)
     expectEqual(destinations.contains { destination in
         if case .tab("appearance") = destination { return true }

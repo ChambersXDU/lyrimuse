@@ -7,7 +7,6 @@ public enum LyricsLineDisplay: Equatable, Sendable {
     case plain
     case adBreak
 
-    case radioTalk
     case instrumental
     case noLyrics
     case networkDown
@@ -19,7 +18,6 @@ public enum LyricsLineDisplay: Equatable, Sendable {
         hasWordTiming: Bool,
         hasCurrentLine: Bool,
         isAdBreak: Bool,
-        isRadioTalk: Bool,
         isInstrumental: Bool,
         hasNoLyrics: Bool,
         networkDown: Bool,
@@ -30,7 +28,6 @@ public enum LyricsLineDisplay: Equatable, Sendable {
         if hasWordTiming { return .words }
         if isAdBreak { return .adBreak }
 
-        if isRadioTalk { return .radioTalk }
         if isInstrumental { return .instrumental }
         if hasNoLyrics { return .noLyrics }
         if networkDown, !hasLyricsContent { return .networkDown }

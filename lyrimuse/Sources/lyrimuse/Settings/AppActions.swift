@@ -7,8 +7,6 @@ final class AppActions {
 
     var openSettings: (() -> Void)?
     var openLyricsManager: (() -> Void)?
-    var openOnboarding: (() -> Void)?
-
     var openLyricsQuickSearch: (() -> Void)?
 
     let quickSearchRefreshRequests = PassthroughSubject<Void, Never>()

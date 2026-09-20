@@ -613,7 +613,6 @@ public final class LyricsSyncEngine {
         let lyrics, lyricsTr, lyricsRoma, lyricsYRC: String
         let trackTitle, trackArtist: String
         let romanizationScripts: RomanizationScripts
-        let songIsCantonese: Bool
     }
     private var loadedFingerprint: LoadFingerprint?
 
@@ -621,12 +620,12 @@ public final class LyricsSyncEngine {
     public func load(
         lyrics: String, lyricsTr: String, lyricsRoma: String, lyricsYRC: String,
         trackTitle: String = "", trackArtist: String = "",
-        romanizationScripts: RomanizationScripts = .default, songIsCantonese: Bool = false
+        romanizationScripts: RomanizationScripts = .default
     ) -> Bool {
         let fingerprint = LoadFingerprint(
             lyrics: lyrics, lyricsTr: lyricsTr, lyricsRoma: lyricsRoma, lyricsYRC: lyricsYRC,
             trackTitle: trackTitle, trackArtist: trackArtist,
-            romanizationScripts: romanizationScripts, songIsCantonese: songIsCantonese)
+            romanizationScripts: romanizationScripts)
         if fingerprint == loadedFingerprint { return false }
         loadedFingerprint = fingerprint
         self.romanizationScripts = romanizationScripts
@@ -709,10 +708,6 @@ public final class LyricsSyncEngine {
 
         songScript = Romanizer.songScript(of: scriptSample)
 
-        if songScript == .chinese, songIsCantonese {
-            songScript = .cantonese
-        }
-
         kanaAnnotation = KanaAnnotation.parse(lrc: lyrics)
 
         romanizerFallbackCache.removeAll()
@@ -740,9 +735,7 @@ public final class LyricsSyncEngine {
     private var romanizationScripts: RomanizationScripts = .default
 
     private func romanizationAllowed(for line: String) -> Bool {
-        guard let option = Romanizer.script(ofLine: line, song: songScript).option else {
-            return true
-        }
+        guard let option = Romanizer.script(ofLine: line, song: songScript).option else { return false }
         return romanizationScripts.contains(option)
     }
     private var kanaAnnotation: KanaAnnotation?
@@ -836,20 +829,17 @@ public final class LyricsSyncEngine {
         let segments: [Romanizer.JapaneseSegment]? =
             (allowed && Romanizer.looksJapanese(line)) ? cachedJapaneseSegments(for: line) : nil
 
-        var hanRoma: String?
         var koreanRoma: String?
         if allowed, segments == nil {
             let script = Romanizer.script(ofLine: line, song: songScript)
-            if script == .chinese || script == .cantonese {
-                hanRoma = romanizationText(timeMs: words[0].startMs, plainText: line)
-            } else if script == .korean {
+            if script == .korean {
                 koreanRoma = romanizationText(timeMs: words[0].startMs, plainText: line)
             }
         }
         let result = Self.buildWordGroups(
             words: words, line: line, japanese: allowed,
             marks: kanaAnnotation?.marks(forLine: line) ?? [],
-            segments: segments, hanRomanization: hanRoma, koreanRomanization: koreanRoma)
+            segments: segments, koreanRomanization: koreanRoma)
         wordGroupCache[key] = result
         return result
     }
@@ -858,20 +848,12 @@ public final class LyricsSyncEngine {
         words: [SyncedLyricWord], line: String, japanese: Bool,
         marks: [KanaAnnotation.Mark] = [],
         segments: [Romanizer.JapaneseSegment]? = nil,
-        hanRomanization: String? = nil,
         koreanRomanization: String? = nil
     ) -> [SyncedLyricWordGroup]? {
         if japanese, Romanizer.looksJapanese(line) {
 
             let segs = segments ?? Romanizer.japaneseSegments(line, marks: marks)
             return mergeSegmentsIntoWordGroups(words: words, segs: segs)
-        }
-        if let hanRomanization, !hanRomanization.isEmpty {
-            let tokens = hanRomanization.split(separator: " ", omittingEmptySubsequences: true)
-            guard tokens.count == words.count, !words.isEmpty else { return nil }
-            return zip(words, tokens).enumerated().map { i, pair in
-                SyncedLyricWordGroup(id: i, words: [pair.0], romanization: String(pair.1))
-            }
         }
         if let koreanRomanization, !koreanRomanization.isEmpty,
            let segs = Romanizer.koreanSegments(line, romanization: koreanRomanization)

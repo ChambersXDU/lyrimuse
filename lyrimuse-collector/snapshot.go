@@ -24,8 +24,6 @@ type snapshot struct {
 
 	Position float64
 	AnchorTS time.Time
-
-	Radio bool
 }
 
 func (s snapshot) key() string {
@@ -53,11 +51,7 @@ func extract(state map[string]any) snapshot {
 		}
 	}
 
-	radio := str("radioStationHash") != ""
 	duration := num("duration")
-	if radio {
-		duration = num("catalogDurationSecs")
-	}
 	return snapshot{
 		Title:         str("title"),
 		Artist:        str("artist"),
@@ -69,6 +63,5 @@ func extract(state map[string]any) snapshot {
 		Rate:          num("playbackRate"),
 		McTS:          mcTS,
 		AnchorElapsed: num("anchorElapsedTime"),
-		Radio:         radio,
 	}
 }

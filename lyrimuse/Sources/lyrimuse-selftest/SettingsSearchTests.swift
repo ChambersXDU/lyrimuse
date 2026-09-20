@@ -8,12 +8,6 @@ func runSettingsSearchTests() {
     expectEqual(Set(entries.map(\.id)).count, entries.count)
     expectEqual(entries.filter { $0.titleKey.isEmpty || $0.pathKeys.isEmpty }, [])
 
-    let accountNames = entries.compactMap { entry -> String? in
-        guard case .account(let name) = entry.destination else { return nil }
-        return name
-    }
-    expectEqual(Set(accountNames), ["listenBrainz", "stateRelay", "bark"])
-
     let sectionValues = Set(entries.compactMap(\.sectionValue))
     expectEqual(sectionValues, ["overlay", "menuBar", "display", "manage", "translation", "fetch"])
 
@@ -21,8 +15,6 @@ func runSettingsSearchTests() {
         switch entry.destination {
         case .tab(let tab):
             expectEqual(["lyrics", "player", "appearance", "shortcuts", "general", "about"].contains(tab), true)
-        case .account(let account):
-            expectEqual(["listenBrainz", "stateRelay", "bark"].contains(account), true)
         }
     }
 

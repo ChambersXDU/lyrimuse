@@ -46,7 +46,7 @@ final class SettingsSearchIndex {
         secondary.append(contentsOf: entry.alternateTitleKeys)
         secondary.append(contentsOf: entry.pathKeys)
 
-        for language in ["en", "zh-hant", "zh-hans"] where language != L10n.current {
+        for language in ["en", "zh-hans"] where language != L10n.current {
             let table = stringsTable(language)
             for key in [entry.titleKey] + entry.alternateTitleKeys {
                 if let translated = table[key] { secondary.append(translated) }

@@ -50,7 +50,6 @@ LYRICS_GOLDEN_KEY='歌手|歌名|专辑' \            # enrich 缓存里的 key,
 LYRICS_GOLDEN_ID=<kebab-case 文件名> \
 LYRICS_GOLDEN_CATEGORY=<类别键> \
 LYRICS_GOLDEN_NOTE='为什么挑这首、它守什么' \
-[LYRICS_GOLDEN_PLAYER=com.netease.163music] \   # 这一刻"在放"的播放器,同源 +250 的判据;缺省不加分
 GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsGoldenCapture$' -v .
 ```
 

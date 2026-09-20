@@ -7,8 +7,6 @@ import (
 	_ "image/png"
 	"log"
 	"math"
-	neturl "net/url"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,27 +40,16 @@ func needsRomanizationRetry(results []scoredLyricCandidateResult) bool {
 	return needsScript
 }
 
-func (e *enrichEntry) maybeGenerateJyutpingRoma() {
-	if e.SongLanguage == songLanguageCantonese && e.Lyrics != "" && e.LyricsRoma == "" {
-		e.LyricsRoma = jyutpingLRC(e.Lyrics)
-	}
-}
-
 type enrichEntry struct {
 	CoverURL string `json:"cover_url,omitempty"`
 
-	MotionCoverURL   string `json:"motion_cover_url,omitempty"`
-	MotionPreviewURL string `json:"motion_preview_url,omitempty"`
-
-	MotionCoverChecked bool   `json:"motion_cover_checked,omitempty"`
-	AccentColor        string `json:"accent_color,omitempty"`
-	NeteaseURL         string `json:"netease_url,omitempty"`
-	AppleURL           string `json:"apple_music_url,omitempty"`
-	QQURL              string `json:"qq_music_url,omitempty"`
+	AccentColor string `json:"accent_color,omitempty"`
+	NeteaseURL  string `json:"netease_url,omitempty"`
+	AppleURL    string `json:"apple_music_url,omitempty"`
+	QQURL       string `json:"qq_music_url,omitempty"`
 
 	QQAlbumMid  string `json:"qq_album_mid,omitempty"`
 	QQSingerMid string `json:"qq_singer_mid,omitempty"`
-	SpotifyURL  string `json:"spotify_url,omitempty"`
 	Lyrics      string `json:"lyrics,omitempty"`
 	LyricsTr    string `json:"lyrics_tr,omitempty"`
 
@@ -133,8 +120,6 @@ type enrichEntry struct {
 
 	PeripheralTS int64 `json:"peripheral_ts,omitempty"`
 
-	SpotifyTrackID string `json:"spotify_track_id,omitempty"`
-
 	Unknown map[string]json.RawMessage `json:"-"`
 }
 
@@ -150,8 +135,6 @@ func (e enrichEntry) fields() map[string]string {
 	put("netease_url", e.NeteaseURL)
 	put("apple_music_url", e.AppleURL)
 	put("qq_music_url", e.QQURL)
-	put("spotify_url", e.spotifyLink())
-	put("spotify_track_id", e.SpotifyTrackID)
 	put("lyrics", e.Lyrics)
 	put("lyrics_tr", e.LyricsTr)
 	put("lyrics_roma", e.LyricsRoma)
@@ -222,7 +205,7 @@ func loosenEnrichKey(key string) string {
 	return strings.ToLower(strings.ReplaceAll(folded, " ", ""))
 }
 
-func trackEnrichment(ctx context.Context, artist, title, album, bundleID string, durationSecs float64, isNewTrack, radio bool) map[string]string {
+func trackEnrichment(ctx context.Context, artist, title, album string, durationSecs float64) map[string]string {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -230,18 +213,7 @@ func trackEnrichment(ctx context.Context, artist, title, album, bundleID string,
 		return nil
 	}
 
-	if radioStationCard(radio, artist, title) {
-		return nil
-	}
-
-	if isAdBreak(bundleID, artist, title, album) {
-		return nil
-	}
-
-	setNativeLyricSourcesForPlayer(bundleID)
 	key := enrichKey(artist, title, album)
-
-	hintKey := key
 
 	title = normEnrichTitle(title)
 
@@ -269,16 +241,6 @@ func trackEnrichment(ctx context.Context, artist, title, album, bundleID string,
 	}
 	if ok {
 
-		spotifyHintDirty := applySpotifyTrackIDHintLocked(hintKey, &e)
-
-		if applyRadioDurationHintLocked(hintKey, &e) {
-			spotifyHintDirty = true
-		}
-		if spotifyHintDirty {
-			enrichCache[key] = e
-			enrichDirty = true
-		}
-
 		pinned := lyricsPinned(key)
 
 		wrongDuration := observeWrongDuration(key,
@@ -287,12 +249,8 @@ func trackEnrichment(ctx context.Context, artist, title, album, bundleID string,
 		if needsLyricsFirstFill(e) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go retryLyricsUpgrade(ctx, key, artist, title, album, durationSecs, true)
-		} else if isNewTrack && e.CoverSource != "device" && !enrichInflight[key] {
-			enrichInflight[key] = true
-			go applyDeviceCoverUpgrade(ctx, key, artist, title, album, bundleID)
 		} else if (needsPeripheralBackfill(e, artist, album) ||
-			(coverNeedsHintCheck(e, album, coverAlbum) && peripheralBackfillWindowOpen(e)) ||
-			(motionCoverWorthBackfill(e, title, album) && peripheralBackfillWindowOpen(e))) && !enrichInflight[key] {
+			(coverNeedsHintCheck(e, album, coverAlbum) && peripheralBackfillWindowOpen(e))) && !enrichInflight[key] {
 
 			enrichInflight[key] = true
 			go backfillPeripheralFields(ctx, key, artist, title, album, durationSecs)
@@ -302,14 +260,8 @@ func trackEnrichment(ctx context.Context, artist, title, album, bundleID string,
 		} else if needsLyricsRetry(e, wrongDuration, pinned, features.LyricsAutoUpgrade) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go retryLyricsUpgrade(ctx, key, artist, title, album, durationSecs, false)
-		} else if needsTranslationBackfill(e) && !enrichInflight[key] {
-			enrichInflight[key] = true
-			go backfillTranslation(ctx, key)
 		}
 		enrichMu.Unlock()
-		if spotifyHintDirty {
-			saveEnrichCache()
-		}
 		return e.fields()
 	}
 
@@ -318,7 +270,7 @@ func trackEnrichment(ctx context.Context, artist, title, album, bundleID string,
 
 		cancelCtx, cancel := context.WithCancel(ctx)
 		enrichCancelFuncs[key] = cancel
-		go resolveEnrichAsync(cancelCtx, key, artist, title, album, bundleID, durationSecs, isNewTrack)
+		go resolveEnrichAsync(cancelCtx, key, artist, title, album, durationSecs)
 	}
 	enrichMu.Unlock()
 	return nil
@@ -377,9 +329,6 @@ func coverSwapAllowed(old, fresh enrichEntry, album string) bool {
 		return false
 	}
 
-	if old.CoverSource == "device" {
-		return deviceCoverUpgradable(old.CoverURL, fresh.CoverURL)
-	}
 	if old.CoverURL == "" || old.CoverSource == fresh.CoverSource {
 		return true
 	}
@@ -633,10 +582,7 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 		return false
 	}
 
-	nativeMissedOut := hasNativeLyricSource() && !isNativeLyricSource(e.LyricsSource) &&
-		slices.ContainsFunc(e.LyricsSourcesSeen, func(s string) bool { return isNativeLyricSource(s) })
-
-	if e.LyricsYRC != "" && !nativeMissedOut && !wrongDuration {
+	if e.LyricsYRC != "" && !wrongDuration {
 		return false
 	}
 
@@ -647,7 +593,7 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 		return false
 	}
 
-	if nativeMissedOut || wrongDuration {
+	if wrongDuration {
 		return true
 	}
 	missing := false
@@ -754,7 +700,6 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 		path, artist, title, album, durationSecs, scored, picked, upgraded)
 	e.LyricsDecision.SourcesSkipped = e.LyricsSourcesSkipped
 	e.LyricsDecision.QueriesTried = queries.queries()
-	traceLyricsDecision(key, e.LyricsDecision)
 
 	if upgraded || (picked != nil && picked.Source == e.LyricsSource && picked.Lyrics == e.Lyrics) {
 		e.LyricsDecisionApplied = e.LyricsDecision
@@ -768,7 +713,6 @@ func retryLyricsUpgrade(ctx context.Context, key, artist, title, album string, d
 		e.ResolvedDurationSecs = durationSecs
 		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 		e.SongLanguage = songLanguageFromScored(scored)
-		e.maybeGenerateRoma()
 		lyricsChanged = true
 
 		e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
@@ -906,7 +850,6 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 			picked != nil && picked.Lyrics != e.Lyrics)
 		e.LyricsDecision.SourcesSkipped = e.LyricsSourcesSkipped
 		e.LyricsDecision.QueriesTried = queries.queries()
-		traceLyricsDecision(key, e.LyricsDecision)
 
 		if picked != nil {
 			e.LyricsDecisionApplied = e.LyricsDecision
@@ -927,7 +870,6 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 			e.Lyrics = picked.Lyrics
 			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 			e.SongLanguage = songLanguageFromScored(scored)
-			e.maybeGenerateRoma()
 			lyricsChanged = true
 
 			e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
@@ -945,7 +887,7 @@ func rescoreLyrics(ctx context.Context, key, artist, title, album string, durati
 	enrichDirty = true
 }
 
-func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID string, durationSecs float64, isNewTrack bool) {
+func resolveEnrichAsync(ctx context.Context, key, artist, title, album string, durationSecs float64) {
 	enrichMu.Lock()
 	generation := enrichExternalGeneration[key]
 	enrichMu.Unlock()
@@ -961,12 +903,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 	}()
 
 	roundStat := beginNetworkRound()
-	deviceCoverURL := deviceCoverURLIfFresh(ctx, isNewTrack, bundleID, artist, title)
-	e := resolveTrackEnrichment(ctx, artist, title, album, durationSecs, deviceCoverURL)
-
-	enrichMu.Lock()
-	applySpotifyTrackIDHintLocked(key, &e)
-	enrichMu.Unlock()
+	e := resolveTrackEnrichment(ctx, artist, title, album, durationSecs)
 	e.TS = time.Now().Unix()
 
 	if ctx.Err() != nil {
@@ -1019,48 +956,6 @@ func commitEnrichEntry(key string, e enrichEntry, generation uint64) {
 	}
 }
 
-func applyDeviceCoverUpgrade(ctx context.Context, key, artist, title, album, bundleID string) {
-	defer func() {
-		enrichMu.Lock()
-		delete(enrichInflight, key)
-		enrichMu.Unlock()
-	}()
-	deviceCoverURL := deviceCoverURLIfFresh(ctx, true, bundleID, artist, title)
-	if deviceCoverURL == "" {
-		return
-	}
-	accent := dominantColor(ctx, deviceCoverURL)
-
-	enrichMu.Lock()
-	existing, exists := enrichCache[key]
-	enrichMu.Unlock()
-	if !exists || existing.CoverURL == deviceCoverURL {
-		return
-	}
-
-	if !deviceCoverOverridesCandidate(ctx, deviceCoverURL, existing.CoverURL) {
-		return
-	}
-	enrichMu.Lock()
-	e, ok := enrichCache[key]
-	if !ok || e.CoverURL == deviceCoverURL {
-
-		enrichMu.Unlock()
-		return
-	}
-	e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = deviceCoverURL, "device", album, accent
-	enrichCache[key] = e
-	enrichDirty = true
-	enrichMu.Unlock()
-	saveEnrichCache()
-	if enrichNotify != nil {
-		select {
-		case enrichNotify <- struct{}{}:
-		default:
-		}
-	}
-}
-
 func backfillPeripheralFields(ctx context.Context, key, artist, title, album string, durationSecs float64) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -1071,7 +966,7 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 		enrichMu.Unlock()
 	}()
 
-	fresh := resolveTrackEnrichment(ctx, artist, title, album, durationSecs, "")
+	fresh := resolveTrackEnrichment(ctx, artist, title, album, durationSecs)
 
 	coverAlbum := coverAlbumForTrack(ctx, artist, title, album, durationSecs)
 	enrichMu.Lock()
@@ -1110,18 +1005,6 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 			}
 		}
 	}
-	if fresh.SpotifyURL != "" {
-		e.SpotifyURL = fresh.SpotifyURL
-	}
-
-	if fresh.MotionCoverURL != "" {
-		e.MotionCoverURL = fresh.MotionCoverURL
-		e.MotionPreviewURL = fresh.MotionPreviewURL
-	}
-
-	if fresh.MotionCoverChecked {
-		e.MotionCoverChecked = true
-	}
 	if fresh.NeteaseURL != "" {
 		e.NeteaseURL = fresh.NeteaseURL
 	}
@@ -1147,7 +1030,7 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	}
 }
 
-func resolveTrackEnrichment(ctx context.Context, artist, title, album string, durationSecs float64, deviceCoverURL string) enrichEntry {
+func resolveTrackEnrichment(ctx context.Context, artist, title, album string, durationSecs float64) enrichEntry {
 
 	artist, title, album = toSimplified(artist), toSimplified(title), toSimplified(album)
 	var e enrichEntry
@@ -1207,12 +1090,6 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 			}
 		}
 	}
-	if deviceCoverURL != "" {
-
-		if deviceCoverOverridesCandidate(ctx, deviceCoverURL, e.CoverURL) {
-			e.CoverURL, e.CoverSource, e.CoverAlbum = deviceCoverURL, "device", album
-		}
-	}
 	if e.CanonicalArtist == "" {
 
 		e.CanonicalArtist = resolveGenericArtistCanonicalName(ctx, artist)
@@ -1226,9 +1103,6 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	e.QQURL = qqMusicURL(ctx, artist, title, album, durationSecs)
 
 	e.QQAlbumMid, e.QQSingerMid = qqSongCatalogMids(ctx, qqMidFromURL(e.QQURL))
-	if title != "" {
-		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(artist+" "+title)
-	}
 	e.DurationSecs = durationSecs
 
 	e.LyricsSourcesSeen = lyricSourcesWithCandidates(scored)
@@ -1242,7 +1116,6 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	e.LyricsDecision.SourcesSkipped = e.LyricsSourcesSkipped
 	e.LyricsDecision.QueriesTried = queries.queries()
 
-	traceLyricsDecision(artist+"|"+title+"|"+album, e.LyricsDecision)
 	if picked != nil {
 
 		e.LyricsDecisionApplied = e.LyricsDecision
@@ -1253,8 +1126,6 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 		e.ResolvedDurationSecs = durationSecs
 		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 		e.SongLanguage = songLanguageFromScored(scored)
-		e.maybeGenerateRoma()
-
 		e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
 	} else {
 
@@ -1271,39 +1142,7 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 			}
 		}
 	}
-	e.fillMotionCover(ctx, title, album)
 	return e
-}
-
-func (e *enrichEntry) fillMotionCover(ctx context.Context, title, album string) {
-	if e.MotionCoverChecked || e.MotionCoverURL != "" {
-		return
-	}
-
-	albumID, viaAnchor := appleCatalogAlbumIDFor(title, album)
-	if !viaAnchor {
-		albumID = motionCoverAlbumIDFromAppleURL(e.AppleURL)
-	}
-	if albumID <= 0 {
-		return
-	}
-	mc, done := motionCoverFor(ctx, albumID)
-	if !done {
-
-		return
-	}
-	if mc.Master == "" {
-
-		e.MotionCoverChecked = true
-		return
-	}
-
-	e.MotionCoverChecked = true
-	if !motionCoverMatchesCover(ctx, mc.PreviewFrame, e.CoverURL) {
-		return
-	}
-	e.MotionCoverURL = mc.Master
-	e.MotionPreviewURL = mc.PreviewFrame
 }
 
 func pickLyricCandidatePreferring(scored []scoredLyricCandidateResult, sourceChoice string) *scoredLyricCandidateResult {

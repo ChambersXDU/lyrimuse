@@ -390,11 +390,11 @@ func runSyncEngineTests() {
     }
 
     do {
-        func d(words: Bool = false, line: Bool = false, ad: Bool = false, talk: Bool = false,
+        func d(words: Bool = false, line: Bool = false, ad: Bool = false,
                inst: Bool = false, noLyrics: Bool = false, netDown: Bool = false, content: Bool = false,
                playing: Bool = true) -> LyricsLineDisplay {
             LyricsLineDisplay.resolve(
-                hasWordTiming: words, hasCurrentLine: line, isAdBreak: ad, isRadioTalk: talk,
+                hasWordTiming: words, hasCurrentLine: line, isAdBreak: ad,
                 isInstrumental: inst, hasNoLyrics: noLyrics, networkDown: netDown,
                 hasLyricsContent: content, isPlaying: playing)
         }
@@ -408,10 +408,6 @@ func runSyncEngineTests() {
         expectEqual(d(inst: true), .instrumental)
         expectEqual(d(ad: true), .adBreak)
 
-        expectEqual(d(talk: true), .radioTalk)
-        expectEqual(d(talk: true, noLyrics: true), .radioTalk)
-        expectEqual(d(ad: true, talk: true), .adBreak)
-        expectEqual(d(words: true, line: true, talk: true, content: true), .words)
         expectEqual(d(noLyrics: true, netDown: true), .noLyrics)
         expectEqual(d(netDown: true), .networkDown)
 
@@ -500,20 +496,6 @@ func runSyncEngineTests() {
             lyricsRoma: "[00:01.00]piao yi hang de yi wen",
             lyricsYRC: "[3000,500](3000,300,0)drifted (3300,200,0)line")
         expectEqual(engineDrift.allLines(idPrefix: "t").first?.line.translation, "漂移行的译文")
-        expectEqual(engineDrift.allLines(idPrefix: "t").first?.line.romanization, "piao yi hang de yi wen")
-
-        let engineNbspVsSpace = LyricsSyncEngine()
-        engineNbspVsSpace.load(
-            lyrics: "[00:01.000]若你\u{A0}想欣赏\u{A0}有没有\u{A0}金曲奖",
-            lyricsTr: "",
-            lyricsRoma: "[00:01.000]joek6 nei5 soeng2 jan1 soeng2 jau5 mut6 jau5 gam1 kuk1 zoeng2",
-            lyricsYRC: "[1706,1100](1706,100,0)若(1806,100,0)你 (1906,100,0)想(2006,100,0)欣" +
-                "(2106,100,0)赏 (2206,100,0)有(2306,100,0)没(2406,100,0)有 (2506,100,0)金" +
-                "(2606,100,0)曲(2706,100,0)奖")
-        let nbspLine = engineNbspVsSpace.allLines(idPrefix: "t").first?.line
-        expectEqual(nbspLine?.romanization,
-                    "joek6 nei5 soeng2 jan1 soeng2 jau5 mut6 jau5 gam1 kuk1 zoeng2")
-        expectEqual(nbspLine?.wordGroups?.count, 11)
 
         let engineParenStyle = LyricsSyncEngine()
         engineParenStyle.load(

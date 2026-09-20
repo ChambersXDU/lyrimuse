@@ -91,8 +91,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppSettingsMirror.startObserving()
         AppSettingsMirror.write()
 
-        ICloudConfigStore.ensureFolderIconIfPresent()
-
         URLCache.shared = URLCache(memoryCapacity: 32 << 20, diskCapacity: 256 << 20)
 
         UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 150])
@@ -108,15 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
         LocalPlaybackSource.shared.chineseVariant = settings.lyricsChineseVariant
         LocalPlaybackSource.shared.romanizationScripts = settings.romanizationScripts
-
-        settings.$showTranslation
-            .sink { on in
-                MainActor.assumeIsolated { LocalPlaybackSource.shared.showsTranslation = on }
-            }
-            .store(in: &cancellables)
-        BrowserPositionProbe.shared.platformBrowserPairs = settings.browserPlatformPairs
-        BrowserAutomationPermission.manuallyAddedFamilies = settings.manualBrowserFamilies
-            .compactMapValues { BrowserAutomationPermission.Family(rawValue: $0) }
+        LocalPlaybackSource.shared.showsTranslation = settings.showTranslation
 
         PlaybackCoordinator.shared.start()
         MenuBarStatusItem.shared.start()
@@ -134,29 +124,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             LyricsOverlayWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
             LyricsOverlayWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
         }
-        MediaControlHealth.shared.checkInBackground()
         startObservingScreenLock()
         installScrollForwardMonitor()
-        SpaceDiagnostics.start()
-
-        UnknownPlayerNotifier.shared.registerCategory()
-        UnknownPlayerNotifier.shared.start()
-
         MenuBarSceneActions.install()
-
-        let playersToLaunch = PlayerLinkage.effective(settings.launchPlayersOnLyrimuseOpen,
-                                                      selectedPlayers: FeatureSettingsStore.shared.players)
-        for player in playersToLaunch where !player.bundleIdentifier.isEmpty {
-            let bundleID = player.bundleIdentifier
-            if !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == bundleID }),
-               let playerURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-                let config = NSWorkspace.OpenConfiguration()
-                config.activates = false
-                NSWorkspace.shared.openApplication(at: playerURL, configuration: config)
-            }
-        }
-
-        PlayerQuitWatcher.shared.start()
 
         GlobalHotkeys.registerAll()
 
@@ -204,12 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         AppExit.logTermination()
-        guard ConfigStore.shared.isDirty else { return .terminateNow }
-        Task {
-            _ = await ConfigStore.shared.save()
-            NSApp.reply(toApplicationShouldTerminate: true)
-        }
-        return .terminateLater
+        return .terminateNow
     }
 
     private var scrollForwardMonitor: Any?

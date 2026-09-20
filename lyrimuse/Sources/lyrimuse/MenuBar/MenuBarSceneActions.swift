@@ -46,7 +46,6 @@ enum MenuBarSceneActions {
 }
 
 private struct SceneActionRegistrar: View {
-    @ObservedObject private var settings = AppSettings.shared
     @Environment(\.openSettings) private var openSettingsAction
     @Environment(\.openWindow) private var openWindowAction
 
@@ -67,19 +66,6 @@ private struct SceneActionRegistrar: View {
                     openWindowAction(id: "lyrics-quick-search")
 
                     AppActions.shared.quickSearchRefreshRequests.send()
-                }
-                AppActions.shared.openOnboarding = {
-                    NSApp.activate(ignoringOtherApps: true)
-                    openWindowAction(id: "onboarding")
-                }
-
-                if !settings.hasCompletedOnboarding {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-
-                        ICloudConfigImportPrompt.offerIfNeeded {
-                            AppActions.shared.openOnboarding?()
-                        }
-                    }
                 }
             }
     }

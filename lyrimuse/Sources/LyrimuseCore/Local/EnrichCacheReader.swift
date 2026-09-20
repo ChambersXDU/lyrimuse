@@ -11,10 +11,6 @@ public struct EnrichCacheEntry: Decodable, Equatable {
 
     public let coverURL: String?
 
-    public let motionCoverURL: String?
-
-    public let motionPreviewURL: String?
-
     public let coverAlbum: String?
 
     public let instrumental: Bool?
@@ -26,8 +22,6 @@ public struct EnrichCacheEntry: Decodable, Equatable {
     public let neteaseURL: String?
     public let qqAlbumMid: String?
     public let qqSingerMid: String?
-
-    public let spotifyTrackID: String?
 
     public let songLanguage: String?
 
@@ -49,8 +43,6 @@ public struct EnrichCacheEntry: Decodable, Equatable {
         lyricsSource: String? = nil,
         coverSource: String? = nil,
         coverURL: String? = nil,
-        motionCoverURL: String? = nil,
-        motionPreviewURL: String? = nil,
         coverAlbum: String? = nil,
         instrumental: Bool? = nil,
         ts: Int64? = nil,
@@ -59,7 +51,6 @@ public struct EnrichCacheEntry: Decodable, Equatable {
         neteaseURL: String? = nil,
         qqAlbumMid: String? = nil,
         qqSingerMid: String? = nil,
-        spotifyTrackID: String? = nil,
         songLanguage: String? = nil,
         plainLyrics: String? = nil,
         durationSecs: Double? = nil,
@@ -75,8 +66,6 @@ public struct EnrichCacheEntry: Decodable, Equatable {
         self.lyricsSource = lyricsSource
         self.coverSource = coverSource
         self.coverURL = coverURL
-        self.motionCoverURL = motionCoverURL
-        self.motionPreviewURL = motionPreviewURL
         self.coverAlbum = coverAlbum
         self.instrumental = instrumental
         self.ts = ts
@@ -85,7 +74,6 @@ public struct EnrichCacheEntry: Decodable, Equatable {
         self.neteaseURL = neteaseURL
         self.qqAlbumMid = qqAlbumMid
         self.qqSingerMid = qqSingerMid
-        self.spotifyTrackID = spotifyTrackID
         self.songLanguage = songLanguage
         self.plainLyrics = plainLyrics
         self.durationSecs = durationSecs
@@ -103,8 +91,6 @@ public struct EnrichCacheEntry: Decodable, Equatable {
         case lyricsSource = "lyrics_source"
         case coverSource = "cover_source"
         case coverURL = "cover_url"
-        case motionCoverURL = "motion_cover_url"
-        case motionPreviewURL = "motion_preview_url"
         case coverAlbum = "cover_album"
         case instrumental
         case ts
@@ -113,7 +99,6 @@ public struct EnrichCacheEntry: Decodable, Equatable {
         case neteaseURL = "netease_url"
         case qqAlbumMid = "qq_album_mid"
         case qqSingerMid = "qq_singer_mid"
-        case spotifyTrackID = "spotify_track_id"
         case songLanguage = "song_language"
         case plainLyrics = "plain_lyrics"
         case durationSecs = "duration_secs"
@@ -128,8 +113,6 @@ public func enrichLyricsSearchIncomplete(lyrics: String, sourcesSkipped: [String
     lyrics.isEmpty && (!sourcesSkipped.isEmpty || !sourcesFailed.isEmpty) && fillCount == 0
 }
 
-private let songLanguageCantonese = "yue"
-
 public struct EnrichCacheLyrics: Equatable {
     public let lyrics: String
     public let lyricsTr: String
@@ -138,8 +121,6 @@ public struct EnrichCacheLyrics: Equatable {
     public let instrumental: Bool
 
     public let resolved: Bool
-
-    public let isCantonese: Bool
 
     public let plainLyrics: String
 
@@ -204,32 +185,6 @@ public enum EnrichCacheReader {
         return SourceInfo(lyricsSource: entry.lyricsSource, coverSource: entry.coverSource)
     }
 
-    public static func platformLinks(artist: String, title: String, album: String) -> PlatformLinks? {
-        guard let all = loadEntries() else { return nil }
-        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        let atKey = artistTitleKey(artist: artist, title: title)
-        let entries = entryByArtistTitle()
-        guard let entry = all[key]
-            ?? looseMatch(key, in: all)
-            ?? entries[atKey]
-            ?? entryForArtistTitle(in: entries, artist: artist, title: title)
-        else { return nil }
-        let rawQQ = entry.qqMusicURL ?? ""
-
-        let qqSong = (!rawQQ.isEmpty && !PlatformLinks.isQQSearchFallback(rawQQ))
-            ? URL(string: rawQQ) : nil
-        let links = PlatformLinks(
-
-            appleMusic: MusicCatalogSearch.musicSchemeURL(entry.appleMusicURL),
-            qqSong: qqSong,
-            qqAlbum: PlatformLinks.qqAlbumURL(mid: entry.qqAlbumMid ?? ""),
-            qqArtist: PlatformLinks.qqArtistURL(mid: entry.qqSingerMid ?? ""),
-            neteaseSong: (entry.neteaseURL?.isEmpty == false) ? URL(string: entry.neteaseURL!) : nil,
-
-            spotifySong: PlatformLinks.spotifyTrackURL(id: entry.spotifyTrackID ?? ""))
-        return links.isEmpty ? nil : links
-    }
-
     public static func trackDurationSecs(artist: String, title: String, album: String) -> Double? {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
@@ -279,7 +234,6 @@ public enum EnrichCacheReader {
             lyricsYRC: entry.lyricsYRC ?? "",
             instrumental: entry.instrumental ?? false,
             resolved: (entry.ts ?? 0) > 0,
-            isCantonese: entry.songLanguage == songLanguageCantonese,
             plainLyrics: entry.plainLyrics ?? "",
             searchIncomplete: enrichLyricsSearchIncomplete(
                 lyrics: entry.lyrics ?? "",
@@ -319,15 +273,6 @@ public enum EnrichCacheReader {
         return nil
     }
 
-    public static func albumMatchedMotionCover(artist: String, title: String,
-                                               album: String) -> (master: URL, preview: String?)? {
-        guard let all = loadEntries() else { return nil }
-        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        let entry = all[key] ?? looseMatch(key, in: all)
-        guard let entry, let s = entry.motionCoverURL, let url = URL(string: s) else { return nil }
-        return (url, entry.motionPreviewURL)
-    }
-
     public static func albumVerifiedCoverURL(artist: String, title: String, album: String) -> URL? {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
@@ -348,7 +293,7 @@ public enum EnrichCacheReader {
         if let url = albumMatchedCoverURL(artist: artist, title: title, album: album) {
             return url
         }
-        guard let all = loadEntries() else { return nil }
+        guard loadEntries() != nil else { return nil }
         if let s = Self.coverURLString(in: coverByArtistTitle(), artist: artist, title: title),
            let url = URL(string: s) {
             return url

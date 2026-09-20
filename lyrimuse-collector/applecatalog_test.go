@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -69,12 +68,6 @@ func TestAppleCatalogAnchorGuards(t *testing.T) {
 	}
 	if got.AlbumArtist != "周杰伦" {
 		t.Errorf("专辑署名 = %q, want 周杰伦", got.AlbumArtist)
-	}
-
-	for _, b := range []string{qqMusicBundleID, neteaseMusicBundleID, spotifyBundleID, kugouMusicBundleID, ""} {
-		if _, ok := appleCatalogAnchor(b, anchorMedleyID, 0, "枫+退后+搁浅 (Live)", anchorAlbum); ok {
-			t.Errorf("bundleID=%q 不该拿到 Apple 目录锚点", b)
-		}
 	}
 
 	if _, ok := appleCatalogAnchor(appleMusicBundleID, anchorNextID, 0, "枫+退后+搁浅 (Live)", anchorAlbum); ok {
@@ -244,40 +237,6 @@ func TestDedupeArtistIdentities(t *testing.T) {
 	}
 	if got := dedupeArtistIdentities(nil, nil); got != nil {
 		t.Errorf("全空应返回 nil,得到 %#v", got)
-	}
-}
-
-func TestMediaControlRawStateParsesUniqueIdentifier(t *testing.T) {
-
-	const localImport = `{"album":"BLOOD ON THE DANCE FLOOR/ HIStory In The Mix",` +
-		`"artist":"Michael Jackson","bundleIdentifier":"com.apple.Music",` +
-		`"duration":336.1733229166667,"elapsedTime":0.024432084,"playing":true,` +
-		`"playbackRate":1,"timestamp":"2026-08-22T09:56:13Z","title":"Is It Scary",` +
-		`"trackNumber":5,"uniqueIdentifier":2764576100379992737}`
-	var raw mediaControlRawState
-	if err := json.Unmarshal([]byte(localImport), &raw); err != nil {
-		t.Fatalf("解析真实 media-control 输出失败: %v", err)
-	}
-	if raw.UniqueIdentifier != 2764576100379992737 {
-		t.Errorf("UniqueIdentifier = %d, want 2764576100379992737(JSON tag 是不是拼错了?)", raw.UniqueIdentifier)
-	}
-
-	if appleCatalogPlausibleID(raw.UniqueIdentifier) {
-		t.Errorf("本地导入曲目的持久 ID %d 不该被当成目录 ID", raw.UniqueIdentifier)
-	}
-	if raw.Duration != 336.1733229166667 || raw.Title != "Is It Scary" {
-		t.Errorf("同一份 payload 的其它字段也该照常解出来,得到 title=%q duration=%v", raw.Title, raw.Duration)
-	}
-
-	const catalog = `{"album":"周杰伦地表最强世界巡回演唱会 (Live)","artist":"周杰伦",` +
-		`"bundleIdentifier":"com.apple.Music","duration":208.293,"playing":true,` +
-		`"title":"印地安老斑鸠 (Live)","uniqueIdentifier":1485220325}`
-	var raw2 mediaControlRawState
-	if err := json.Unmarshal([]byte(catalog), &raw2); err != nil {
-		t.Fatalf("解析目录曲目 payload 失败: %v", err)
-	}
-	if raw2.UniqueIdentifier != 1485220325 || !appleCatalogPlausibleID(raw2.UniqueIdentifier) {
-		t.Errorf("目录曲目 ID 应解出 1485220325 且通过 plausible 闸,得到 %d", raw2.UniqueIdentifier)
 	}
 }
 

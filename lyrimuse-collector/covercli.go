@@ -78,7 +78,7 @@ func planRecheckCover(key string) recheckCoverPlan {
 		duration = e.DurationSecs
 	}
 
-	fresh := resolveTrackEnrichment(context.Background(), artist, title, album, duration, "")
+	fresh := resolveTrackEnrichment(context.Background(), artist, title, album, duration)
 	p.newURL, p.newSource, p.newAlbum, p.newAccent = fresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor
 
 	p.swap = coverSwapAllowed(e, fresh, coverAlbumForTrack(context.Background(), artist, title, album, duration))

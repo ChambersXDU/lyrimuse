@@ -19,21 +19,6 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 		t.Error("已校准的条目不该被 rescore 换掉歌词")
 	}
 
-	savedNative := nativeLyricSources
-	t.Cleanup(func() { nativeLyricSources = savedNative })
-	nativeLyricSources = map[string]bool{"qq": true}
-	missed := enrichEntry{
-		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
-		LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "qq"},
-	}
-	if !needsLyricsRetry(missed, false, false, true) {
-		t.Fatal("前提不成立：同源落选的条目本来就该重试，测试用例失效")
-	}
-	if needsLyricsRetry(missed, false, true, true) {
-		t.Error("已校准的条目不该被 retry 换掉歌词（哪怕是同源落选这条越闸路径）")
-	}
-
-	nativeLyricSources = nil
 	wrongDur := enrichEntry{
 		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
 		LyricsSource: "kugou", ResolvedDurationSecs: 300,

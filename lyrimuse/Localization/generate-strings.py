@@ -9,7 +9,6 @@ CATALOG = os.path.join(ROOT, "Localizable.xcstrings")
 TARGETS = {
     "zh-Hans": "zh-hans.lproj",
     "en": "en.lproj",
-    "zh-Hant": "zh-hant.lproj",
 }
 
 FALLBACK_TO_SOURCE = set()
@@ -126,7 +125,7 @@ def main() -> int:
         with open(out, "w", encoding="utf-8") as f:
             f.writelines(lines)
         if missing:
-            print(f"\u2717 {lang} 缺 {len(missing)} 条翻译(新加文案必须把 en / zh-Hant 都写全,繁体规范见 Localization/zh-Hant-STYLE.md):", file=sys.stderr)
+            print(f"\u2717 {lang} 缺 {len(missing)} 条翻译(新加文案必须把 en / zh-Hans 都写全):", file=sys.stderr)
             for key in missing[:20]:
                 print(f"    {key[:80]}", file=sys.stderr)
             if len(missing) > 20:

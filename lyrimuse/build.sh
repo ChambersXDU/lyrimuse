@@ -74,8 +74,6 @@ FAT_DIR="$(mktemp -d)"
 
 echo "==> building (release) [$ARCHES]"
 SWIFT_SLICES=()
-TRANSLATE_SLICES=()
-ROMANIZE_SLICES=()
 SPM_PATH_ARGS=()
 [ -n "${LYRIMUSE_SPM_CACHE_PATH:-}" ] && SPM_PATH_ARGS+=(--cache-path "$LYRIMUSE_SPM_CACHE_PATH")
 [ -n "${LYRIMUSE_SPM_SCRATCH_PATH:-}" ] && SPM_PATH_ARGS+=(--scratch-path "$LYRIMUSE_SPM_SCRATCH_PATH")
@@ -83,12 +81,8 @@ for arch in $ARCHES; do
   swift build -c release --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"}
   BIN_PATH="$(swift build -c release --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"} --show-bin-path)"
   SWIFT_SLICES+=("$BIN_PATH/lyrimuse")
-  TRANSLATE_SLICES+=("$BIN_PATH/lyrics-translate")
-  ROMANIZE_SLICES+=("$BIN_PATH/lyrics-romanize")
 done
 merge_slices "$FAT_DIR/lyrimuse" "${SWIFT_SLICES[@]}"
-merge_slices "$FAT_DIR/lyrics-translate" "${TRANSLATE_SLICES[@]}"
-merge_slices "$FAT_DIR/lyrics-romanize" "${ROMANIZE_SLICES[@]}"
 
 echo "==> building collector [$ARCHES]"
 COLLECTOR_SLICES=()
@@ -113,94 +107,9 @@ rm -f "$APP_DIR/Contents/Resources/collector"
 cp "$FAT_DIR/collector" "$APP_DIR/Contents/Resources/collector"
 codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/collector"
 
-rm -f "$APP_DIR/Contents/Resources/lyrics-translate"
-cp "$FAT_DIR/lyrics-translate" "$APP_DIR/Contents/Resources/lyrics-translate"
-codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/lyrics-translate"
 
-rm -f "$APP_DIR/Contents/Resources/lyrics-romanize"
-cp "$FAT_DIR/lyrics-romanize" "$APP_DIR/Contents/Resources/lyrics-romanize"
-codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/lyrics-romanize"
-
-if [ -n "${LYRIMUSE_MEDIA_CONTROL_PREFIX:-}" ]; then
-  MEDIA_CONTROL_PREFIX="$LYRIMUSE_MEDIA_CONTROL_PREFIX"
-else
-  MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null)"
-  if [ ! -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ] && command -v brew >/dev/null 2>&1; then
-    echo "==> media-control not found, installing via Homebrew (QQ 音乐支持)"
-    brew install media-control || echo "!! brew install media-control 失败——继续构建,QQ 音乐支持这次不可用,Apple Music 不受影响" >&2
-    MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null)"
-  fi
-fi
-if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
-  rm -rf "$APP_DIR/Contents/Resources/media-control"
-  mkdir -p "$APP_DIR/Contents/Resources/media-control/bin" \
-           "$APP_DIR/Contents/Resources/media-control/lib" \
-           "$APP_DIR/Contents/Resources/media-control/Frameworks"
-  cp "$MEDIA_CONTROL_PREFIX/bin/media-control" "$APP_DIR/Contents/Resources/media-control/bin/"
-  cp -R "$MEDIA_CONTROL_PREFIX/lib/media-control" "$APP_DIR/Contents/Resources/media-control/lib/media-control"
-  MC_FW_SRC="$MEDIA_CONTROL_PREFIX/Frameworks/MediaRemoteAdapter.framework"
-  [ -d "$MC_FW_SRC" ] || MC_FW_SRC="$MEDIA_CONTROL_PREFIX/Library/Frameworks/MediaRemoteAdapter.framework"
-  ditto "$MC_FW_SRC" "$APP_DIR/Contents/Resources/media-control/Frameworks/MediaRemoteAdapter.framework"
-  chmod -R u+w "$APP_DIR/Contents/Resources/media-control"
-  /usr/bin/sed -i '' "s|'\.\.', 'Library', 'Frameworks', 'MediaRemoteAdapter.framework'|'..', 'Frameworks', 'MediaRemoteAdapter.framework'|" \
-    "$APP_DIR/Contents/Resources/media-control/bin/media-control"
-  codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/media-control/bin/media-control"
-  if [ "$UNIVERSAL" = 1 ]; then
-    MC_FW="$APP_DIR/Contents/Resources/media-control/Frameworks/MediaRemoteAdapter.framework"
-    if [ -n "${LYRIMUSE_MEDIA_CONTROL_PREFIX:-}" ]; then
-      MC_VER="$(basename "$MEDIA_CONTROL_PREFIX")"
-    else
-      MC_VER="$(brew list --versions media-control | awk '{print $2}')"
-    fi
-    MC_PIN_VER="0.7.6"
-    MC_TAG="sonoma"
-    MC_SHA="52a07ebec136e88574c620dfaa6cf2121d37aade09967bf4d6bab0d316ee6aac"
-    if [ "$MC_VER" != "$MC_PIN_VER" ]; then
-      echo "!! media-control 本机版本 $MC_VER 与钉住的 $MC_PIN_VER 不一致,跳过 lipo——x86_64 上 QQ 音乐支持不可用(重新钉版见本段注释)" >&2
-    else
-      MC_TGZ="$FAT_DIR/media-control-x86_64-$MC_PIN_VER.tar.gz"
-      if curl -fsSL -H "Authorization: Bearer QQ==" \
-           "https://ghcr.io/v2/homebrew/core/media-control/blobs/sha256:$MC_SHA" -o "$MC_TGZ" \
-         && [ "$(shasum -a 256 "$MC_TGZ" | awk '{print $1}')" = "$MC_SHA" ]; then
-        MC_X86="$FAT_DIR/media-control-x86_64"
-        rm -rf "$MC_X86"; mkdir -p "$MC_X86"
-        tar -xzf "$MC_TGZ" -C "$MC_X86"
-        MC_X86_ROOT="$(find "$MC_X86" -type d -name "Frameworks" -maxdepth 3 | head -1)"
-        MC_X86_ROOT="$(dirname "${MC_X86_ROOT:-$MC_X86}")"
-        merged=0
-        for rel in "Frameworks/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter" \
-                   "lib/media-control/MediaRemoteAdapterTestClient"; do
-          dst="$APP_DIR/Contents/Resources/media-control/$rel"
-          src="$MC_X86_ROOT/$rel"
-          if [ -f "$dst" ] && [ -f "$src" ]; then
-            lipo -create "$dst" "$src" -output "$dst.fat" && mv "$dst.fat" "$dst"
-            merged=$((merged + 1))
-          fi
-        done
-        if [ "$merged" -gt 0 ]; then
-          codesign --force --sign "$SIGN_ID" "$MC_FW"
-          codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/media-control/lib/media-control/MediaRemoteAdapterTestClient" 2>/dev/null || true
-          echo "    media-control x86_64 切片已合入($merged 个 Mach-O, bottle tag=$MC_TAG)"
-        else
-          echo "!! media-control x86_64 bottle 里没找到预期的 Mach-O,跳过 lipo" >&2
-        fi
-      else
-        echo "!! media-control x86_64 bottle 下载或校验失败,跳过 lipo——x86_64 上 QQ 音乐支持不可用" >&2
-      fi
-    fi
-  fi
-  echo "    media-control bundled (QQ 音乐支持)"
-else
-  if [ -n "$STAGE" ] && [ -d "$FINAL_APP_DIR/Contents/Resources/media-control" ]; then
-    ditto "$FINAL_APP_DIR/Contents/Resources/media-control" "$APP_DIR/Contents/Resources/media-control"
-    echo "    media-control 从现装包继承(brew 里没找到,保持已装版本不被降级)"
-  fi
-  echo "!! media-control not found (brew install media-control) — QQ 音乐支持这次构建不可用,Apple Music 不受影响" >&2
-fi
-
-rm -rf "$APP_DIR/Contents/Resources/zh-hans.lproj" "$APP_DIR/Contents/Resources/zh-hant.lproj" "$APP_DIR/Contents/Resources/en.lproj"
+rm -rf "$APP_DIR/Contents/Resources/zh-hans.lproj" "$APP_DIR/Contents/Resources/en.lproj"
 cp -R Sources/lyrimuse/Resources/zh-hans.lproj "$APP_DIR/Contents/Resources/zh-hans.lproj"
-cp -R Sources/lyrimuse/Resources/zh-hant.lproj "$APP_DIR/Contents/Resources/zh-hant.lproj"
 cp -R Sources/lyrimuse/Resources/en.lproj "$APP_DIR/Contents/Resources/en.lproj"
 for png in Sources/lyrimuse/Resources/*.png; do
   cp "$png" "$APP_DIR/Contents/Resources/$(basename "$png")"
@@ -237,9 +146,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <!-- Legacy notification alert style preference to display action buttons. -->
     <key>NSUserNotificationAlertStyle</key>
     <string>alert</string>
-    <!-- Explains purpose when prompting for Apple Events automation permission (Music/browsers). -->
+    <!-- Explains purpose when prompting for Apple Events automation permission. -->
     <key>NSAppleEventsUsageDescription</key>
-    <string>Lyrimuse needs to send Apple Events to media players and browsers to read the currently playing track and show synced lyrics.</string>
+    <string>Lyrimuse needs to send Apple Events to Apple Music to read the currently playing track and show synced lyrics.</string>
 </dict>
 </plist>
 PLIST

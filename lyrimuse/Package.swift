@@ -30,17 +30,6 @@ let package = Package(
         ),
 
         .executableTarget(
-            name: "lyrics-translate",
-            path: "Sources/lyrics-translate"
-        ),
-
-        .executableTarget(
-            name: "lyrics-romanize",
-            dependencies: ["LyrimuseCore"],
-            path: "Sources/lyrics-romanize"
-        ),
-
-        .executableTarget(
             name: "lyrimuse-benchmark",
             dependencies: ["LyrimuseCore"],
             path: "Sources/lyrimuse-benchmark"

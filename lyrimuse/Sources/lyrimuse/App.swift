@@ -19,9 +19,5 @@ struct LyrimuseApp: App {
             LyricsQuickSearchWindow()
         }
 
-        Window(L10n.t("欢迎使用 Lyrimuse"), id: "onboarding") {
-            OnboardingView()
-        }
-        .windowResizability(.contentSize)
     }
 }

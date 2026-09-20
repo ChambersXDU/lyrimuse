@@ -20,7 +20,6 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var collectorNetworkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
 
-    @Published private(set) var isRadioTalkBreak = false
     @Published private(set) var currentLineFillSettled = true
 
     @Published private(set) var displayForegroundColor: Color = .white
@@ -70,7 +69,6 @@ private final class OverlayPlayback: ObservableObject {
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
             p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
-            p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
             Publishers.CombineLatest3(p.$artworkAccentColor, s.$followsCoverArt, s.$foregroundColor)
                 .map { accent, follows, fg in (follows ? accent : nil) ?? fg }
@@ -653,12 +651,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         } else if playback.isCurrentTrackAdBreak {
 
             Text(L10n.t("广告中"))
-                .font(playback.mainFont)
-                .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
-                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
-        } else if playback.isRadioTalkBreak {
-
-            Text(L10n.t("口白"))
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)

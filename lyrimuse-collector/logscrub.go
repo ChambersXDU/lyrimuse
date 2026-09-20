@@ -2,7 +2,6 @@ package main
 
 import (
 	"io"
-	"net/url"
 	"regexp"
 	"slices"
 	"sort"
@@ -15,8 +14,6 @@ const redactedMark = "***"
 
 const (
 	minSecretLen = 8
-
-	minPathSecretLen = 16
 )
 
 var (
@@ -62,22 +59,6 @@ func scrubSecrets(s string) string {
 		s = r.Replace(s)
 	}
 	return sensitiveQueryRe.ReplaceAllString(s, "${1}"+redactedMark)
-}
-
-func rememberConfigSecrets(c *config) {
-	if c == nil {
-		return
-	}
-	registerSecrets(
-		c.Token,
-		c.StateRelayToken,
-		c.DingtalkSignSecret,
-		c.FeishuSignSecret,
-	)
-
-	if u, err := url.Parse(c.NotificationWebhookURL); err == nil {
-		registerSecretsMinLen(minPathSecretLen, strings.Split(u.Path, "/")...)
-	}
 }
 
 type secretScrubber struct{ w io.Writer }

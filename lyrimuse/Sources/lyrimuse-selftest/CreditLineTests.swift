@@ -432,12 +432,6 @@ func runCreditLineTests() {
         expectEqual(line?.plainText, "但我听说这是我最为珍贵的一个小特长")
         expectEqual(line?.romanization, nil)
 
-        let engineZh = LyricsSyncEngine()
-        _ = engineZh.load(lyrics: lyrics, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
-                          trackTitle: "神的随波逐流", trackArtist: "泠鸢yousa",
-                          romanizationScripts: [.japanese, .korean, .chinese])
-        expectEqual(engineZh.activeLine(atMs: 31_500)?.romanization != nil, true)
-
         let jpLyrics = """
         [00:00.00]作词：れるりり
         [00:05.00]火曜日の朝は

@@ -258,17 +258,13 @@ public enum Romanizer {
 
 public enum LyricScript: String, Sendable, CaseIterable {
     case japanese, korean, chinese
-
-    case cantonese
-
     case other
 
     var option: RomanizationScripts? {
         switch self {
         case .japanese: return .japanese
         case .korean: return .korean
-        case .chinese: return .chinese
-        case .cantonese: return .cantonese
+        case .chinese: return nil
         case .other: return nil
         }
     }
@@ -281,11 +277,7 @@ public struct RomanizationScripts: OptionSet, Sendable, Codable {
     public static let japanese = RomanizationScripts(rawValue: 1 << 0)
     public static let korean = RomanizationScripts(rawValue: 1 << 1)
 
-    public static let chinese = RomanizationScripts(rawValue: 1 << 2)
-
-    public static let cantonese = RomanizationScripts(rawValue: 1 << 3)
-
-    public static let `default`: RomanizationScripts = [.japanese, .korean, .chinese, .cantonese]
+    public static let `default`: RomanizationScripts = [.japanese, .korean]
 }
 
 extension Romanizer {
@@ -336,7 +328,6 @@ extension Romanizer {
         if containsHangul(line) { return .korean }
         if containsHan(line) {
             if song == .japanese { return .japanese }
-            if song == .cantonese { return .cantonese }
             return .chinese
         }
         return .other

@@ -63,9 +63,6 @@ final class AppSettings: ObservableObject {
         static let showTranslation = "np:showTranslation"
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
 
-        static let launchMusicOnLyrimuseOpen = "np:launchMusicOnLyrimuseOpen"
-        static let launchPlayersOnLyrimuseOpen = "np:launchPlayersOnLyrimuseOpen"
-        static let quitWithPlayers = "np:quitWithPlayers"
         static let collectorServiceEnabled = "np:collectorServiceEnabled"
         static let showInDock = "np:showInDock"
         static let showNextLinePreview = "np:showNextLinePreview"
@@ -112,19 +109,11 @@ final class AppSettings: ObservableObject {
         static let debugHUDEnabled = "np:debugHUD"
 
         static let appLanguage = "np:appLanguage"
-        static let hasShownAutomationOnboarding = "np:hasShownAutomationOnboarding"
-        static let hasCompletedOnboarding = "np:hasCompletedOnboarding"
-        static let hasOfferedICloudImport = "np:hasOfferedICloudImport"
         static let classicOverlayEnabled = "np:classicOverlayEnabled"
-        static let motionCoverEnabled = "np:motionCoverEnabled"
 
         static let legacyClassicOverlayVisible = "np:overlayVisible"
 
         static let customColorThemesJSON = "np:customColorThemesJSON"
-        static let browserPlatformPairsJSON = "np:browserPlatformPairsJSON"
-        static let manualBrowserFamiliesJSON = "np:manualBrowserFamiliesJSON"
-        static let browserJSVerifiedAtJSON = "np:browserJSVerifiedAtJSON"
-
     }
 
     static let defaultFontFamilyName = ""
@@ -133,8 +122,6 @@ final class AppSettings: ObservableObject {
     static let defaultOverlayFontWeight: OverlayFontWeight = .semibold
 
     static let defaultFollowsCoverArt = true
-
-    static let defaultMotionCoverEnabled = true
 
     static let defaultMenuBarLyricsWidthMode = MenuBarLyricsWidthMode.adaptive
     static let defaultMenuBarLyricsAlignment = LyricsRestingAlignment.leading
@@ -171,11 +158,6 @@ final class AppSettings: ObservableObject {
         $0.lowercased().hasPrefix("zh")
     }
 
-    static let userReadsSimplifiedChinese: Bool = {
-        guard let first = Locale.preferredLanguages.first?.lowercased(), first.hasPrefix("zh") else { return false }
-        return !UILanguage.isTraditionalChineseTag(first)
-    }()
-
     @Published var lyricsChineseVariant: ChineseVariant {
         didSet { defaults.set(lyricsChineseVariant.rawValue, forKey: Keys.lyricsChineseVariant) }
     }
@@ -194,14 +176,6 @@ final class AppSettings: ObservableObject {
             defaults.set(launchAtLoginEnabled, forKey: Keys.launchAtLoginEnabled)
             LoginItemManager.shared.setEnabled(launchAtLoginEnabled)
         }
-    }
-
-    @Published var launchPlayersOnLyrimuseOpen: Set<PlaybackPlayer> {
-        didSet { defaults.set(launchPlayersOnLyrimuseOpen.map(\.rawValue).sorted(), forKey: Keys.launchPlayersOnLyrimuseOpen) }
-    }
-
-    @Published var quitWithPlayers: Set<PlaybackPlayer> {
-        didSet { defaults.set(quitWithPlayers.map(\.rawValue).sorted(), forKey: Keys.quitWithPlayers) }
     }
 
     @Published var collectorServiceEnabled: Bool {
@@ -342,19 +316,8 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(manualPickLocksLyrics, forKey: Keys.manualPickLocksLyrics) }
     }
 
-    @Published var hasCompletedOnboarding: Bool {
-        didSet { defaults.set(hasCompletedOnboarding, forKey: Keys.hasCompletedOnboarding) }
-    }
-
-    @Published var hasOfferedICloudImport: Bool {
-        didSet { defaults.set(hasOfferedICloudImport, forKey: Keys.hasOfferedICloudImport) }
-    }
-
     @Published var classicOverlayEnabled: Bool {
         didSet { defaults.set(classicOverlayEnabled, forKey: Keys.classicOverlayEnabled) }
-    }
-    @Published var motionCoverEnabled: Bool {
-        didSet { defaults.set(motionCoverEnabled, forKey: Keys.motionCoverEnabled) }
     }
     @Published var fontFamilyName: String {
         didSet {
@@ -418,27 +381,6 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    @Published var browserPlatformPairs: [String: Set<String>] {
-        didSet {
-            let json = (try? JSONEncoder().encode(browserPlatformPairs)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-            defaults.set(json, forKey: Keys.browserPlatformPairsJSON)
-        }
-    }
-
-    @Published var manualBrowserFamilies: [String: String] {
-        didSet {
-            let json = (try? JSONEncoder().encode(manualBrowserFamilies)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-            defaults.set(json, forKey: Keys.manualBrowserFamiliesJSON)
-        }
-    }
-
-    @Published var browserJSVerifiedAt: [String: Date] {
-        didSet {
-            let json = (try? JSONEncoder().encode(browserJSVerifiedAt)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-            defaults.set(json, forKey: Keys.browserJSVerifiedAtJSON)
-        }
-    }
-
     @Published private(set) var foregroundColor: Color = .white
     @Published private(set) var backgroundColor: Color = .clear
     @Published private(set) var backgroundIsVisible: Bool = false
@@ -483,16 +425,6 @@ final class AppSettings: ObservableObject {
         showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? Self.userReadsChinese
 
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? true
-        if let raw = defaults.array(forKey: Keys.launchPlayersOnLyrimuseOpen) as? [String] {
-            launchPlayersOnLyrimuseOpen = Set(raw.compactMap(PlaybackPlayer.init(rawValue:)))
-        } else {
-
-            let legacy = (defaults.object(forKey: Keys.launchMusicOnLyrimuseOpen) as? Bool) ?? false
-            launchPlayersOnLyrimuseOpen = PlayerLinkage.migratedLaunchSet(
-                legacyEnabled: legacy, selectedPlayers: PlaybackPlayerPreference.selected, requiresSole: true)
-        }
-        quitWithPlayers = Set(((defaults.array(forKey: Keys.quitWithPlayers) as? [String]) ?? [])
-            .compactMap(PlaybackPlayer.init(rawValue:)))
         collectorServiceEnabled = (defaults.object(forKey: Keys.collectorServiceEnabled) as? Bool) ?? false
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
 
@@ -550,11 +482,6 @@ final class AppSettings: ObservableObject {
         hideDuringScreenCapture = legacyHideDuringCapture
         hideWhenNotPlaying = legacyHideWhenNotPlaying
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
-        hasCompletedOnboarding = (defaults.object(forKey: Keys.hasCompletedOnboarding) as? Bool)
-            ?? (defaults.object(forKey: Keys.hasShownAutomationOnboarding) as? Bool) ?? false
-        hasOfferedICloudImport =
-            (defaults.object(forKey: Keys.hasOfferedICloudImport) as? Bool) ?? false
-
         var classicOn = (defaults.object(forKey: Keys.classicOverlayEnabled) as? Bool) ?? true
 
         if let legacyVisible = defaults.object(forKey: Keys.legacyClassicOverlayVisible) as? Bool {
@@ -563,7 +490,6 @@ final class AppSettings: ObservableObject {
             defaults.removeObject(forKey: Keys.legacyClassicOverlayVisible)
         }
         classicOverlayEnabled = classicOn
-        motionCoverEnabled = (defaults.object(forKey: Keys.motionCoverEnabled) as? Bool) ?? Self.defaultMotionCoverEnabled
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? Self.defaultFontFamilyName
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? Self.defaultFontSize
 
@@ -581,28 +507,6 @@ final class AppSettings: ObservableObject {
         } else {
             customColorThemes = []
         }
-        if let json = defaults.string(forKey: Keys.browserPlatformPairsJSON),
-           let data = json.data(using: .utf8),
-           let pairs = try? JSONDecoder().decode([String: Set<String>].self, from: data) {
-            browserPlatformPairs = pairs
-        } else {
-            browserPlatformPairs = [:]
-        }
-        if let json = defaults.string(forKey: Keys.manualBrowserFamiliesJSON),
-           let data = json.data(using: .utf8),
-           let families = try? JSONDecoder().decode([String: String].self, from: data) {
-            manualBrowserFamilies = families
-        } else {
-            manualBrowserFamilies = [:]
-        }
-        if let json = defaults.string(forKey: Keys.browserJSVerifiedAtJSON),
-           let data = json.data(using: .utf8),
-           let map = try? JSONDecoder().decode([String: Date].self, from: data) {
-            browserJSVerifiedAt = map
-        } else {
-            browserJSVerifiedAt = [:]
-        }
-
         recomputeFonts()
         foregroundColor = Color(hexWithAlpha: foregroundColorHex, fallback: .white)
         backgroundColor = Color(hexWithAlpha: backgroundColorHex, fallback: .clear)

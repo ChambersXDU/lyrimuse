@@ -72,8 +72,6 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(action(L10n.t("歌词管理…"), symbol: "music.note.list",
                             selector: #selector(openLyricsManager)))
 
-        menu.addItem(action(L10n.t("重新运行引导…"), symbol: "sparkles",
-                            selector: #selector(rerunOnboarding)))
         menu.addItem(action(L10n.t("关于 Lyrimuse"), symbol: "info.circle",
                             selector: #selector(openAbout)))
         menu.addItem(.separator())
@@ -161,8 +159,6 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
 
     @objc private func openSettings() { AppActions.shared.openSettings?() }
     @objc private func openLyricsManager() { AppActions.shared.openLyricsManager?() }
-    @objc private func rerunOnboarding() { AppActions.shared.openOnboarding?() }
-
     @objc private func openAbout() {
 
         AppActions.shared.requestSettings(.tab(.about))

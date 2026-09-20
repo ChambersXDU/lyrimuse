@@ -21,7 +21,6 @@ func runSearchLyricsCLI(args []string) {
 
 	currentSource := fs.String("current-source", "", "the lyric source in effect now (for the -pick decidability guard)")
 
-	player := fs.String("player", "", "bundle id of the player currently playing (for the same-source scoring term)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("search-lyrics: %v", err)
 	}
@@ -48,7 +47,6 @@ func runSearchLyricsCLI(args []string) {
 
 		loadEnrichCacheReadOnly(filepath.Join(filepath.Dir(cfgPath), clientName+"-enrich-cache.json"))
 
-		setNativeLyricSourcesForPlayer(*player)
 	}
 
 	sArtist, sTitle, sAlbum := toSimplified(*artist), toSimplified(*title), toSimplified(*album)
@@ -162,7 +160,6 @@ type searchLyricsUpdate struct {
 }
 
 type searchLyricsPick struct {
-
 	Winner      string `json:"winner,omitempty"`
 	WinnerScore int    `json:"winnerScore"`
 

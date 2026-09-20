@@ -15,8 +15,6 @@ public struct MediaControlSnapshot: Decodable {
 
     public let anchorElapsedTime: Double?
 
-    public let isRadio: Bool?
-
     public var trackKey: String { Self.trackKey(artist: artist, title: title) }
 
     public static func trackKey(artist: String?, title: String?) -> String {
@@ -28,7 +26,7 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: artist, album: newAlbum, duration: duration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio)
+            anchorElapsedTime: anchorElapsedTime)
     }
 
     public func withDuration(_ newDuration: Double) -> MediaControlSnapshot {
@@ -36,14 +34,6 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: artist, album: album, duration: newDuration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio)
-    }
-
-    public func withRadio(position: Double) -> MediaControlSnapshot {
-        MediaControlSnapshot(
-            title: title, artist: artist, album: album, duration: duration,
-            elapsedTime: position, playing: playing, playbackRate: playbackRate,
-            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: position, isRadio: true)
+            anchorElapsedTime: anchorElapsedTime)
     }
 }

@@ -122,7 +122,6 @@ enum SettingsIconTint {
 
 enum SettingsSidebarItem: Hashable {
     case tab(SettingsTab)
-    case account(AccountDestination)
 }
 
 struct SettingsView: View {
@@ -131,10 +130,6 @@ struct SettingsView: View {
 
     @State private var selection: SettingsSidebarItem? = .tab(SettingsTab.restoredLastTab())
     @AppStorage(SettingsTab.lastTabStorageKey) private var lastTabRaw = SettingsTab.lyrics.rawValue
-
-    @StateObject private var playerHealth = PlayerHealthMonitor()
-
-    @State private var isAdditionalFeaturesExpanded = false
 
     @State private var settingsSearchText = ""
 
@@ -176,11 +171,6 @@ struct SettingsView: View {
         switch entry.destination {
         case .tab(let raw):
             if let tab = SettingsTab(rawValue: raw) { selection = .tab(tab) }
-        case .account(let name):
-            if let destination = AccountDestination.allCases.first(where: { String(describing: $0) == name }) {
-                withAnimation { isAdditionalFeaturesExpanded = true }
-                selection = .account(destination)
-            }
         }
         if let key = entry.sectionKey, let value = entry.sectionValue {
             UserDefaults.standard.set(value, forKey: key)
@@ -200,17 +190,6 @@ struct SettingsView: View {
             sidebarLabel(.about)
         }
 
-        Section(isExpanded: $isAdditionalFeaturesExpanded) {
-            ForEach(AccountDestination.allCases) { destination in
-                AccountSidebarRow(destination: destination)
-                    .tag(SettingsSidebarItem.account(destination))
-            }
-        } header: {
-
-            HStack(spacing: 4) {
-                Text(L10n.t("实验室功能"))
-            }
-        }
     }
 
     var body: some View {
@@ -242,18 +221,9 @@ struct SettingsView: View {
                 case .tab(.shortcuts): ShortcutsSettingsTab()
                 case .tab(.general): GeneralSettingsTab()
                 case .tab(.about): AboutSettingsTab()
-                case .account(let destination):
-                    AccountLinkingTab(destination: destination, onJumpToAccount: { target in
-                        withAnimation { isAdditionalFeaturesExpanded = true }
-                        selection = .account(target)
-                    })
                 case nil: ContentUnavailableView(L10n.t("选择左侧的设置分类"), systemImage: "gearshape")
                 }
             }
-
-            .safeAreaInset(edge: .top, spacing: 0) { ConfigFileDamageBanner() }
-
-            .overlay(alignment: .bottom) { CollectorApplyStatusBar() }
 
             .navigationTitle(L10n.t("设置"))
             .navigationSubtitle(selectedCategoryTitle)
@@ -286,13 +256,9 @@ struct SettingsView: View {
 
         .onAppear {
             AuxiliaryWindowActivation.windowDidAppear()
-            playerHealth.start()
-
         }
         .onDisappear {
             AuxiliaryWindowActivation.windowDidDisappear()
-            playerHealth.stop()
-
         }
     }
 
@@ -300,11 +266,6 @@ struct SettingsView: View {
         Label {
             HStack(spacing: 6) {
                 Text(tab.title)
-                if tab == .player, let warning = playerHealth.warningText {
-                    Spacer(minLength: 4)
-                    SidebarCountBadge(count: max(1, playerHealth.warnings.count))
-                        .accessibilityLabel(warning)
-                }
             }
         } icon: {
             iconBadge(tab.icon, tint: tab.tint)
@@ -315,7 +276,6 @@ struct SettingsView: View {
     private var selectedCategoryTitle: String {
         switch selection {
         case .tab(let tab): return tab.title
-        case .account(let destination): return destination.title
         case nil: return L10n.t("设置")
         }
     }
@@ -389,50 +349,12 @@ private struct LyricsSettingsTab: View {
     @State private var isTestingLyricSources = false
     @State private var lyricSourceTestGeneration = 0
 
-    @State private var offsetScope = ""
-
-    @State private var nowPlayingBundleID: String?
-
-    private func refreshNowPlayingPlayer() {
-        let coordinator = PlaybackCoordinator.shared
-        nowPlayingBundleID = coordinator.isPlayingSmoothed ? coordinator.resolvedPlayerBundleID : nil
-    }
-
-    private var offsetScopeOptions: [String] {
-
-        LyricsOffsetScope.options(
-            builtInOrder: PlaybackPlayer.displayOrder,
-            trusted: features.trustedPlayers,
-            configured: Set(offsets.playerOffsets.keys),
-            nowPlaying: nowPlayingBundleID
-        )
-    }
-
-    private func playerDisplayName(_ bundleID: String) -> String {
-        if let builtin = PlaybackPlayer.allCases.first(where: { $0 != .auto && $0.bundleIdentifier == bundleID }) {
-            return builtin.displayName
-        }
-        if let trusted = features.trustedPlayers[bundleID], !trusted.isEmpty { return trusted }
-        return FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID
-    }
-
-    private func offsetScopeLabel(_ bundleID: String) -> String {
-        let name = playerDisplayName(bundleID)
-        if bundleID == nowPlayingBundleID { return name + L10n.t("（正在播放）") }
-        if offsets.playerOffset(forBundleID: bundleID) != 0 { return name + L10n.t("（已调）") }
-        return name
-    }
-
     private var scopedOffsetMs: Int {
-        offsetScope.isEmpty ? offsets.globalOffsetMs : offsets.playerOffset(forBundleID: offsetScope)
+        offsets.globalOffsetMs
     }
 
     private func setScopedOffset(_ ms: Int) {
-        if offsetScope.isEmpty {
-            PlaybackCoordinator.shared.setGlobalLyricsOffset(ms)
-        } else {
-            PlaybackCoordinator.shared.setPlayerLyricsOffset(ms, forBundleID: offsetScope)
-        }
+        PlaybackCoordinator.shared.setGlobalLyricsOffset(ms)
     }
 
     @AppStorage("settings:lyricsSection") private var sectionRaw = Section.fetch.rawValue
@@ -926,21 +848,6 @@ private struct LyricsSettingsTab: View {
                 .pickerStyle(.menu)
                 .fixedSize()
             }
-            CardDivider()
-            SettingsRow(
-                icon: "character.book.closed",
-                title: L10n.t("系统兜底翻译")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { features.lyricsMachineTranslation },
-                    set: { features.lyricsMachineTranslation = $0; Task { await features.save() } }
-                ))
-            }
-
-            if #available(macOS 26.0, *), features.lyricsMachineTranslation {
-                CardDivider()
-                LanguagePackRow()
-            }
         }
     }
 
@@ -988,10 +895,6 @@ private struct LyricsSettingsTab: View {
                             L10n.t("日语"), .japanese)
                         romanizationToggle(
                             L10n.t("韩语"), .korean)
-                        romanizationToggle(
-                            L10n.t("拼音"), .chinese)
-                        romanizationToggle(
-                            L10n.t("粤拼"), .cantonese)
                     }
                 }
             }
@@ -1002,16 +905,6 @@ private struct LyricsSettingsTab: View {
                 title: L10n.t("全局时间轴偏移")
             ) {
                 HStack(spacing: 8) {
-                    Picker("", selection: $offsetScope) {
-
-                        Text(L10n.t("全部播放器")).tag("")
-                        ForEach(offsetScopeOptions, id: \.self) { bundleID in
-                            Text(offsetScopeLabel(bundleID)).tag(bundleID)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .fixedSize()
-
                     Text("\(AppSettings.signedSeconds(ms: scopedOffsetMs))\(L10n.t("秒"))")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
@@ -1028,10 +921,6 @@ private struct LyricsSettingsTab: View {
                 }
             }
 
-            .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
-                refreshNowPlayingPlayer()
-            }
-            .onAppear { refreshNowPlayingPlayer() }
         }
     }
 
@@ -1342,845 +1231,58 @@ private struct AppearanceSettingsTab: View {
 
 }
 
-@MainActor
-private final class PlayerTabStores: ObservableObject {
-
-    @Published private(set) var browserJSVerifiedAt: [String: Date] = [:]
-    @Published private(set) var browserPlatformPairs: [String: Set<String>] = [:]
-    @Published private(set) var manualBrowserFamilies: [String: String] = [:]
-    @Published private(set) var launchPlayersOnLyrimuseOpen: Set<PlaybackPlayer> = []
-    @Published private(set) var quitWithPlayers: Set<PlaybackPlayer> = []
-
-    @Published private(set) var players: Set<PlaybackPlayer> = [.auto]
-    @Published private(set) var trustedPlayers: [String: String] = [:]
-    @Published private(set) var launchLyrimuseOnPlayers: Set<PlaybackPlayer> = []
-
-    @Published private(set) var mediaControlState: MediaControlHealth.State = .unknown
-    private var subs: [AnyCancellable] = []
-
-    init() {
-        let s = AppSettings.shared
-        let f = FeatureSettingsStore.shared
-        let h = MediaControlHealth.shared
-        browserJSVerifiedAt = s.browserJSVerifiedAt
-        browserPlatformPairs = s.browserPlatformPairs
-        manualBrowserFamilies = s.manualBrowserFamilies
-        launchPlayersOnLyrimuseOpen = s.launchPlayersOnLyrimuseOpen
-        quitWithPlayers = s.quitWithPlayers
-        players = f.players
-        trustedPlayers = f.trustedPlayers
-        launchLyrimuseOnPlayers = f.launchLyrimuseOnPlayers
-        mediaControlState = h.state
-        subs = [
-            s.$browserJSVerifiedAt.removeDuplicates().sink { [weak self] in self?.browserJSVerifiedAt = $0 },
-            s.$browserPlatformPairs.removeDuplicates().sink { [weak self] in self?.browserPlatformPairs = $0 },
-            s.$manualBrowserFamilies.removeDuplicates().sink { [weak self] in self?.manualBrowserFamilies = $0 },
-            s.$launchPlayersOnLyrimuseOpen.removeDuplicates().sink { [weak self] in self?.launchPlayersOnLyrimuseOpen = $0 },
-            s.$quitWithPlayers.removeDuplicates().sink { [weak self] in self?.quitWithPlayers = $0 },
-            f.$players.removeDuplicates().sink { [weak self] in self?.players = $0 },
-            f.$trustedPlayers.removeDuplicates().sink { [weak self] in self?.trustedPlayers = $0 },
-            f.$launchLyrimuseOnPlayers.removeDuplicates().sink { [weak self] in self?.launchLyrimuseOnPlayers = $0 },
-            h.$state.removeDuplicates().sink { [weak self] in self?.mediaControlState = $0 },
-        ]
-    }
-
-}
-
 private struct PlayerSettingsTab: View {
-    @StateObject private var stores = PlayerTabStores()
-
     @State private var automationStatus: MusicAutomationPermissionStatus = .notDetermined
-
-    @State private var isRequestingAutomation = false
-    @State private var automationRequestTimedOut = false
-
+    @State private var requestingAutomation = false
     @State private var collectorState: LaunchdJobState = .notRegistered
-    @State private var isTogglingCollectorService = false
-
-    @State private var collectorEnableFailed = false
-
-    @State private var collectorVersionMismatch: (appVersion: String, collectorVersion: String)?
-
-    @State private var ungatedNowPlaying: MediaControlClient.UngatedNowPlaying?
-
-    @State private var notificationsDenied = false
+    @State private var collectorBusy = false
 
     var body: some View {
-        SettingsPage(
-            title: L10n.t("播放器")
-        ) {
-            playerCard
-            browserAutomationCard
-            unknownPlayerCard
-            notificationDeniedCard
-            trustedPlayersCard
-            companionCard
-            permissionCard
-            collectorCard
-        }
-        .id(L10n.current)
-        .onAppear { refreshUngatedNowPlaying(); refreshNotificationStatus(); refreshBrowserLiveStatus() }
-        .onReceive(NotificationCenter.default.publisher(
-            for: NSApplication.didBecomeActiveNotification)) { _ in
-            refreshNotificationStatus()
-
-            refreshBrowserLiveStatus()
-        }
-
-        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
-            refreshUngatedNowPlaying()
-            refreshBrowserLiveStatus()
-        }
-        .onChange(of: automationRefreshTick) { _, _ in refreshBrowserLiveStatus() }
-        .onChange(of: stores.browserPlatformPairs) { _, _ in refreshBrowserLiveStatus() }
-    }
-
-    private func refreshUngatedNowPlaying() {
-        guard let seen = MediaControlClient.lastUngatedNowPlaying,
-              Date().timeIntervalSince(seen.at) < 15 else {
-            if ungatedNowPlaying != nil { ungatedNowPlaying = nil }
-            return
-        }
-        if ungatedNowPlaying != seen { ungatedNowPlaying = seen }
-    }
-
-    private func refreshNotificationStatus() {
-        Task {
-            let denied = await UnknownPlayerNotifier.authorizationStatus() == .denied
-            if notificationsDenied != denied { notificationsDenied = denied }
-        }
-    }
-
-    private var playerCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("播放器"))
-            SettingsRawRow {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                    ForEach(PlaybackPlayer.displayOrder) { player in
-                        PlayerChoiceCard(player: player,
-                                         isSelected: stores.players.contains(player),
-                                         isCoveredByAuto: isCoveredByAuto(player)) {
-                            toggleSelectedPlayer(player)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-
-        }
-    }
-
-    private func isCoveredByAuto(_ player: PlaybackPlayer) -> Bool {
-        player != .auto && stores.players.contains(.auto) && !stores.players.contains(player)
-    }
-
-    private func toggleSelectedPlayer(_ player: PlaybackPlayer) {
-        FeatureSettingsStore.shared.togglePlayer(player)
-    }
-
-    @ViewBuilder
-    private var unknownPlayerCard: some View {
-
-        if let seen = ungatedNowPlaying,
-           UnknownPlayerAlert.shouldOffer(
-               bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
-               observedAt: seen.at, isAutoDetect: stores.players.contains(.auto), now: Date(),
-               isAccepted: { TrustedPlayers.isAccepted($0) }) {
+        SettingsPage(title: L10n.t("播放器")) {
             SettingsCard {
                 SettingsRow(
-
-                    icon: "questionmark.app.dashed",
-                    iconImage: AppIconResolver.icon(forBundleID: seen.bundleID),
-                    title: FeatureSettingsStore.appDisplayName(forBundleID: seen.bundleID) ?? seen.bundleID
-                ) {
-                    Button(L10n.t("加入信任列表")) {
-                        Task { await FeatureSettingsStore.shared.trust(bundleID: seen.bundleID) }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var notificationDeniedCard: some View {
-        if stores.players.contains(.auto), notificationsDenied {
-            SettingsCard {
-                SettingsRow(
-                    icon: "bell.slash",
-                    title: L10n.t("新播放器提醒")
-                ) {
-                    Button(L10n.t("打开系统设置")) {
-                        if let url = URL(string:
-                            "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var trustedPlayersCard: some View {
-        if !stores.trustedPlayers.isEmpty {
-            SettingsCard {
-
-                SettingsCardHeader(title: L10n.t("已信任的播放器"))
-
-                ForEach(stores.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
-                    if bundleID != stores.trustedPlayers.keys.sorted().first { CardDivider() }
-
-                    SettingsRow(
-                        icon: "checkmark.seal",
-                        iconImage: AppIconResolver.icon(forBundleID: bundleID),
-                        title: displayNameForTrusted(bundleID)
-                    ) {
-                        Button(L10n.t("移除")) {
-                            Task {
-                                await FeatureSettingsStore.shared.untrust(bundleID: bundleID)
-
-                                unpairBrowserEverywhere(bundleID)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func displayNameForTrusted(_ bundleID: String) -> String {
-        if let stored = stores.trustedPlayers[bundleID], !stored.isEmpty { return stored }
-        return FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID
-    }
-
-    private func addablePlatformBrowsers(platformID: String) -> [String] {
-        BrowserPairing.addableBrowsers(platformID: platformID)
-    }
-
-    @State private var browserPickerError: String?
-
-    private func chooseBrowserFromApplications(platformID: String) {
-        browserPickerError = BrowserPairing.chooseFromApplications(
-            platformID: platformID,
-            revealPairing: { bundleID in
-                expandedBrowserBundleID = bundleID
-                expandedBrowserPlatformID = platformID
-            },
-            automationDidResolve: { automationRefreshTick &+= 1 })
-    }
-
-    private func rememberManualBrowser(_ bundleID: String, family: BrowserAutomationPermission.Family) {
-        BrowserPairing.rememberManualBrowser(bundleID, family: family)
-    }
-
-    private func trustAndPairBrowser(_ bundleID: String, platformID: String) {
-        BrowserPairing.trustAndPair(
-            bundleID, platformID: platformID,
-            revealPairing: {
-                expandedBrowserBundleID = bundleID
-                expandedBrowserPlatformID = platformID
-            },
-            automationDidResolve: { automationRefreshTick &+= 1 })
-    }
-
-    @State private var automationRefreshTick = 0
-
-    struct BrowserLiveStatus: Equatable {
-
-        var jsSwitch: BrowserAutomationPermission.Status
-        var running: Bool
-
-        var automation: MusicAutomationPermissionStatus?
-    }
-    @State private var browserLiveStatus: [String: BrowserLiveStatus] = [:]
-    @State private var browserLiveStatusInFlight = false
-
-    private func refreshBrowserLiveStatus() {
-        guard !browserLiveStatusInFlight else { return }
-        let ids = Set(stores.browserPlatformPairs.values.flatMap { $0 })
-        guard !ids.isEmpty else {
-            if !browserLiveStatus.isEmpty { browserLiveStatus = [:] }
-            return
-        }
-        let running = Dictionary(uniqueKeysWithValues: ids.map {
-            ($0, MusicAutomationPermission.isRunning(bundleID: $0))
-        })
-        browserLiveStatusInFlight = true
-        Task {
-            let fresh = await Task.detached(priority: .utility) { () -> [String: BrowserLiveStatus] in
-                var out: [String: BrowserLiveStatus] = [:]
-                for id in ids {
-                    let isRunning = running[id] ?? false
-                    out[id] = BrowserLiveStatus(
-                        jsSwitch: BrowserAutomationPermission.status(forBundleID: id),
-                        running: isRunning,
-
-                        automation: isRunning
-                            ? MusicAutomationPermission.check(bundleID: id, askIfNeeded: false) : nil)
-                }
-                return out
-            }.value
-            browserLiveStatusInFlight = false
-            if fresh != browserLiveStatus { browserLiveStatus = fresh }
-        }
-    }
-
-    private func requestBrowserAutomation(bundleID: String) {
-        Task {
-            _ = await MusicAutomationPermission.requestWithTimeout(
-                bundleID: bundleID, launchIfNeeded: true)
-            automationRefreshTick &+= 1
-        }
-    }
-
-    private func addBrowserMenuLabel(_ bundleID: String) -> String {
-        let name = FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID
-        guard stores.trustedPlayers[bundleID] == nil else { return name }
-        return name + L10n.t("（未信任，选择后自动信任）")
-    }
-
-    private func pairBrowser(_ bundleID: String, platformID: String) {
-        BrowserPairing.pair(bundleID, platformID: platformID)
-    }
-
-    private func unpairBrowserEverywhere(_ bundleID: String) {
-        var pairs = stores.browserPlatformPairs
-        var changed = false
-        for (platformID, ids) in pairs where ids.contains(bundleID) {
-            var next = ids
-            next.remove(bundleID)
-            if next.isEmpty { pairs.removeValue(forKey: platformID) } else { pairs[platformID] = next }
-            changed = true
-        }
-
-        guard changed else { return }
-        AppSettings.shared.browserPlatformPairs = pairs
-        BrowserPositionProbe.shared.platformBrowserPairs = pairs
-        forgetManualBrowserIfUnpaired(bundleID)
-    }
-
-    private func forgetManualBrowserIfUnpaired(_ bundleID: String) {
-        BrowserPairing.forgetManualBrowserIfUnpaired(bundleID)
-    }
-
-    private func unpairBrowser(_ bundleID: String, platformID: String) {
-        BrowserPairing.unpair(bundleID, platformID: platformID)
-    }
-
-    @State private var expandedBrowserBundleID: String?
-    @State private var expandedBrowserPlatformID: String?
-
-    @ViewBuilder
-    private var browserAutomationCard: some View {
-
-        let anySupportedInstalled = (BrowserAutomationPermission.knownBrowserBundleIDs
-            + Array(stores.manualBrowserFamilies.keys))
-            .contains { BrowserAutomationPermission.isInstalled(bundleID: $0)
-                        && BrowserAutomationPermission.family(forBundleID: $0) != nil }
-        if anySupportedInstalled {
-            SettingsCard {
-                SettingsCardHeader(
-                    title: L10n.t("网页播放器")
-                )
-                SettingsRawRow {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                        ForEach(BrowserPositionProbe.supportedPlatforms) { platform in
-                            browserPlatformCard(platform: platform)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-
-            .alert(
-                L10n.t("这个应用用不了"),
-                isPresented: Binding(
-                    get: { browserPickerError != nil },
-                    set: { if !$0 { browserPickerError = nil } })
-            ) {
-                Button(L10n.t("知道了"), role: .cancel) { browserPickerError = nil }
-            } message: {
-                Text(browserPickerError ?? "")
-            }
-
-            .onReceive(NotificationCenter.default.publisher(
-                for: NSApplication.didBecomeActiveNotification)) { _ in
-                automationRefreshTick &+= 1
-
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 12_000_000_000)
-                    automationRefreshTick &+= 1
-                }
-            }
-        }
-    }
-
-    private func browserPlatformCard(platform: BrowserPositionProbe.BrowserMusicPlatform) -> some View {
-
-        let pairedBundleIDs = (stores.browserPlatformPairs[platform.id] ?? [])
-            .filter { BrowserAutomationPermission.isInstalled(bundleID: $0) }
-            .sorted()
-        let addable = addablePlatformBrowsers(platformID: platform.id)
-        return VStack(spacing: 6) {
-            if let icon = WebPlatformIcon.image(platform.id) {
-                Image(nsImage: icon)
-                    .resizable()
-                    .frame(width: 26, height: 26)
-            }
-            Text(platform.displayName)
-                .font(.caption)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .foregroundStyle(.primary)
-
-            HStack(spacing: 6) {
-                ForEach(pairedBundleIDs, id: \.self) { bundleID in
-                    browserAvatarButton(bundleID: bundleID, platformID: platform.id)
-                }
-
-                do {
-                    Menu {
-                        ForEach(addable, id: \.self) { bundleID in
-                            Button(addBrowserMenuLabel(bundleID)) { trustAndPairBrowser(bundleID, platformID: platform.id) }
-                        }
-                        Divider()
-                        Button(L10n.t("从应用程序中选择…")) { chooseBrowserFromApplications(platformID: platform.id) }
-                    } label: {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 15))
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(pairedBundleIDs.isEmpty ? Color.primary.opacity(0.05) : Color.accentColor.opacity(0.14))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(pairedBundleIDs.isEmpty ? Color.clear : Color.accentColor, lineWidth: 1.5)
-        )
-    }
-
-    private func browserAvatarButton(bundleID: String, platformID: String) -> some View {
-        Button {
-            expandedBrowserBundleID = bundleID
-            expandedBrowserPlatformID = platformID
-        } label: {
-            Self.browserIconView(bundleID: bundleID, size: 22)
-
-                .overlay(alignment: .topTrailing) {
-                    if browserSetupIncomplete(bundleID: bundleID) {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white, Color.orange)
-                            .offset(x: 3, y: -3)
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-        .popover(isPresented: Binding(
-            get: { expandedBrowserBundleID == bundleID && expandedBrowserPlatformID == platformID },
-            set: { if !$0 { expandedBrowserBundleID = nil; expandedBrowserPlatformID = nil } }
-        )) {
-            browserPermissionPopover(bundleID: bundleID, platformID: platformID)
-        }
-    }
-
-    private func browserPermissionPopover(bundleID: String, platformID: String) -> some View {
-
-        let live = browserLiveStatus[bundleID]
-        let status = live?.jsSwitch ?? .unknown
-
-        let running = live?.running ?? false
-
-        let liveAutomation: MusicAutomationPermissionStatus? = running ? live?.automation : nil
-        let verifiedBefore = stores.browserJSVerifiedAt[bundleID] != nil
-        let automation: MusicAutomationPermissionStatus? =
-            liveAutomation ?? (verifiedBefore ? .authorized : nil)
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Self.browserIconView(bundleID: bundleID, size: 24)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(displayNameForTrusted(bundleID)).font(.system(size: 13))
-
-                    Text(browserJSSwitchCaption(bundleID: bundleID, status: status))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(browserAutomationCaption(automation, live: liveAutomation != nil))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            if !browserJSLikelyWorking(bundleID: bundleID) {
-                Text(browserManualEnableHint(bundleID: bundleID))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text(L10n.t("勾完要退出并重新打开这个浏览器才生效——这个开关只在浏览器启动时读一次。"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let r = browserSelfTestResults[bundleID] {
-
-                    Text(browserSelfTestCaption(r, switchDisabled: status == .disabled))
-                        .font(.system(size: 11))
-                        .foregroundStyle(r == .ok ? Color.green : Color.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                HStack {
-                    Button(L10n.t("检测是否已生效")) { runBrowserSelfTest(bundleID: bundleID) }
-                        .disabled(browserSelfTestRunning.contains(bundleID))
-                    Spacer()
-
-                    Button(L10n.t("打开该浏览器")) {
-                        guard let appURL = NSWorkspace.shared
-                            .urlForApplication(withBundleIdentifier: bundleID) else { return }
-                        let config = NSWorkspace.OpenConfiguration()
-                        config.activates = true
-                        NSWorkspace.shared.openApplication(at: appURL, configuration: config)
-                    }
-                }
-            }
-
-            if browserJSLikelyWorking(bundleID: bundleID) {
-                if let r = browserSelfTestResults[bundleID] {
-
-                    Text(browserSelfTestCaption(r, switchDisabled: status == .disabled))
-                        .font(.system(size: 11))
-                        .foregroundStyle(r == .ok ? Color.green : Color.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                HStack {
-                    Button(L10n.t("重新检测")) { runBrowserSelfTest(bundleID: bundleID) }
-                        .disabled(browserSelfTestRunning.contains(bundleID))
-                    Spacer()
-                }
-            }
-            if automation != .authorized {
-                HStack {
-                    Spacer()
-                    if automation == .denied {
-
-                        Button(L10n.t("打开系统设置")) {
-                            NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
-                        }
-                    } else {
-                        Button(L10n.t("请求系统授权")) { requestBrowserAutomation(bundleID: bundleID) }
-                    }
-                }
-            }
-            Divider()
-            HStack {
-                Button(L10n.t("移除配对")) {
-                    unpairBrowser(bundleID, platformID: platformID)
-                    expandedBrowserBundleID = nil
-                    expandedBrowserPlatformID = nil
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                Spacer()
-            }
-        }
-        .padding(14)
-        .frame(width: 300)
-    }
-
-    @State private var browserSelfTestResults: [String: BrowserPositionProbe.SelfTestResult] = [:]
-    @State private var browserSelfTestRunning: Set<String> = []
-
-    private func runBrowserSelfTest(bundleID: String) {
-        guard let family = BrowserAutomationPermission.family(forBundleID: bundleID) else { return }
-        browserSelfTestRunning.insert(bundleID)
-        browserSelfTestResults[bundleID] = nil
-        DispatchQueue.global(qos: .userInitiated).async {
-            let r = BrowserPositionProbe.selfTest(bundleID: bundleID, family: family)
-            DispatchQueue.main.async {
-                browserSelfTestRunning.remove(bundleID)
-                browserSelfTestResults[bundleID] = r
-
-                var map = stores.browserJSVerifiedAt
-                switch r {
-                case .ok:
-                    map[bundleID] = Date()
-                    AppSettings.shared.browserJSVerifiedAt = map
-                case .blocked, .noReply:
-                    if map.removeValue(forKey: bundleID) != nil { AppSettings.shared.browserJSVerifiedAt = map }
-                case .noTab, .failed:
-                    break
-                }
-
-                automationRefreshTick &+= 1
-            }
-        }
-    }
-
-    private func browserSelfTestCaption(_ r: BrowserPositionProbe.SelfTestResult,
-                                        switchDisabled: Bool = false) -> String {
-        switch r {
-        case .ok:
-            if switchDisabled {
-                return L10n.t("✓ 此刻驱动得动——但这是重启前的暂时状态：上面那个开关已经被关掉，重启后就会失效")
-            }
-            return L10n.t("✓ 已生效——这个浏览器现在可以被驱动了")
-        case .noTab: return L10n.t("这个浏览器没在运行，或者一个标签页都没开——打开它并随便开一个网页，再检测一次")
-        case .blocked: return L10n.t("还没生效：浏览器回绝了执行 JavaScript 的请求，按上面那条路径再确认一下开关勾上了没有")
-        case .noReply: return L10n.t("还没生效：浏览器收下了请求却一直没回应，多半是那个开关还没勾上（有的浏览器不报错、直接不回）。按上面那条路径再确认一下")
-        case .failed(let msg): return String(format: L10n.t("检测没通过：%@"), msg)
-        }
-    }
-
-    private func browserJSSwitchCaption(bundleID: String, status: BrowserAutomationPermission.Status) -> String {
-        switch status {
-        case .enabled: return L10n.t("已开启")
-        case .disabled:
-
-            if browserJSProvenWorking(bundleID: bundleID) {
-                return L10n.t("这个开关已经被关掉了——现在还能用，只是因为该浏览器还没重启；重启后就会失效")
-            }
-            return L10n.t("未开启")
-        case .unknown:
-
-            if let at = stores.browserJSVerifiedAt[bundleID] {
-                return String(format: L10n.t("上次检测通过（%@）"), Self.verifiedAtFormatter.localizedString(for: at, relativeTo: Date()))
-            }
-            return L10n.t("无法确认状态（读不到该浏览器的配置文件）")
-        case .unsupported: return ""
-        }
-    }
-
-    private static let verifiedAtFormatter: RelativeDateTimeFormatter = {
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .full
-        return f
-    }()
-
-    private func browserJSProvenWorking(bundleID: String) -> Bool {
-        if browserSelfTestResults[bundleID] == .ok { return true }
-        return stores.browserJSVerifiedAt[bundleID] != nil
-    }
-
-    private func browserJSLikelyWorking(bundleID: String) -> Bool {
-
-        let status = browserLiveStatus[bundleID]?.jsSwitch ?? .unknown
-
-        if status == .disabled { return false }
-
-        if let r = browserSelfTestResults[bundleID] {
-            switch r {
-            case .ok: return true
-            case .blocked, .noReply, .failed: return false
-            case .noTab: break
-            }
-        }
-        if status == .enabled { return true }
-        return stores.browserJSVerifiedAt[bundleID] != nil
-    }
-
-    private func browserManualEnableHint(bundleID: String) -> String {
-        switch bundleID {
-        case "com.google.Chrome":
-
-            return L10n.t("在 Chrome 菜单栏依次打开「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。")
-        case "com.microsoft.edgemac":
-            return L10n.t("在 Edge 菜单栏依次打开「查看 → 开发人员 → 允许 Apple 事件中的 JavaScript」。")
-        case "company.thebrowser.Browser":
-            return L10n.t("在 Arc 菜单栏依次打开「View → Developer → Allow JavaScript from Apple Events」。Arc 的这几个菜单项在中文系统下也是英文。")
-        case "com.apple.Safari":
-            return L10n.t("Safari 在设置里，不在菜单栏：先到「Safari 浏览器 → 设置 → 高级」勾上「显示网页开发者功能」，设置里就会多出「开发」一栏，在那里勾上「允许Apple事件中的JavaScript」。")
-        default:
-            return L10n.t("到该浏览器的开发者菜单里打开「允许 Apple 事件中的 JavaScript」。")
-        }
-    }
-
-    private func browserSetupIncomplete(bundleID: String) -> Bool {
-
-        guard let live = browserLiveStatus[bundleID] else { return false }
-
-        if !browserJSLikelyWorking(bundleID: bundleID) { return true }
-        guard live.running else { return false }
-        return live.automation != .authorized
-    }
-
-    private func browserAutomationCaption(_ status: MusicAutomationPermissionStatus?,
-                                          live: Bool = true) -> String {
-        switch status {
-        case .authorized:
-
-            return live ? L10n.t("系统自动化授权：已授权")
-                        : L10n.t("系统自动化授权：上次检测时已授权")
-        case .denied: return L10n.t("系统自动化授权：已拒绝，需要在系统设置里打开")
-        case .notDetermined: return L10n.t("系统自动化授权：尚未授权")
-        case nil: return L10n.t("系统自动化授权：这个浏览器没在运行，查不到当前状态")
-        }
-    }
-
-    private static func browserIconView(bundleID: String, size: CGFloat) -> some View {
-        Group {
-            if let icon = AppIconResolver.icon(forBundleID: bundleID) {
-                Image(nsImage: icon).resizable()
-            } else {
-                Image(systemName: "app.dashed")
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))
-    }
-
-    @ViewBuilder
-    private var permissionCard: some View {
-
-        if stores.players.contains(.appleMusic) {
-            SettingsCard {
-                SettingsRow(
-                    icon: automationStatusIconName,
-                    iconTint: automationStatusIconColor,
+                    icon: "music.note",
                     title: L10n.t("Apple Music 自动化")
                 ) {
-                    if isRequestingAutomation {
+                    if requestingAutomation {
                         ProgressView().controlSize(.small)
                     } else {
                         Button(automationActionTitle) { handleAutomationAction() }
                     }
                 }
-                if isRequestingAutomation {
+                if automationStatus == .denied {
                     CardDivider()
                     SettingsNote {
-                        if automationRequestTimedOut {
-                            Text(L10n.t("这次请求耗时有点久。如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启"))
-                            Button(L10n.t("打开系统设置")) {
-                                NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
-                            }
-                        } else {
-                            Text(L10n.t("请查看屏幕上弹出的系统授权对话框，选择「允许」"))
+                        Button(L10n.t("打开系统设置")) {
+                            NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
                         }
                     }
                 }
             }
             .onAppear { refreshAutomationStatus() }
-
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                refreshAutomationStatus(clearRequestUI: true)
+                refreshAutomationStatus()
             }
-        }
-    }
 
-    private var collectorCard: some View {
-        SettingsCard {
-            SettingsRow(
-                icon: collectorStatusIconName,
-                iconTint: collectorStatusIconColor,
-                title: L10n.t("后台采集服务")
-            ) {
-
-                if isTogglingCollectorService {
-                    ProgressView().controlSize(.small)
-                } else if !collectorState.isRunning {
-                    Button(L10n.t("启用")) { enableCollectorService() }
+            SettingsCard {
+                SettingsRow(
+                    icon: collectorState.isRunning ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+                    iconTint: collectorState.isRunning ? .green : .orange,
+                    title: L10n.t("后台歌词服务")
+                ) {
+                    if collectorBusy {
+                        ProgressView().controlSize(.small)
+                    } else if !collectorState.isRunning {
+                        Button(L10n.t("启用")) { enableCollector() }
+                    }
                 }
             }
-
-            if collectorEnableFailed {
-                CardDivider()
-                SettingsNote {
-                    Text(L10n.t("启用失败，可能是权限或系统限制导致后台服务没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"))
-                    Button(L10n.t("导出诊断…")) { exportDiagnostics() }
-                }
-            }
-
-            if case .unavailable(let message) = stores.mediaControlState {
-                CardDivider()
-                SettingsNote {
-                    Text(L10n.t("系统的媒体信息通道在这台机器上不可用，QQ 音乐 / 网易云音乐的播放检测会受影响（Apple Music、Spotify 不受影响）"))
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .textSelection(.enabled)
-                }
-            }
-
-            if let mismatch = collectorVersionMismatch {
-                CardDivider()
-                SettingsNote {
-                    Text(L10n.t("这个版本打包时漏了同步后台采集服务的版本号。不影响功能，采集服务的实际代码跟 App 是同一个版本，不需要你做任何处理"))
-                    Text("App \(mismatch.appVersion) · \(L10n.t("采集服务")) \(mismatch.collectorVersion)")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .textSelection(.enabled)
-                }
+            .onAppear { refreshCollectorState() }
+            .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+                refreshCollectorState()
             }
         }
-
-        .onAppear {
-            refreshCollectorState()
-            refreshCollectorVersionCheck()
-        }
-        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
-            refreshCollectorState()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            refreshCollectorState()
-        }
-    }
-
-    private var linkageCandidates: [PlaybackPlayer] {
-        let set = PlayerLinkage.candidates(selectedPlayers: stores.players)
-        return PlaybackPlayer.displayOrder.filter { set.contains($0) }
-    }
-
-    private var companionCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("播放器联动"))
-            CardDivider()
-            PlayerLinkageRow(
-                icon: "arrow.up.forward.app",
-                title: L10n.t("打开 Lyrimuse 时启动"),
-                candidates: linkageCandidates,
-                chosen: stores.launchPlayersOnLyrimuseOpen
-            ) { AppSettings.shared.launchPlayersOnLyrimuseOpen = $0 }
-            CardDivider()
-            PlayerLinkageRow(
-                icon: "arrow.down.app",
-                title: L10n.t("跟随播放器启动"),
-                candidates: linkageCandidates,
-                chosen: stores.launchLyrimuseOnPlayers
-            ) { chosen in
-                FeatureSettingsStore.shared.launchLyrimuseOnPlayers = chosen
-                Task { await FeatureSettingsStore.shared.save() }
-            }
-            CardDivider()
-            PlayerLinkageRow(
-                icon: "power",
-                title: L10n.t("跟随播放器退出"),
-                candidates: linkageCandidates,
-                chosen: stores.quitWithPlayers
-            ) { AppSettings.shared.quitWithPlayers = $0 }
-        }
-    }
-
-    private var automationStatusIconName: String {
-        switch automationStatus {
-        case .authorized: return "checkmark.circle.fill"
-        case .denied: return "xmark.circle.fill"
-        case .notDetermined: return "questionmark.circle.fill"
-        }
-    }
-
-    private var automationStatusIconColor: Color {
-        switch automationStatus {
-        case .authorized: return .green
-        case .denied: return .red
-        case .notDetermined: return .orange
-        }
+        .id(L10n.current)
     }
 
     private var automationActionTitle: String {
@@ -2189,97 +1291,41 @@ private struct PlayerSettingsTab: View {
 
     private func handleAutomationAction() {
         if automationStatus == .notDetermined {
-            requestAutomationPermission()
+            requestingAutomation = true
+            Task {
+                _ = await MusicAutomationPermission.requestWithTimeout()
+                requestingAutomation = false
+                refreshAutomationStatus()
+            }
         } else {
             NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
         }
     }
 
-    private func requestAutomationPermission() {
-        isRequestingAutomation = true
-        automationRequestTimedOut = false
+    private func refreshAutomationStatus() {
         Task {
-            if let status = await MusicAutomationPermission.requestWithTimeout() {
-                automationStatus = status
-                isRequestingAutomation = false
-                automationRequestTimedOut = false
-            } else {
-                automationRequestTimedOut = true
-            }
-        }
-    }
-
-    private var collectorStatusIconName: String {
-        switch collectorState {
-        case .running: return "checkmark.circle.fill"
-        case .registeredNotRunning, .unknown: return "exclamationmark.triangle.fill"
-        case .notRegistered: return "xmark.circle.fill"
-        }
-    }
-
-    private var collectorStatusIconColor: Color {
-        switch collectorState {
-        case .running: return .green
-        case .registeredNotRunning, .unknown: return .orange
-        case .notRegistered: return .red
-        }
-    }
-
-    private func refreshAutomationStatus(clearRequestUI: Bool = false) {
-        Task {
-            let latest = await Task.detached(priority: .utility) {
+            let status = await Task.detached(priority: .utility) {
                 MusicAutomationPermission.check(askIfNeeded: false)
             }.value
-            if latest != automationStatus { automationStatus = latest }
-            if clearRequestUI, latest != .notDetermined {
-                isRequestingAutomation = false
-                automationRequestTimedOut = false
-            }
+            automationStatus = status
         }
     }
-
-    @State private var collectorStateInFlight = false
 
     private func refreshCollectorState() {
-        guard !collectorStateInFlight else { return }
-        collectorStateInFlight = true
+        guard !collectorBusy else { return }
         Task {
-            let latest = await Task.detached(priority: .utility) { CollectorServiceManager.state }.value
-            collectorStateInFlight = false
-            if latest != collectorState { collectorState = latest }
-        }
-    }
-
-    private func refreshCollectorVersionCheck() {
-        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-        Task.detached(priority: .utility) {
-            guard let collectorVersion = CollectorServiceManager.bundledCollectorVersion(),
-                  collectorVersion != appVersion else {
-
-                await MainActor.run { collectorVersionMismatch = nil }
-                return
-            }
-            await MainActor.run {
-                collectorVersionMismatch = (appVersion: appVersion, collectorVersion: collectorVersion)
-            }
-        }
-    }
-
-    private func enableCollectorService() {
-        isTogglingCollectorService = true
-        collectorEnableFailed = false
-        Task {
-            let state = await CollectorServiceManager.setEnabledAndWait(true)
-            AppSettings.shared.collectorServiceEnabled = true
+            let state = await Task.detached(priority: .utility) { CollectorServiceManager.state }.value
             collectorState = state
-            isTogglingCollectorService = false
-
-            collectorEnableFailed = !state.isRunning
         }
     }
 
-    private func exportDiagnostics() {
-        DiagnosticsExporter.exportInteractively()
+    private func enableCollector() {
+        collectorBusy = true
+        Task {
+            collectorState = await CollectorServiceManager.setEnabledAndWait(true)
+            AppSettings.shared.collectorServiceEnabled = collectorState.isRunning
+            collectorBusy = false
+        }
     }
 }
 
@@ -2288,62 +1334,29 @@ private struct GeneralSettingsTab: View {
 
     @State private var showExportConfigWarning = false
     @State private var showImportConfigConfirm = false
-    @State private var showICloudExportWarning = false
-
-    @State private var iCloudSnapshot: ICloudConfigStore.Snapshot?
-    @State private var iCloudBusy = false
-    @State private var iCloudMessage: String?
-
     @State private var configMessage: String?
-
-    @State private var iCloudJustSaved = false
-
-    @State private var iCloudJustSavedToken = 0
     @State private var pendingImportData: Data?
-
     @State private var pendingImportLyrics: Data?
-
     @State private var pendingImportLyricsCount = 0
-
-    @State private var pendingImportFolder: URL?
     @State private var showClearConfigWarning = false
 
     var body: some View {
-        SettingsPage(
-            title: L10n.t("通用")
-        ) {
-
+        SettingsPage(title: L10n.t("通用")) {
             SettingsCard {
                 SettingsCardHeader(title: L10n.t("菜单栏与 Dock"))
                 CardDivider()
-
-                SettingsRow(
-                    icon: "menubar.rectangle",
-                    title: L10n.t("菜单栏图标")
-                ) {
+                SettingsRow(icon: "menubar.rectangle", title: L10n.t("菜单栏图标")) {
                     Text(settings.menuBarIconStyle.displayName)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
-
-                SettingsRawRow {
-
-                    MenuBarIconPicker()
-                }
+                SettingsRawRow { MenuBarIconPicker() }
                 CardDivider()
-
-                SettingsRow(
-                    icon: "figure.dance",
-                    title: L10n.t("随播放律动")
-                ) {
+                SettingsRow(icon: "figure.dance", title: L10n.t("随播放律动")) {
                     Toggle("", isOn: $settings.menuBarIconAnimates)
                 }
                 CardDivider()
-                SettingsRow(
-                    icon: "macwindow",
-                    title: L10n.t("在 Dock 中显示")
-                ) {
+                SettingsRow(icon: "macwindow", title: L10n.t("在 Dock 中显示")) {
                     Toggle("", isOn: $settings.showInDock)
                 }
             }
@@ -2351,13 +1364,10 @@ private struct GeneralSettingsTab: View {
             SettingsCard {
                 SettingsCardHeader(title: L10n.t("语言与启动"))
                 CardDivider()
-
                 SettingsRow(icon: "globe", title: L10n.t("语言")) {
                     Picker("", selection: $settings.appLanguage) {
                         Text(L10n.t("跟随系统")).tag("system")
                         Text(L10n.t("简体中文")).tag("zh-hans")
-
-                        Text(L10n.t("繁體中文")).tag("zh-hant")
                         Text("English").tag("en")
                     }
                     .pickerStyle(.menu)
@@ -2370,71 +1380,9 @@ private struct GeneralSettingsTab: View {
             }
 
             SettingsCard {
-
-                SettingsCardHeader(title: L10n.t("备份与迁移")) {
-
-                    Menu {
-                        Button(L10n.t("更换备份文件夹…")) { chooseBackupFolder() }
-                        if ICloudConfigStore.usingCustomFolder {
-                            Button(L10n.t("改回 iCloud")) {
-                                ICloudConfigStore.setCustomFolder(nil)
-                                iCloudSnapshot = ICloudConfigStore.latestSnapshot()
-                            }
-                        }
-
-                        Divider()
-
-                        Button(L10n.t("打开备份文件夹")) {
-                            NSWorkspace.shared.activateFileViewerSelecting(
-                                [ICloudConfigStore.preparedFolderURL()])
-                        }
-                    } label: {
-                        Text(L10n.t("备份文件夹…"))
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                }
+                SettingsCardHeader(title: L10n.t("备份与迁移"))
                 CardDivider()
-
-                SettingsRow(
-                    icon: ICloudConfigStore.usingCustomFolder ? "folder" : "icloud",
-                    title: ICloudConfigStore.usingCustomFolder
-                        ? L10n.t("备份文件夹") : L10n.t("iCloud 备份")
-                ) {
-                    HStack(spacing: 8) {
-                        if iCloudBusy { ProgressView().controlSize(.small) }
-                        Button {
-                            showICloudExportWarning = true
-                        } label: {
-                            if iCloudJustSaved {
-                                Label(L10n.t("已保存"), systemImage: "checkmark")
-                            } else {
-                                Text(iCloudSnapshot == nil
-                                    ? (ICloudConfigStore.usingCustomFolder
-                                        ? L10n.t("存一份") : L10n.t("存到 iCloud"))
-                                    : L10n.t("更新备份"))
-                            }
-                        }
-
-                        .frame(minWidth: 88)
-                        .disabled(!ICloudConfigStore.isAvailable)
-                        if iCloudSnapshot != nil {
-
-                            Button(L10n.t("恢复这份")) { importFromICloud() }
-                                .disabled(!ICloudConfigStore.isAvailable)
-                        }
-                    }
-                }
-                if let iCloudMessage {
-                    CardDivider()
-                    SettingsNote { Text(iCloudMessage) }
-                }
-                CardDivider()
-
-                SettingsRow(
-                    icon: "doc.badge.gearshape",
-                    title: L10n.t("设置文件")
-                ) {
+                SettingsRow(icon: "doc.badge.gearshape", title: L10n.t("设置文件")) {
                     HStack(spacing: 8) {
                         Button(L10n.t("导出…")) { showExportConfigWarning = true }
                         Button(L10n.t("从文件导入…")) { pickConfigFileToImport() }
@@ -2445,145 +1393,42 @@ private struct GeneralSettingsTab: View {
                     SettingsNote { Text(configMessage) }
                 }
             }
-            .onAppear {
-                iCloudSnapshot = ICloudConfigStore.latestSnapshot()
-            }
-
-            .alert(L10n.t("确定要存到 iCloud 吗？"), isPresented: $showICloudExportWarning) {
-                Button(L10n.t("取消"), role: .cancel) {}
-                Button(L10n.t("存到 iCloud")) {
-
-                    Task { @MainActor in
-                        guard let data = ConfigPortability.buildExportData() else { return }
-                        let name = ConfigPortability.suggestedFilename()
-                        guard ICloudConfigStore.write(data, filename: name) != nil else {
-                            iCloudMessage = L10n.t("写入 iCloud 失败，可以改用下面的「导出…」存成文件")
-                            return
-                        }
-
-                        var note: String?
-                        if let archive = await LyricsBackupStore.buildArchive() {
-                            let lyricsName = LyricsBackupArchive.sidecarName(forConfigName: name)
-                            if ICloudConfigStore.write(archive, filename: lyricsName) == nil {
-                                note = L10n.t("设置已存好，但歌词库那一份没写成功")
-                            }
-                        }
-
-                        iCloudSnapshot = ICloudConfigStore.latestSnapshot()
-                        iCloudMessage = note
-
-                        if note == nil {
-                            iCloudJustSavedToken += 1
-                            let token = iCloudJustSavedToken
-                            withAnimation { iCloudJustSaved = true }
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .seconds(1))
-                                guard iCloudJustSavedToken == token else { return }
-                                withAnimation { iCloudJustSaved = false }
-                            }
-                        }
-                    }
-                }
-            }
             .alert(L10n.t("确定要导出设置吗？"), isPresented: $showExportConfigWarning) {
                 Button(L10n.t("取消"), role: .cancel) {}
-                Button(L10n.t("继续导出")) {
-                    guard let data = ConfigPortability.buildExportData() else { return }
-                    let panel = NSSavePanel()
-                    panel.nameFieldStringValue = ConfigPortability.suggestedFilename()
-
-                    panel.directoryURL = ICloudConfigStore.isAvailable
-                        ? ICloudConfigStore.preparedFolderURL()
-                        : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
-                    if panel.runModal() == .OK, let url = panel.url {
-
-                        do {
-                            try data.writeSecurely(to: url)
-                        } catch {
-                            configMessage = String(format: L10n.t("导出失败：%@"), error.localizedDescription)
-                            return
-                        }
-
-                        Task { @MainActor in
-                            guard let archive = await LyricsBackupStore.buildArchive() else {
-                                configMessage = L10n.t("设置已导出；歌词库这次没打包成功，只有设置那一个文件")
-                                return
-                            }
-                            let sidecarName = LyricsBackupArchive.sidecarName(forConfigName: url.lastPathComponent)
-                            let sidecar = url.deletingLastPathComponent().appendingPathComponent(sidecarName)
-                            do {
-                                try archive.writeSecurely(to: sidecar)
-
-                                configMessage = String(format: L10n.t("已导出两个文件：设置和歌词库（%@）。搬到新电脑时两个都要拷"), sidecarName)
-                            } catch {
-                                configMessage = L10n.t("设置已导出；歌词库那份写盘失败，只有设置那一个文件")
-                            }
-                        }
-                    }
-                }
+                Button(L10n.t("继续导出")) { exportConfig() }
             } message: {
-                Text(L10n.t("导出的文件包含账号登录凭证和密钥，妥善保管，不要发给别人。歌词库会另外存成同名的第二个文件，搬家时两个都要拷"))
+                Text(L10n.t("导出的文件包含账号登录凭证和密钥，妥善保管，不要发给别人。歌词库会另外存成同名的第二个文件。"))
             }
             .alert(L10n.t("确定要导入这份设置吗？"), isPresented: $showImportConfigConfirm) {
                 Button(L10n.t("取消"), role: .cancel) {}
-
                 Button(L10n.t("导入并重启"), role: .destructive) {
-                    if let data = pendingImportData {
-                        Task { @MainActor in
-
-                            guard await ConfigPortability.importData(data) else {
-                                configMessage = L10n.t("导入失败：这个文件不是 Lyrimuse 的设置备份，或者已经损坏。当前设置没有被改动")
-                                return
-                            }
-
-                            if let lyrics = pendingImportLyrics {
-                                await LyricsBackupStore.restore(from: lyrics)
-                            }
-
-                            if let folder = pendingImportFolder {
-                                ICloudConfigStore.adoptFolder(folder)
-                            }
-                            ConfigPortability.restartApp()
+                    guard let data = pendingImportData else { return }
+                    Task { @MainActor in
+                        guard await ConfigPortability.importData(data) else {
+                            configMessage = L10n.t("导入失败：这个文件不是 Lyrimuse 的设置备份，或者已经损坏。当前设置没有被改动")
+                            return
                         }
+                        if let lyrics = pendingImportLyrics {
+                _ = await LyricsBackupStore.restore(from: lyrics)
+                        }
+                        ConfigPortability.restartApp()
                     }
                 }
             } message: {
-
-                if let source = pendingImportSourceDescription {
-                    Text(String(format: L10n.t("即将导入：%@"), source))
-                }
-
                 if pendingImportLyrics != nil {
-                    Text(String(format: L10n.t("这会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址；同一份备份里的 %@ 个歌词文件也会一并恢复（同名的会被覆盖）。完成后立即重启 Lyrimuse 使其生效"),
-                                "\(pendingImportLyricsCount)"))
+                    Text(String(format: L10n.t("这会覆盖当前设置，并恢复 %@ 个歌词文件；完成后立即重启 Lyrimuse。"), "\(pendingImportLyricsCount)"))
                 } else {
-                    Text(L10n.t("这会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse 使其生效"))
+                    Text(L10n.t("这会覆盖当前设置并立即重启 Lyrimuse。"))
                 }
             }
 
             SettingsCard {
-                SettingsCardHeader(title: L10n.t("封面"))
-                CardDivider()
-                SettingsRow(
-                    icon: "photo.badge.arrow.down",
-                    title: L10n.t("动态封面")
-                ) {
-                    Toggle("", isOn: $settings.motionCoverEnabled)
-                }
-            }
-
-            SettingsCard {
-                SettingsRow(
-                    icon: "trash",
-                    title: L10n.t("清除所有设置")
-                ) {
+                SettingsRow(icon: "trash", title: L10n.t("清除所有设置")) {
                     DestructiveButton(title: L10n.t("清除…")) { showClearConfigWarning = true }
                 }
             }
-
             .alert(L10n.t("确定要清除所有设置吗？"), isPresented: $showClearConfigWarning) {
                 Button(L10n.t("取消"), role: .cancel) {}
-
                 Button(L10n.t("清除并重启"), role: .destructive) {
                     Task { @MainActor in
                         await ConfigPortability.clearAllConfig()
@@ -2591,44 +1436,39 @@ private struct GeneralSettingsTab: View {
                     }
                 }
             } message: {
-                Text(L10n.t("这会清除本机所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。iCloud 里那份备份和已经导出的文件都不受影响；两样都没有的话，建议先备份一份"))
+                Text(L10n.t("这会清除本机所有账号 token、密钥和个人设置，且无法撤销。"))
             }
         }
         .id(L10n.current)
     }
 
-    private var pendingImportSourceDescription: String? {
-        guard let data = pendingImportData else { return nil }
-        let meta = ICloudConfigStore.metadata(in: data)
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        switch (meta.exportedAt, meta.deviceName) {
-        case let (when?, device?) where !device.isEmpty:
-            return String(format: L10n.t("%1$@ 从「%2$@」导出的备份"), formatter.string(from: when), device)
-        case let (when?, _):
-            return String(format: L10n.t("%@ 导出的备份"), formatter.string(from: when))
-        case let (nil, device?) where !device.isEmpty:
-            return String(format: L10n.t("从「%@」导出的备份"), device)
-        default:
-
-            return nil
-        }
-    }
-
-    private func chooseBackupFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = L10n.t("选择")
-        panel.message = L10n.t("选一个会自动同步的文件夹（Dropbox、坚果云、OneDrive 等），换 Mac 时在那台机器上指向同一个文件夹即可")
-        panel.directoryURL = ICloudConfigStore.preparedFolderURL()
+    private func exportConfig() {
+        guard let data = ConfigPortability.buildExportData() else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = ConfigPortability.suggestedFilename()
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Desktop", isDirectory: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        ICloudConfigStore.setCustomFolder(url)
-
-        iCloudSnapshot = ICloudConfigStore.latestSnapshot()
-        iCloudMessage = nil
+        do {
+            try data.writeSecurely(to: url)
+        } catch {
+            configMessage = String(format: L10n.t("导出失败：%@"), error.localizedDescription)
+            return
+        }
+        Task { @MainActor in
+            guard let archive = await LyricsBackupStore.buildArchive() else {
+                configMessage = L10n.t("设置已导出；歌词库这次没打包成功")
+                return
+            }
+            let sidecarName = LyricsBackupArchive.sidecarName(forConfigName: url.lastPathComponent)
+            let sidecar = url.deletingLastPathComponent().appendingPathComponent(sidecarName)
+            do {
+                try archive.writeSecurely(to: sidecar)
+                configMessage = String(format: L10n.t("已导出设置和歌词库（%@）"), sidecarName)
+            } catch {
+                configMessage = L10n.t("设置已导出；歌词库写盘失败")
+            }
+        }
     }
 
     private func pickConfigFileToImport() {
@@ -2637,12 +1477,8 @@ private struct GeneralSettingsTab: View {
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.json]
         panel.prompt = L10n.t("导入")
-        if ICloudConfigStore.isAvailable {
-            panel.directoryURL = ICloudConfigStore.folderURL
-        }
         guard panel.runModal() == .OK, let url = panel.url,
               let data = try? Data(contentsOf: url) else { return }
-
         let looksLikeExport: Bool = {
             guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
             return obj["appSettings"] != nil || obj["config"] != nil || obj["version"] != nil
@@ -2651,10 +1487,7 @@ private struct GeneralSettingsTab: View {
             configMessage = L10n.t("这个文件不是 Lyrimuse 的设置备份，没有导入")
             return
         }
-        configMessage = nil
         pendingImportData = data
-        pendingImportFolder = nil
-
         let sidecar = url.deletingLastPathComponent().appendingPathComponent(
             LyricsBackupArchive.sidecarName(forConfigName: url.lastPathComponent))
         pendingImportLyrics = try? Data(contentsOf: sidecar)
@@ -2664,39 +1497,6 @@ private struct GeneralSettingsTab: View {
             Task { @MainActor in
                 pendingImportLyricsCount = await LyricsBackupStore.peek(lyrics)?.files ?? 0
             }
-        }
-    }
-
-    private func importFromICloud() {
-        guard let snap = iCloudSnapshot else { return }
-        iCloudBusy = true
-        iCloudMessage = nil
-        Task {
-
-            let outcome = await ICloudConfigStore.readOutcome(snap.url)
-            iCloudBusy = false
-            let data: Data
-            switch outcome {
-            case .data(let d):
-                data = d
-            case .downloading:
-                iCloudMessage = L10n.t("正在从 iCloud 下载这份备份，下载完再点一次「导入」")
-                return
-            case .unavailable:
-                iCloudMessage = L10n.t("读不到这份备份：可能没开 iCloud Drive，或者这个文件夹不在同步")
-                return
-            }
-            pendingImportData = data
-            pendingImportFolder = snap.folderURL
-
-            let sidecarURL = snap.url.deletingLastPathComponent().appendingPathComponent(
-                LyricsBackupArchive.sidecarName(forConfigName: snap.url.lastPathComponent))
-            pendingImportLyrics = await ICloudConfigStore.read(sidecarURL)
-            pendingImportLyricsCount = 0
-            if let lyrics = pendingImportLyrics {
-                pendingImportLyricsCount = await LyricsBackupStore.peek(lyrics)?.files ?? 0
-            }
-            showImportConfigConfirm = true
         }
     }
 }
@@ -2846,7 +1646,6 @@ private struct AboutSettingsTab: View {
         } content: {
             communityCard
             legalCard
-            diagnosticsCard
             Text("© 2026 Yudaotor · GPL-3.0")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
@@ -3003,31 +1802,6 @@ private struct AboutSettingsTab: View {
         }
     }
 
-    private var diagnosticsCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("诊断与数据"))
-            CardDivider()
-
-            SettingsRow(
-                icon: "doc.text.magnifyingglass",
-                title: L10n.t("导出诊断")
-            ) {
-                Button(L10n.t("导出…")) {
-                    DiagnosticsExporter.exportInteractively()
-                }
-            }
-            CardDivider()
-
-            SettingsRow(
-                icon: "folder",
-                title: L10n.t("配置文件夹")
-            ) {
-                Button(L10n.t("打开配置文件夹")) {
-                    NSWorkspace.shared.activateFileViewerSelecting([ConfigPortability.configFolderURL])
-                }
-            }
-        }
-    }
 }
 
 struct SettingsWindowConfigurator: NSViewRepresentable {

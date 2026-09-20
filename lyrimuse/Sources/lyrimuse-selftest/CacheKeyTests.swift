@@ -236,8 +236,6 @@ func runCacheKeyTests() {
                     "netease")
         expectEqual(R.trackDurationSecs(artist: "丁世光", title: "如果我们当时一起会怎么样", album: "The Journal"),
                     245.5)
-        expectEqual(R.platformLinks(artist: "丁世光", title: "如果我们当时一起会怎么样", album: "The Journal")?.neteaseSong,
-                    URL(string: "https://music.163.com/song/789"))
 
         let emptyAlbum = R.lookup(artist: "丁世光", title: "如果我们当时一起会怎么样", album: "")
         expectEqual(emptyAlbum?.lyrics, sampleLyrics)
@@ -259,8 +257,6 @@ func runCacheKeyTests() {
                     "netease")
         expectEqual(R.trackDurationSecs(artist: "丁世光 feat. 嘉宾", title: "如果我们当时一起会怎么样", album: "The Journal"),
                     245.5)
-        expectEqual(R.platformLinks(artist: "丁世光 feat. 嘉宾", title: "如果我们当时一起会怎么样", album: "The Journal")?.neteaseSong,
-                    URL(string: "https://music.163.com/song/789"))
 
         let queryDiffSep = R.lookup(artist: "Sebastien Najand & 英雄联盟", title: "PROJECT: Ashe", album: "Mismatch Album")
         expectEqual(queryDiffSep?.lyrics, "[00:02.00]Ashe Project")

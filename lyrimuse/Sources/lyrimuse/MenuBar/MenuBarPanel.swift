@@ -19,8 +19,6 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var collectorNetworkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
 
-    @Published private(set) var isRadioTalkBreak = false
-    @Published private(set) var radioStationName: String?
     @Published private(set) var currentLineFillSettled = true
     @Published private(set) var artworkImage: NSImage?
 
@@ -57,8 +55,6 @@ private final class PanelPlayback: ObservableObject {
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
             p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
-            p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
-            p.$radioStationName.removeDuplicates().sink { [weak self] in self?.radioStationName = $0 },
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
             p.$artworkImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.artworkImage = $0 },
@@ -242,10 +238,6 @@ private struct MenuBarPanelView: View {
     private var displayTitle: String {
         if playback.isCurrentTrackAdBreak { return L10n.t("广告中") }
 
-        if playback.isRadioTalkBreak, let station = playback.radioStationName, !station.isEmpty {
-            return station
-        }
-
         return playback.title
     }
 
@@ -345,7 +337,6 @@ private struct MenuBarPanelView: View {
             hasWordTiming: !(playback.compactLine?.words ?? []).isEmpty,
             hasCurrentLine: playback.compactLine != nil,
             isAdBreak: playback.isCurrentTrackAdBreak,
-            isRadioTalk: playback.isRadioTalkBreak,
             isInstrumental: playback.isCurrentTrackInstrumental,
             hasNoLyrics: playback.currentTrackHasNoLyrics,
             networkDown: playback.collectorNetworkDown,
@@ -360,8 +351,6 @@ private struct MenuBarPanelView: View {
         case .adBreak:
 
             Text("")
-        case .radioTalk:
-            statusText(L10n.t("口白"))
         case .instrumental:
             statusText(L10n.t("纯音乐"))
         case .noLyrics:

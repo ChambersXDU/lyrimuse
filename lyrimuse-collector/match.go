@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"unicode"
 	"unicode/utf8"
 )
@@ -204,7 +203,6 @@ const (
 	scoreTermDuration     = "duration"
 	scoreTermCorroborated = "corroborated"
 	scoreTermWordTiming   = "wordTiming"
-	scoreTermNativeSource = "nativeSource"
 	scoreTermSource       = "source"
 	scoreTermLines        = "lines"
 	scoreTermVersionTags  = "versionTags"
@@ -227,7 +225,7 @@ const (
 func lyricScoreTermKinds() []string {
 	return []string{
 		scoreTermDuration, scoreTermCorroborated, scoreTermWordTiming,
-		scoreTermNativeSource, scoreTermLines, scoreTermVersionTags,
+		scoreTermLines, scoreTermVersionTags,
 		scoreTermDurationOff, scoreTermDurationOvershoot, scoreTermAlbum,
 		scoreTermTitleMatch, scoreTermConsensus, scoreTermTranslation,
 		scoreTermRoma, scoreTermSourceDurationOff, scoreTermWordTimingOverride,
@@ -252,68 +250,6 @@ const (
 
 	scoreRejectPlainTextOnly = "rejectPlainTextOnly"
 )
-
-var (
-	nativeLyricSourcesMu sync.RWMutex
-	nativeLyricSources   map[string]bool
-)
-
-func setNativeLyricSourcesForPlayer(bundleID string) {
-	src := playerNativeLyricSource(playerForBundleID(bundleID))
-	nativeLyricSourcesMu.Lock()
-	defer nativeLyricSourcesMu.Unlock()
-	if src == "" {
-		nativeLyricSources = nil
-		return
-	}
-	if len(nativeLyricSources) == 1 && nativeLyricSources[src] {
-		return
-	}
-	nativeLyricSources = map[string]bool{src: true}
-}
-
-func isNativeLyricSource(src string) bool {
-	nativeLyricSourcesMu.RLock()
-	defer nativeLyricSourcesMu.RUnlock()
-	return nativeLyricSources[src]
-}
-
-func hasNativeLyricSource() bool {
-	nativeLyricSourcesMu.RLock()
-	defer nativeLyricSourcesMu.RUnlock()
-	return len(nativeLyricSources) > 0
-}
-
-func playerForBundleID(bundleID string) string {
-	switch bundleID {
-	case appleMusicBundleID:
-		return playerAppleMusic
-	case qqMusicBundleID:
-		return playerQQMusic
-	case neteaseMusicBundleID:
-		return playerNetease
-	case spotifyBundleID:
-		return playerSpotify
-	case kugouMusicBundleID:
-		return playerKugou
-	default:
-		return ""
-	}
-}
-
-func playerNativeLyricSource(player string) string {
-	switch player {
-	case playerQQMusic:
-		return "qq"
-	case playerNetease:
-		return "netease"
-	case playerKugou:
-
-		return "kugou"
-	default:
-		return ""
-	}
-}
 
 func scoreLyricCandidate(
 	localArtist, localTitle, localAlbum string, durationSecs float64,
@@ -384,11 +320,6 @@ func scoreLyricCandidateDetailed(
 	if c.hasWordTiming {
 		add(scoreTermWordTiming, 400)
 	}
-	if isNativeLyricSource(c.source) {
-
-		add(scoreTermNativeSource, 250)
-	}
-
 	lines := len(strings.Split(c.lyrics, "\n"))
 	if lines > 200 {
 		lines = 200
@@ -745,7 +676,6 @@ func lyricSourceArtistMatches(candidate, query string) bool {
 }
 
 const (
-
 	lyricRecordingTriangleDurationTolerance = 0.01
 
 	lyricRecordingTriangleAlbumWidthRatio = 0.6

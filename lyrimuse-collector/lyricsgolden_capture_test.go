@@ -35,7 +35,6 @@ func TestLyricsGoldenCapture(t *testing.T) {
 	id := os.Getenv("LYRICS_GOLDEN_ID")
 	category := os.Getenv("LYRICS_GOLDEN_CATEGORY")
 	note := os.Getenv("LYRICS_GOLDEN_NOTE")
-	player := os.Getenv("LYRICS_GOLDEN_PLAYER")
 	if key == "" || id == "" || category == "" {
 		t.Fatal("LYRICS_GOLDEN_KEY / LYRICS_GOLDEN_ID / LYRICS_GOLDEN_CATEGORY 都必须给")
 	}
@@ -79,7 +78,6 @@ func TestLyricsGoldenCapture(t *testing.T) {
 	loadQQArtistNameCache(filepath.Join(cfgDir, clientName+"-qq-artist-name-cache.json"))
 
 	artistAliasPath, mbPrimaryNamePath, qqArtistNamePath, appleStorefrontArtistPath, appleCatalogPath = "", "", "", "", ""
-	setNativeLyricSourcesForPlayer(player)
 
 	qArtist, qTitle, qAlbum := toSimplified(parts[0]), toSimplified(parts[1]), toSimplified(parts[2])
 	dur := entry.ResolvedDurationSecs
@@ -206,7 +204,6 @@ func TestLyricsGoldenCapture(t *testing.T) {
 			Sources:             copyGoldenSources(getFeaturesLyricsSources()),
 			SourceMode:          features.LyricsSourceMode,
 			SourceOrder:         append([]string(nil), features.LyricsSourceOrder...),
-			PlayerBundleID:      player,
 			ArtistCJKHint:       resolvedArtistCJKHint(qArtist),
 		},
 		Sources: map[string]goldenSourceRaw{},

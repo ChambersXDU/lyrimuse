@@ -7,7 +7,7 @@ enum L10n {
 
     static var current: String {
         let override = UserDefaults.standard.string(forKey: languageOverrideKey) ?? "system"
-        if override == "en" || override == "zh-hans" || override == "zh-hant" { return override }
+        if override == "en" || override == "zh-hans" { return override }
         return resolveSystem(Locale.preferredLanguages.first ?? "zh-hans")
     }
 
@@ -18,7 +18,6 @@ enum L10n {
     static func localeIdentifier(for lang: String) -> String {
         switch lang {
         case "en": return "en"
-        case "zh-hant": return "zh-Hant"
         default: return "zh-Hans"
         }
     }
