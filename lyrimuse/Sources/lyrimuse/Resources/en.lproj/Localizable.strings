@@ -93,7 +93,6 @@
 "一行 1 分，最多 200" = "One point per line, up to 200";
 "一键开启" = "Enable";
 "三" = "W";
-"三种展示方式可以同时开启" = "All three can be on at once";
 "三种方式都关掉了，播放时屏幕上不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开" = "All three are off, so no lyrics will show while music plays. The menu bar icon is always there — you can turn them back on from it";
 "三连音符" = "Three Notes";
 "上" = "Top";
@@ -365,7 +364,6 @@
 "在 iCloud 里发现一份 Lyrimuse 备份" = "Found a Lyrimuse backup in iCloud";
 "在 iPhone 上安装 Bark App，首页显示的就是你的专属推送地址，复制粘贴过来即可，不需要额外设置" = "Install the Bark app on your iPhone — the home screen shows your personal push URL. Just copy and paste it here; no extra setup needed";
 "在「设置 → 歌词 → 歌词来源」里关掉的源，这一轮没有查它" = "Turned off under Settings → Lyrics → Lyrics Sources; this search did not query it";
-"在任何 App 里都能触发，需搭配 ⌘ ⌥ ⌃ 之一" = "Work in any app; must include ⌘, ⌥ or ⌃";
 "在企业微信群里：群设置 → 群机器人 → 添加机器人，创建后复制 Webhook 地址，不需要额外的签名设置" = "In your WeCom group: Group Settings → Group Bots → Add a Bot, then copy the webhook URL after creating it. No extra signature setup is needed";
 "在播放器中打开" = "Show in Player";
 "在播放器里播放任意歌曲，歌词会自动出现" = "Play something in your player and lyrics will appear here";
@@ -1042,7 +1040,6 @@
 "菜单栏" = "Menu Bar";
 "菜单栏与 Dock" = "Menu Bar & Dock";
 "菜单栏图标" = "Menu Bar Icon";
-"菜单栏图标、语言与启动，以及备份搬家" = "Menu bar icon, language & startup, and backups";
 "菜单栏图标开机就在，不用每次自己打开" = "The menu bar icon is there as soon as you log in, so you never have to open it yourself";
 "菜单栏歌词" = "Menu Bar Lyrics";
 "菜单栏歌词的笔画粗细。字体族继续跟随系统菜单栏，「常规」就是系统菜单栏本来的粗细；中文只变粗不变宽，英文越粗越宽一点" = "How heavy the menu bar lyrics are drawn. The font family keeps following the system menu bar; Regular is exactly the system default weight. Chinese only gets bolder, Latin text also gets slightly wider.";

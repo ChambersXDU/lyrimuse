@@ -2865,29 +2865,6 @@
         }
       }
     },
-    "三种展示方式可以同时开启" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All three can be on at once"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "三种展示方式可以同时开启"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "三種展示方式可以同時開啟"
-          }
-        }
-      }
-    },
     "三种方式都关掉了，播放时屏幕上不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -25966,29 +25943,6 @@
         }
       }
     },
-    "菜单栏图标、语言与启动，以及备份搬家" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "菜单栏图标、语言与启动，以及备份搬家"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Menu bar icon, language & startup, and backups"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選單列圖像、語言與啟動，以及備份搬家"
-          }
-        }
-      }
-    },
     "%@（推荐）" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27133,29 +27087,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新播放器提醒"
-          }
-        }
-      }
-    },
-    "在任何 App 里都能触发，需搭配 ⌘ ⌥ ⌃ 之一" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Work in any app; must include ⌘, ⌥ or ⌃"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在任何 App 里都能触发，需搭配 ⌘ ⌥ ⌃ 之一"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在任何 App 裡都能觸發，需搭配 ⌘ ⌥ ⌃ 之一"
           }
         }
       }

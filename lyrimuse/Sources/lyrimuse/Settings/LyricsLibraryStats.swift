@@ -231,7 +231,6 @@ struct LyricsLibraryStatsPanel: View {
         return HStack(spacing: 10) {
             HStack(spacing: 4) {
                 legendItem(.none, value: counts.count(.none))
-                HelpButton(text: L10n.t("重新扫描的范围：没有歌词的，加上只有纯文本的；人工修正过的不动"))
             }
             Spacer(minLength: 12)
             if let status, status.running {

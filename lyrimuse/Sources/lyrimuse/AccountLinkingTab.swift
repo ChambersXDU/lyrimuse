@@ -369,8 +369,7 @@ struct AccountLinkingTab: View {
     private var stateRelayFields: some View {
         SettingsCard {
             SettingsCardHeader(
-                title: L10n.t("连接信息"),
-                help: L10n.t("要先把网页端部署好并拿到访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端")
+                title: L10n.t("连接信息")
             )
             CardDivider()
             SettingsRawRow(insetToText: true) {
@@ -378,12 +377,6 @@ struct AccountLinkingTab: View {
             TextField(text: $config.stateRelayURL, prompt: Text(L10n.t("例如 https://yourdomain.com/api/state"))) {
                 HStack(spacing: 4) {
                     Text(L10n.t("同步服务地址"))
-                    HelpButton(
-                        text: L10n.t("自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（独立公开仓库 Yudaotor/nowplaying-workers）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。效果截图 + 完整从零搭建步骤见该仓库自己的 README"),
-                        docTitle: L10n.t("查看效果 + 教程 →"),
-
-                        docURL: URL(string: "https://github.com/Yudaotor/nowplaying-workers#readme")!
-                    )
                 }
             }
             SecretFieldRow(L10n.t("访问令牌"), value: $config.stateRelayToken)
@@ -404,11 +397,6 @@ struct AccountLinkingTab: View {
                         .frame(width: SettingsRowMetrics.iconWidth)
                     Text(L10n.t("通知平台"))
                         .font(.system(size: 13))
-                    HelpButton(
-                        text: config.notificationPlatform.setupGuide,
-                        docTitle: L10n.t("查看官方文档 →"),
-                        docURL: config.notificationPlatform.setupDocURL
-                    )
                     Spacer(minLength: 12)
                     Picker("", selection: $config.notificationPlatform) {
                         ForEach(NotificationPlatform.allCases) { platform in

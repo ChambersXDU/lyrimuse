@@ -111,7 +111,6 @@ private struct FixedWidthScrollView<Content: View>: View {
 
 struct SettingsPage<Content: View>: View {
     let title: String
-    var subtitle: String?
 
     var heroImage: NSImage?
     var heroSize: CGFloat = 88
@@ -153,15 +152,6 @@ struct SettingsPage<Content: View>: View {
             Text(title)
                 .font(.system(size: 22, weight: .bold))
                 .multilineTextAlignment(.center)
-            if let subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
-                    .frame(maxWidth: 380)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
         .padding(.bottom, 6)
     }
@@ -246,23 +236,13 @@ struct SettingsCardHeader<Trailing: View>: View {
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .tracking(0.5)
-                if let help { HelpButton(text: help) }
-                Spacer(minLength: 0)
-                trailing()
-            }
-            if let subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(.system(size: 11))
-
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .tracking(0.5)
+            Spacer(minLength: 0)
+            trailing()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
@@ -315,13 +295,6 @@ struct SettingsRow<Trailing: View>: View {
                 HStack(spacing: 4) {
                     Text(title)
                         .font(.system(size: 13))
-                    if let help { HelpButton(text: help) }
-                }
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -390,17 +363,8 @@ struct SettingsSubRow<Trailing: View>: View {
                 .padding(.vertical, 1)
             VStack(alignment: .leading, spacing: 2) {
                 if let title, !title.isEmpty {
-                    HStack(spacing: 4) {
-                        Text(title)
-                            .font(.system(size: 13))
-                        if let help { HelpButton(text: help) }
-                    }
-                }
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(title)
+                        .font(.system(size: 13))
                 }
             }
             Spacer(minLength: 10)

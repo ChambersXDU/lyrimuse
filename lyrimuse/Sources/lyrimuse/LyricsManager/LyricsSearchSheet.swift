@@ -646,21 +646,9 @@ struct LyricsSearchSheet: View {
     @ViewBuilder
     private func scoreLine(_ c: LyricsSearchService.Candidate, font: Font) -> some View {
         let label = Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
-        Group {
-            if c.scoreTerms.isEmpty {
-
-                label
-            } else {
-
-                QuickHelpLabel(text: scoreExplanation(c)) { label }
-            }
-        }
+        label
         .font(font)
         .foregroundStyle(.secondary)
-    }
-
-    private func scoreExplanation(_ c: LyricsSearchService.Candidate) -> String {
-        LyricsSearchService.ScoreTerm.explanation(score: c.score, terms: c.scoreTerms)
     }
 
     @ViewBuilder

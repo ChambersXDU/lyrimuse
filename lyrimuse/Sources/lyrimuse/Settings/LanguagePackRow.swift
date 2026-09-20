@@ -125,8 +125,7 @@ struct LanguagePackRow: View {
         VStack(spacing: 0) {
             SettingsRow(
                 icon: "arrow.down.circle",
-                title: L10n.t("翻译语言包"),
-                help: L10n.t("只统计能翻成当前译文语言的语言；译文语言自己和同一语系的语言不计，所以数字可能比「系统设置」里的少。语言包由 macOS 管理，翻译在本机完成")
+                title: L10n.t("翻译语言包")
             ) {
                 HStack(spacing: 10) {
 
@@ -144,10 +143,8 @@ struct LanguagePackRow: View {
             if isExpanded {
                 CardDivider()
                 SettingsRawRow(insetToText: true) { packGrid }
-                SettingsNote {
-                    Text(L10n.t("要删除已下载的语言包，请到「系统设置 › 通用 › 语言与地区 › 翻译语言」"))
+                SettingsRawRow(insetToText: true) {
                     Button(L10n.t("打开系统设置")) {
-
                         if let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension") {
                             NSWorkspace.shared.open(url)
                         }

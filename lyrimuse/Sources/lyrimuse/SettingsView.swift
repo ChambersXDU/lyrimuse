@@ -209,11 +209,7 @@ struct SettingsView: View {
 
             HStack(spacing: 4) {
                 Text(L10n.t("实验室功能"))
-                Image(systemName: "questionmark.circle")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
             }
-            .help(L10n.t("实验性 Beta 功能"))
         }
     }
 
@@ -1287,10 +1283,7 @@ private struct AppearanceSettingsTab: View {
             .animation(.easeOut(duration: 0.18), value: sectionRaw)
         } page: {
             SettingsPage(
-                title: L10n.t("歌词显示"),
-
-                subtitle: L10n.t("三种展示方式可以同时开启")
-
+                title: L10n.t("歌词显示")
             ) {
                 sectionPicker
                 currentSection
@@ -1504,11 +1497,6 @@ private struct PlayerSettingsTab: View {
                 .frame(maxWidth: .infinity)
             }
 
-            if stores.players.contains(.auto) {
-                SettingsNote {
-                    Text(L10n.t("「自动识别」开着时会认出所有已知和你信任过的播放器，上面的勾选暂不生效。想只认其中几个，取消勾选它。"))
-                }
-            }
         }
     }
 
@@ -2402,9 +2390,7 @@ private struct GeneralSettingsTab: View {
 
     var body: some View {
         SettingsPage(
-            title: L10n.t("通用"),
-
-            subtitle: L10n.t("菜单栏图标、语言与启动，以及备份搬家")
+            title: L10n.t("通用")
         ) {
 
             SettingsCard {
@@ -2832,8 +2818,7 @@ private struct ShortcutsSettingsTab: View {
     var body: some View {
 
         SettingsPage(
-            title: L10n.t("快捷键"),
-            subtitle: L10n.t("在任何 App 里都能触发，需搭配 ⌘ ⌥ ⌃ 之一")
+            title: L10n.t("快捷键")
         ) {
 
             SettingsCard {
