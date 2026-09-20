@@ -295,7 +295,7 @@ private struct MenuBarPanelView: View {
                         .frame(width: 18, height: 18)
                 }
                 .buttonStyle(.plain)
-                .help(PlaybackCoordinator.shared.resolvedPlayerDisplayName ?? "")
+                .accessibilityLabel(PlaybackCoordinator.shared.resolvedPlayerDisplayName ?? L10n.t("打开播放器"))
             }
     }
     }
@@ -447,10 +447,10 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    private func knobTile(symbol: String, title: String, subtitle: String? = nil, on: Bool,
+    private func knobTile(symbol: String, title: String, on: Bool,
                           quick: LyricsSurface? = nil,
                           action: @escaping () -> Void) -> some View {
-        KnobTile(symbol: symbol, title: title, subtitle: subtitle, on: on,
+        KnobTile(symbol: symbol, title: title, on: on,
                  action: action,
 
                  openQuick: quick.map { surface in { setQuickTarget(surface) } })
@@ -459,7 +459,6 @@ private struct MenuBarPanelView: View {
     private struct KnobTile: View {
         let symbol: String
         let title: String
-        let subtitle: String?
         let on: Bool
         let action: () -> Void
 
@@ -511,11 +510,6 @@ private struct MenuBarPanelView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
 
-                    if let subtitle {
-                        Text(subtitle).font(.system(size: 9.5))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
                 }
                 .multilineTextAlignment(.center)
             }
@@ -540,7 +534,7 @@ private struct MenuBarPanelView: View {
         footerItem(
             title: String(format: L10n.t("版本 %@"),
                           Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"),
-            tint: .secondary, help: L10n.t("关于 Lyrimuse"),
+            tint: .secondary,
             icon: { Image(systemName: "info.circle").font(.system(size: 10.5)) }
         ) {
             close()
@@ -552,12 +546,12 @@ private struct MenuBarPanelView: View {
 
     private func footerButton(_ symbol: String, _ title: String,
                               action: @escaping () -> Void) -> some View {
-        footerItem(title: title, tint: .secondary, help: nil,
+        footerItem(title: title, tint: .secondary,
                    icon: { Image(systemName: symbol).font(.system(size: 10.5)) },
                    action: action)
     }
 
-    private func footerItem<Icon: View>(title: String, tint: Color, help: String?,
+    private func footerItem<Icon: View>(title: String, tint: Color,
 
                                         @ViewBuilder icon: @escaping () -> Icon,
                                         action: @escaping () -> Void) -> some View {
@@ -575,7 +569,6 @@ private struct MenuBarPanelView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
         }
-        .modifier(OptionalHelp(text: help))
     }
 }
 
@@ -694,7 +687,7 @@ private struct PanelProgressSection: View {
     private var offsetControls: some View {
         HStack(spacing: 3) {
 
-            offsetButton("minus", help: nudgeHelp(L10n.t("延后"))) {
+            offsetButton("minus", label: nudgeLabel(L10n.t("延后"))) {
                 _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: -lyricsOffsetStepMs)
             }
 
@@ -705,7 +698,7 @@ private struct PanelProgressSection: View {
                 .modifier(TapToReset(enabled: trackLyricsOffsetMs != 0) {
                     PlaybackCoordinator.shared.resetLyricsOffset()
                 })
-            offsetButton("plus", help: nudgeHelp(L10n.t("提前"))) {
+            offsetButton("plus", label: nudgeLabel(L10n.t("提前"))) {
                 _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: lyricsOffsetStepMs)
             }
         }
@@ -715,11 +708,11 @@ private struct PanelProgressSection: View {
         "\(L10n.t("歌词")) \(AppSettings.signedSeconds(ms: trackLyricsOffsetMs))s"
     }
 
-    private func nudgeHelp(_ verb: String) -> String {
+    private func nudgeLabel(_ verb: String) -> String {
         "\(verb) \(AppSettings.formattedSeconds(ms: lyricsOffsetStepMs))\(L10n.t("秒"))"
     }
 
-    private func offsetButton(_ symbol: String, help: String,
+    private func offsetButton(_ symbol: String, label: String,
                               action: @escaping () -> Void) -> some View {
 
         ChipButton(cornerRadius: 4, pressScale: 0.88, action: action) {
@@ -730,7 +723,7 @@ private struct PanelProgressSection: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 16, height: 14)
         }
-        .help(help)
+        .accessibilityLabel(label)
     }
 
     private struct TapToReset: ViewModifier {
@@ -741,7 +734,6 @@ private struct PanelProgressSection: View {
             content
                 .contentShape(Rectangle())
                 .onTapGesture { if enabled { action() } }
-                .modifier(OptionalHelp(text: enabled ? L10n.t("点击归零") : nil))
         }
     }
 

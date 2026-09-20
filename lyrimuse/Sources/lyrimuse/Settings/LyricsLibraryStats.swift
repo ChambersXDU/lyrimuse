@@ -88,7 +88,6 @@ struct LyricsLibrarySizeLabel: View {
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .help(L10n.t("歌词文件夹和本地记录文件加起来占用的磁盘空间"))
                 .accessibilityLabel(String(
                     format: L10n.t("占用空间：%@"),
                     EnrichCacheStore.byteText(store.totalSizeBytes)))
@@ -150,10 +149,7 @@ struct LyricsLibraryStatsPanel: View {
                 }
                 CardDivider()
 
-                SettingsSubRow(
-                    title: L10n.t("已缓存罗马音"),
-                    help: L10n.t("只数存进缓存、会随歌词文件一起导出的那些。其余歌曲的罗马音在播放时实时生成，不计入")
-                ) {
+                SettingsSubRow(title: L10n.t("已缓存罗马音")) {
                     Text(String(format: L10n.t("%@ 首歌"), Self.format(counts.bundledRomanization)))
                         .font(.system(size: 11))
                         .monospacedDigit()
@@ -260,7 +256,6 @@ struct LyricsLibraryStatsPanel: View {
                 .controlSize(.small)
                 .fixedSize()
                 .disabled(retryable == 0)
-                .help(L10n.t("让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放"))
             }
         }
 

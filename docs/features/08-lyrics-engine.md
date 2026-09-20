@@ -254,7 +254,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 |---|---|---|
 | 设置 → 歌词 → 显示 | 繁简转换(`lyricsChineseVariant`) | 不转换/简体/繁体,只影响显示不动缓存;条件显示(见行为规格);立刻 reload |
 | 设置 → 歌词显示 → 悬浮歌词 → 排版 | 双行显示(`showNextLinePreview`) | 悬浮窗在当前句下方显示 `nextLineText` 预览;只影响悬浮窗(2026-08-29 从「歌词 → 效果」移来,2026-08-31 从「文字」组移到「排版」组) |
-| 设置 → 歌词 → 显示 | 时间轴偏移(播放器下拉框 + Stepper ±5s,步长 0.05s) | 下拉选「全部播放器」→ `LyricsOffsetStore.globalOffsetMs`;选具体播放器 → `playerOffsets[bundleID]`。两档**二选一不相加**,再与单曲微调相加;标题/副标题/help 是**固定文案**、不随选中项变;下拉框选中态是纯 `@State`、**不持久化** |
+| 设置 → 歌词 → 显示 | 时间轴偏移(播放器下拉框 + Stepper ±5s,步长 0.05s) | 下拉选「全部播放器」→ `LyricsOffsetStore.globalOffsetMs`;选具体播放器 → `playerOffsets[bundleID]`。两档**二选一不相加**,再与单曲微调相加;标题和控件状态不随选中项变;下拉框选中态是纯 `@State`、**不持久化** |
 | 设置 → 快捷键 | 步长(`lyricsOffsetStepMs`,默认 200ms) | 菜单/快捷键每次 nudge 的幅度(不影响设置页全局偏移的 0.05s 步长) |
 | 菜单栏 → 歌词时间轴 | 提前/延后/重置 | 单曲微调 nudge ±step / 清零;菜单标题显示单曲部分的累计值 |
 

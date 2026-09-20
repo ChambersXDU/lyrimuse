@@ -58,7 +58,6 @@ struct MenuBarEditorStage: View {
 
             Menu {
                 Button(L10n.t("恢复默认")) { MenuBarStyleDefaults.restoreDefaults() }
-                Text(L10n.t("不含宽度和总开关"))
             } label: {
                 Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
             }
@@ -254,8 +253,7 @@ struct MenuBarLyricsIconRow: View {
     var body: some View {
         SettingsRow(
             icon: "chart.bar.fill",
-            title: L10n.t("歌词旁的图标"),
-            help: L10n.t("在歌词一格的最左或最右放一枚菜单栏图标，图标颜色从下往上涨表示播放进度：涨上来的用「已唱到」色，其余用「未唱到」色。只在显示歌词时出现。")
+            title: L10n.t("歌词旁的图标")
         ) {
             Picker("", selection: $settings.menuBarLyricsIconPosition) {
                 ForEach(MenuBarLyricsIconPosition.allCases, id: \.self) { position in
@@ -274,8 +272,7 @@ struct MenuBarHoverControlsRow: View {
     var body: some View {
         SettingsRow(
             icon: "playpause.circle",
-            title: L10n.t("悬停显示播放控制"),
-            help: L10n.t("鼠标移到菜单栏歌词上换成「上一曲 / 播放暂停 / 下一曲」三个键，移开变回。暂停、间奏、或那一格太窄时不接管。点键以外的地方仍是打开面板。")
+            title: L10n.t("悬停显示播放控制")
         ) {
             Toggle("", isOn: $settings.menuBarHoverShowsControls)
         }
@@ -288,8 +285,7 @@ struct MenuBarTitleFallbackRow: View {
     var body: some View {
         SettingsRow(
             icon: "music.note.list",
-            title: L10n.t("无歌词时显示歌名"),
-            help: L10n.t("这首歌没有歌词或还在搜索时，用「♪ 歌名」占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示")
+            title: L10n.t("无歌词时显示歌名")
         ) {
             Toggle("", isOn: $settings.menuBarShowsTitleWhenNoLyrics)
         }
@@ -362,9 +358,7 @@ struct MenuBarWidthModeRow: View {
     var body: some View {
         SettingsRow(
             icon: "arrow.left.and.right.circle",
-            title: L10n.t("宽度模式"),
-
-            help: L10n.t("固定：始终占满设定宽度。\n自适应：提前按整首歌的歌词预留宽度，不超过设定上限；同一首歌换句时保持稳定。")
+            title: L10n.t("宽度模式")
         ) {
             Picker("", selection: $settings.menuBarLyricsWidthMode) {
                 Text(L10n.t("固定")).tag(MenuBarLyricsWidthMode.fixed)
@@ -387,9 +381,7 @@ struct MenuBarAlignmentRow: View {
     var body: some View {
         SettingsRow(
             icon: "text.alignleft",
-
-            title: L10n.t("对齐方式"),
-            help: L10n.t("只影响装得下的短句：它在固定宽度那一格里靠哪边。放不下的句子会横向滚动，没有多余空间，对齐不起作用")
+            title: L10n.t("对齐方式")
         ) {
 
             LyricsAlignmentSegmentedControl(selection: $settings.menuBarLyricsAlignment,
@@ -430,8 +422,7 @@ struct MenuBarSecondaryLineRow: View {
     var body: some View {
         SettingsRow(
             icon: "text.append",
-            title: L10n.t("副行"),
-            help: L10n.t("主歌词下方多一行，高度不变（两行 10pt / 9pt，「字号」不生效）。译文和罗马音显示当前句，「下一句」显示接下来那句、主行不再提前切。副行不滚动，装不下时尾部渐隐。")
+            title: L10n.t("副行")
         ) {
             Picker("", selection: $settings.menuBarSecondaryLine) {
                 ForEach(LyricSecondaryLine.allCases, id: \.self) { kind in
@@ -451,8 +442,7 @@ struct MenuBarFontSizeRow: View {
     var body: some View {
         SettingsRow(
             icon: "textformat.size",
-            title: L10n.t("字号"),
-            help: L10n.t("默认跟随系统菜单栏，可在 10～16pt 间调，16pt 仍在菜单栏项高度内。拖回系统字号那一格即恢复跟随。")
+            title: L10n.t("字号")
         ) {
 
             if settings.menuBarSecondaryLine.showsSecondaryRow {
@@ -488,8 +478,7 @@ struct MenuBarFontWeightRow: View {
     var body: some View {
         SettingsRow(
             icon: "bold",
-            title: L10n.t("粗细"),
-            help: L10n.t("菜单栏歌词的笔画粗细。字体族继续跟随系统菜单栏，「常规」就是系统菜单栏本来的粗细；中文只变粗不变宽，英文越粗越宽一点")
+            title: L10n.t("粗细")
         ) {
             Picker("", selection: $settings.menuBarLyricsFontWeight) {
                 ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
@@ -512,19 +501,15 @@ struct MenuBarColorRows: View {
         VStack(spacing: 0) {
             SettingsRow(
                 icon: "text.word.spacing",
-
-                title: L10n.t("卡拉OK效果"),
-                help: L10n.t("跟着演唱进度把已唱到的部分染成系统强调色。只在这首歌有逐字时间轴时生效；打开菜单反白期间暂不染色")
+                title: L10n.t("卡拉OK效果")
             ) {
                 Toggle("", isOn: $settings.menuBarLyricsKaraoke)
             }
             CardDivider()
             SettingsRow(
                 icon: "textformat",
-
                 title: settings.menuBarLyricsKaraoke
-                    ? L10n.t("未唱到的颜色") : L10n.t("文字颜色"),
-                help: L10n.t("未唱到部分的文字颜色。默认跟随系统：浅色/深色菜单栏自动适配，打开菜单时自动反白")
+                    ? L10n.t("未唱到的颜色") : L10n.t("文字颜色")
             ) {
                 HStack(spacing: 8) {
                     if !settings.menuBarLyricsTextColorHex.isEmpty {
@@ -547,9 +532,7 @@ struct MenuBarColorRows: View {
                 CardDivider()
                 SettingsRow(
                     icon: "paintpalette.fill",
-
-                    title: L10n.t("已唱到的颜色"),
-                    help: L10n.t("已唱到部分的颜色，也是歌词旁那枚图标上进度涨上来那一截的颜色。默认跟随系统强调色（深色菜单栏自动提亮）；自定义后原样使用、不再自动提亮")
+                    title: L10n.t("已唱到的颜色")
                 ) {
                     HStack(spacing: 8) {
                         if !settings.menuBarLyricsFillColorHex.isEmpty {
@@ -618,8 +601,7 @@ struct MenuBarAllSettingsDrawer: View {
     private var resetRow: some View {
         SettingsRow(
             icon: "arrow.uturn.backward",
-            title: L10n.t("恢复默认"),
-            subtitle: L10n.t("不含宽度和总开关")
+            title: L10n.t("恢复默认")
         ) {
             Button(L10n.t("恢复")) { MenuBarStyleDefaults.restoreDefaults() }
         }

@@ -49,8 +49,7 @@ struct OverlayTextSettingsRows: View {
 
             SettingsRow(
                 icon: "sparkles",
-                title: L10n.t("卡拉OK效果"),
-                help: L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
+                title: L10n.t("卡拉OK效果")
             ) {
                 Toggle("", isOn: $settings.overlayLyricsKaraoke)
             }
@@ -103,8 +102,7 @@ struct OverlayLayoutSettingsRows: View {
 
             SettingsRow(
                 icon: "text.alignleft",
-                title: L10n.t("对齐方式"),
-                help: L10n.t("自动（默认）：按对唱声部在左 / 右 / 居中间切换。\n其余：忽略声部，固定在一个位置。")
+                title: L10n.t("对齐方式")
             ) {
 
                 OverlayAlignmentSegmentedControl(selection: $settings.overlayDuetAlignmentOverride)

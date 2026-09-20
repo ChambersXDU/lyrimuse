@@ -9,7 +9,6 @@ struct SettingsSearchHit: Identifiable, Hashable {
     let title: String
 
     let alternateTitles: [String]
-    let subtitle: String?
     let breadcrumb: String
 
     let secondary: [String]
@@ -41,13 +40,11 @@ final class SettingsSearchIndex {
     private func localize(_ entry: SettingsSearchEntry) -> SettingsSearchHit {
         let title = L10n.t(entry.titleKey)
         let alternates = entry.alternateTitleKeys.map(L10n.t)
-        let subtitle = entry.subtitleKey.map(L10n.t)
         let path = entry.pathKeys.map(L10n.t)
         var secondary: [String] = alternates + entry.keywords + path
         secondary.append(entry.titleKey)
         secondary.append(contentsOf: entry.alternateTitleKeys)
         secondary.append(contentsOf: entry.pathKeys)
-        if let subtitle { secondary.append(subtitle) }
 
         for language in ["en", "zh-hant", "zh-hans"] where language != L10n.current {
             let table = stringsTable(language)
@@ -55,7 +52,7 @@ final class SettingsSearchIndex {
                 if let translated = table[key] { secondary.append(translated) }
             }
         }
-        return SettingsSearchHit(entry: entry, title: title, alternateTitles: alternates, subtitle: subtitle,
+        return SettingsSearchHit(entry: entry, title: title, alternateTitles: alternates,
                                  breadcrumb: path.joined(separator: " › "), secondary: secondary)
     }
 

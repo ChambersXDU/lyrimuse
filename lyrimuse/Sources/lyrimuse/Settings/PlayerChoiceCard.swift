@@ -26,8 +26,6 @@ struct PlayerChoiceCard: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
 
         .accessibilityValue(isCoveredByAuto ? L10n.t("由「自动识别」接管——取消「自动识别」后才只认你勾选的播放器") : "")
-
-        .help(isCoveredByAuto ? L10n.t("由「自动识别」接管——取消「自动识别」后才只认你勾选的播放器") : "")
     }
 
 }

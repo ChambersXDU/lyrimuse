@@ -186,8 +186,6 @@ struct OnboardingView: View {
                 .foregroundStyle(Color.accentColor)
             Text(L10n.t("欢迎使用 Lyrimuse"))
                 .font(.title.bold())
-            Text(L10n.t("一个贴心的桌面悬浮歌词小工具。接下来用几步简单设置，帮你把它调整成合适的样子——这些选项以后随时可以在设置里再调整"))
-                .foregroundStyle(.secondary)
             Divider()
             HStack(spacing: 10) {
                 Image(systemName: "globe")
@@ -219,9 +217,6 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("选择播放器"))
                 .font(.title2.bold())
-
-            Text(L10n.t("Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，浏览器里的 YouTube Music 也可以，还可以交给「自动识别」——平时用哪些就都勾上，随时可以在设置里改"))
-                .foregroundStyle(.secondary)
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
 
@@ -265,7 +260,7 @@ struct OnboardingView: View {
         return VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("YouTube Music 用哪个浏览器？"))
                 .font(.title2.bold())
-            Text(L10n.t("YouTube Music 是在浏览器里播的，Lyrimuse 需要知道是哪一个才能读到播放进度。选你平时用来听歌的（可以多选）——之后系统会问你要不要授权，同意就行；随时可以在设置的「网页播放器」里再改"))
+            Text(L10n.t("Lyrimuse 需要知道播放 YouTube Music 的浏览器，才能读取播放进度。"))
                 .foregroundStyle(.secondary)
             if candidates.isEmpty {
 
@@ -384,7 +379,6 @@ struct OnboardingView: View {
             toggleRow(
                 icon: "power",
                 title: L10n.t("开机时自动启动 Lyrimuse"),
-                subtitle: L10n.t("菜单栏图标开机就在，不用每次自己打开"),
                 isOn: $settings.launchAtLoginEnabled)
         }
     }
@@ -393,18 +387,14 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("译文与罗马音"))
                 .font(.title2.bold())
-            Text(L10n.t("听不懂的语言可以并排显示中文译文；日文、韩文、粤语还能标上罗马音跟着唱"))
-                .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 10) {
                 toggleRow(
                     icon: "text.bubble",
                     title: L10n.t("显示译文"),
-                    subtitle: L10n.t("歌词下面并排显示一行译文"),
                     isOn: $settings.showTranslation)
                 toggleRow(
                     icon: "textformat.alt",
                     title: L10n.t("显示罗马音"),
-                    subtitle: L10n.t("日文、韩文、中文拼音、粤拼默认都会注音，可以在设置里单独关掉"),
                     isOn: $settings.showRomanization)
             }
             Text(L10n.t("这两项会显示在桌面悬浮歌词里；菜单栏歌词只能显示一行纯文字"))
@@ -418,21 +408,19 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("歌词显示在哪里"))
                 .font(.title2.bold())
-            Text(L10n.t("这几种可以同时开着，先挑你现在想用的——之后随时能在设置里单独开关"))
+            Text(L10n.t("两种方式可以同时开启"))
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 10) {
                 displayModeRow(
                     kind: .classic,
                     title: L10n.t("桌面悬浮歌词"),
-                    subtitle: L10n.t("贴在桌面上"),
                     isOn: Binding(
                         get: { settings.classicOverlayEnabled },
                         set: { LyricsOverlayWindowController.shared.setVisible($0) }))
                 displayModeRow(
                     kind: .menuBar,
                     title: L10n.t("菜单栏歌词"),
-                    subtitle: L10n.t("菜单栏里的一行字"),
                     isOn: $settings.showLyricsInMenuBar)
             }
 
@@ -453,7 +441,6 @@ struct OnboardingView: View {
     private func displayModeRow(
         kind: DisplayModeThumbnail.Kind,
         title: String,
-        subtitle: String,
         isOn: Binding<Bool>
     ) -> some View {
         HStack(alignment: .center, spacing: 12) {
@@ -462,10 +449,6 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13))
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 12)
@@ -476,9 +459,7 @@ struct OnboardingView: View {
         }
     }
 
-    private func toggleRow(
-        icon: String, title: String, subtitle: String, isOn: Binding<Bool>
-    ) -> some View {
+    private func toggleRow(icon: String, title: String, isOn: Binding<Bool>) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 15))
@@ -489,10 +470,6 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13))
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 12)
             Toggle("", isOn: isOn)
@@ -559,12 +536,6 @@ struct OnboardingView: View {
                 Text(allOK ? L10n.t("一切就绪") : L10n.t("还差一点"))
                     .font(.title.bold())
             }
-
-            Text(allOK ? L10n.t("缪斯已经就位——接下来交给音乐。按下「开始使用」，让每一句歌词都跟着旋律亮起来")
-                       : L10n.t("缪斯还在候场——把上面标橙的那几项补齐，她随时可以开嗓"))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
 
             chosenPlayersStrip
 

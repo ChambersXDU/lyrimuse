@@ -148,8 +148,7 @@ struct OverlayAllSettingsDrawer: View {
     private var resetRow: some View {
         SettingsRow(
             icon: "arrow.uturn.backward",
-            title: L10n.t("恢复默认"),
-            subtitle: L10n.t("不含排版、行为、位置和宽度")
+            title: L10n.t("恢复默认")
         ) {
             Button(L10n.t("恢复")) { OverlayStyleDefaults.restoreTextAndColors() }
         }

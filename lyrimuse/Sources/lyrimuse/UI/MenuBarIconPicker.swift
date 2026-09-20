@@ -37,7 +37,6 @@ struct MenuBarIconPicker: View {
                         .fill(selected ? Color.accentColor : Color.secondary.opacity(0.12)))
         }
         .buttonStyle(.plain)
-        .help(style.displayName)
         .accessibilityLabel(style.displayName)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }

@@ -14,20 +14,18 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
     public let drawer: LyricsSurface?
     public let titleKey: String
     public let alternateTitleKeys: [String]
-    public let subtitleKey: String?
     public let keywords: [String]
     public let pathKeys: [String]
 
     public init(destination: Destination, sectionKey: String? = nil, sectionValue: String? = nil,
                 drawer: LyricsSurface? = nil, titleKey: String, alternateTitleKeys: [String] = [],
-                subtitleKey: String? = nil, keywords: [String] = [], pathKeys: [String]) {
+                keywords: [String] = [], pathKeys: [String]) {
         self.destination = destination
         self.sectionKey = sectionKey
         self.sectionValue = sectionValue
         self.drawer = drawer
         self.titleKey = titleKey
         self.alternateTitleKeys = alternateTitleKeys
-        self.subtitleKey = subtitleKey
         self.keywords = keywords
         self.pathKeys = pathKeys
     }
@@ -42,7 +40,7 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
     }
 
     public var localizedKeys: [String] {
-        [titleKey] + alternateTitleKeys + (subtitleKey.map { [$0] } ?? []) + pathKeys
+        [titleKey] + alternateTitleKeys + pathKeys
     }
 }
 
@@ -52,7 +50,7 @@ public enum SettingsSearchCatalog {
 
     public static let brandPathComponents: Set<String> = ["ListenBrainz"]
 
-    private static func lyrics(_ section: String, _ title: String, alt: [String] = [], sub: String? = nil,
+    private static func lyrics(_ section: String, _ title: String, alt: [String] = [],
                                kw: [String] = [], group: String? = nil) -> SettingsSearchEntry {
         let sectionTitle: String
         switch section {
@@ -62,16 +60,16 @@ public enum SettingsSearchCatalog {
         default: sectionTitle = "管理"
         }
         return SettingsSearchEntry(destination: .tab("lyrics"), sectionKey: lyricsSectionKey, sectionValue: section,
-                                   titleKey: title, alternateTitleKeys: alt, subtitleKey: sub, keywords: kw,
+                                   titleKey: title, alternateTitleKeys: alt, keywords: kw,
                                    pathKeys: ["歌词", sectionTitle] + (group.map { [$0] } ?? []))
     }
 
-    private static func player(_ title: String, sub: String? = nil, kw: [String] = [], group: String? = nil) -> SettingsSearchEntry {
-        SettingsSearchEntry(destination: .tab("player"), titleKey: title, subtitleKey: sub, keywords: kw,
+    private static func player(_ title: String, kw: [String] = [], group: String? = nil) -> SettingsSearchEntry {
+        SettingsSearchEntry(destination: .tab("player"), titleKey: title, keywords: kw,
                             pathKeys: ["播放器"] + (group.map { [$0] } ?? []))
     }
 
-    private static func surface(_ surface: LyricsSurface, _ title: String, alt: [String] = [], sub: String? = nil,
+    private static func surface(_ surface: LyricsSurface, _ title: String, alt: [String] = [],
                                 kw: [String] = [], group: String? = nil, inDrawer: Bool = true) -> SettingsSearchEntry {
         let sectionTitle: String
         switch surface {
@@ -82,23 +80,23 @@ public enum SettingsSearchCatalog {
                                    sectionKey: LyricsSurface.appearanceSectionStorageKey,
                                    sectionValue: surface.appearanceSectionRawValue,
                                    drawer: inDrawer ? surface : nil,
-                                   titleKey: title, alternateTitleKeys: alt, subtitleKey: sub, keywords: kw,
+                                   titleKey: title, alternateTitleKeys: alt, keywords: kw,
                                    pathKeys: ["歌词显示", sectionTitle] + (group.map { [$0] } ?? []))
     }
 
-    private static func shortcut(_ title: String, sub: String? = nil, kw: [String] = []) -> SettingsSearchEntry {
-        SettingsSearchEntry(destination: .tab("shortcuts"), titleKey: title, subtitleKey: sub,
+    private static func shortcut(_ title: String, kw: [String] = []) -> SettingsSearchEntry {
+        SettingsSearchEntry(destination: .tab("shortcuts"), titleKey: title,
                             keywords: kw + ["快捷键", "hotkey"], pathKeys: ["快捷键"])
     }
 
-    private static func general(_ title: String, alt: [String] = [], sub: String? = nil, kw: [String] = [],
+    private static func general(_ title: String, alt: [String] = [], kw: [String] = [],
                                 group: String? = nil) -> SettingsSearchEntry {
-        SettingsSearchEntry(destination: .tab("general"), titleKey: title, alternateTitleKeys: alt, subtitleKey: sub,
+        SettingsSearchEntry(destination: .tab("general"), titleKey: title, alternateTitleKeys: alt,
                             keywords: kw, pathKeys: ["通用"] + (group.map { [$0] } ?? []))
     }
 
-    private static func about(_ title: String, sub: String? = nil, kw: [String] = [], group: String) -> SettingsSearchEntry {
-        SettingsSearchEntry(destination: .tab("about"), titleKey: title, subtitleKey: sub, keywords: kw,
+    private static func about(_ title: String, kw: [String] = [], group: String) -> SettingsSearchEntry {
+        SettingsSearchEntry(destination: .tab("about"), titleKey: title, keywords: kw,
                             pathKeys: ["关于", group])
     }
 
@@ -134,7 +132,7 @@ public enum SettingsSearchCatalog {
         player("播放器", kw: ["Apple Music", "QQ音乐", "网易云音乐", "酷狗音乐", "Spotify", "自动识别", "多选"]),
         player("网页播放器", kw: ["YouTube Music", "Spotify", "浏览器", "Chrome", "Safari", "Edge", "Arc"]),
         player("已信任的播放器", kw: ["信任列表", "其它播放器"]),
-        player("新播放器提醒", sub: "系统通知已关闭", kw: ["通知", "未知播放器"]),
+        player("新播放器提醒", kw: ["通知", "未知播放器"]),
         player("Apple Music 自动化", kw: ["权限", "AppleScript", "自动化"]),
         player("后台采集服务", kw: ["collector", "launchd", "服务", "运行状态"]),
         player("播放器联动", kw: ["启动", "退出", "联动"]),
@@ -165,7 +163,7 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "暂停/无播放时隐藏", kw: ["自动隐藏", "暂停"], group: "行为"),
 
         surface(.overlay, "位置", kw: ["自由", "顶部居中", "底部居中", "Dock", "预设", "对齐"]),
-        surface(.overlay, "恢复默认", sub: "不含排版、行为、位置和宽度", kw: ["重置"]),
+        surface(.overlay, "恢复默认", kw: ["重置"]),
 
         surface(.menuBar, "菜单栏歌词", kw: ["开关", "跑马灯", "总开关"], inDrawer: false),
         surface(.menuBar, "宽度模式", kw: ["固定", "自适应", "宽度"], group: "布局"),
@@ -180,7 +178,7 @@ public enum SettingsSearchCatalog {
         surface(.menuBar, "最大宽度", kw: ["宽度", "pt"]),
         surface(.menuBar, "悬停显示播放控制", kw: ["悬停", "播放控制", "鼠标"], group: "行为"),
         surface(.menuBar, "无歌词时显示歌名", kw: ["歌名", "兜底", "没有歌词"], group: "行为"),
-        surface(.menuBar, "恢复默认", sub: "不含宽度和总开关", kw: ["重置"]),
+        surface(.menuBar, "恢复默认", kw: ["重置"]),
 
         shortcut("显示/隐藏悬浮歌词", kw: ["悬浮歌词", "开关"]),
         shortcut("显示/隐藏菜单栏歌词", kw: ["菜单栏", "开关"]),
@@ -193,7 +191,7 @@ public enum SettingsSearchCatalog {
         shortcut("歌词提前", kw: ["偏移", "时间轴", "校准"]),
         shortcut("歌词延后", kw: ["偏移", "时间轴", "校准"]),
         shortcut("歌词偏移归零", kw: ["偏移", "重置", "时间轴"]),
-        shortcut("步长", sub: "每按一次调整的幅度", kw: ["偏移", "幅度"]),
+        shortcut("步长", kw: ["偏移", "幅度"]),
         shortcut("播放/暂停", kw: ["播放控制"]),
         shortcut("下一首", kw: ["播放控制", "切歌"]),
         shortcut("上一首", kw: ["播放控制", "切歌"]),
@@ -204,16 +202,16 @@ public enum SettingsSearchCatalog {
         general("语言", kw: ["简体中文", "繁體中文", "English", "跟随系统", "界面语言"], group: "语言与启动"),
         general("开机启动", kw: ["登录项", "自动启动", "启动"], group: "语言与启动"),
         general("iCloud 备份", alt: ["备份文件夹"], kw: ["备份", "迁移", "搬家", "同步", "文件夹"], group: "备份与迁移"),
-        general("设置文件", sub: "含明文凭证；导入会覆盖全部设置并重启", kw: ["导出", "导入", "备份", "JSON"], group: "备份与迁移"),
-        general("动态封面", sub: "桌面悬浮歌词的封面卡：部分专辑在 Apple Music 上有会动的封面，没有的照旧静态显示。低电量或开了「减弱动态效果」时自动暂停", kw: ["封面", "动画", "motion", "artwork", "会动", "视频"], group: "封面"),
-        general("清除所有设置", sub: "本机设置，无法撤销", kw: ["重置", "恢复出厂", "删除"]),
+        general("设置文件", kw: ["导出", "导入", "备份", "JSON"], group: "备份与迁移"),
+        general("动态封面", kw: ["封面", "动画", "motion", "artwork", "会动", "视频"], group: "封面"),
+        general("清除所有设置", kw: ["重置", "恢复出厂", "删除"]),
 
-        about("反馈问题", sub: "GitHub Issues", kw: ["issue", "bug", "反馈"], group: "反馈与社区"),
-        about("想法与建议", sub: "GitHub Discussions", kw: ["discussion", "建议"], group: "反馈与社区"),
+        about("反馈问题", kw: ["issue", "bug", "反馈"], group: "反馈与社区"),
+        about("想法与建议", kw: ["discussion", "建议"], group: "反馈与社区"),
         about("版权说明", kw: ["版权", "歌词版权"], group: "许可与版权"),
-        about("第三方许可", sub: "开源组件与词典", kw: ["许可证", "开源", "license"], group: "许可与版权"),
-        about("开源许可证", sub: "GPL-3.0", kw: ["GPL", "许可证", "license"], group: "许可与版权"),
-        about("导出诊断", sub: "不含账号与密钥", kw: ["诊断", "日志", "排查"], group: "诊断与数据"),
+        about("第三方许可", kw: ["许可证", "开源", "license"], group: "许可与版权"),
+        about("开源许可证", kw: ["GPL", "许可证", "license"], group: "许可与版权"),
+        about("导出诊断", kw: ["诊断", "日志", "排查"], group: "诊断与数据"),
         about("配置文件夹", kw: ["config", "配置", "文件夹", "路径"], group: "诊断与数据"),
 
         account("listenBrainz", path: ["ListenBrainz"], "账户信息", kw: ["ListenBrainz", "token", "令牌", "用户名", "连接"]),

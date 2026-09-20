@@ -230,9 +230,6 @@ enum SettingsRowMetrics {
 struct SettingsCardHeader<Trailing: View>: View {
     let title: String
 
-    var subtitle: String?
-    var help: String?
-
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
@@ -254,8 +251,8 @@ struct SettingsCardHeader<Trailing: View>: View {
 }
 
 extension SettingsCardHeader where Trailing == EmptyView {
-    init(title: String, subtitle: String? = nil, help: String? = nil) {
-        self.init(title: title, subtitle: subtitle, help: help) { EmptyView() }
+    init(title: String) {
+        self.init(title: title) { EmptyView() }
     }
 }
 
@@ -266,9 +263,6 @@ struct SettingsRow<Trailing: View>: View {
 
     var iconImage: NSImage?
     let title: String
-    var subtitle: String?
-
-    var help: String?
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
@@ -315,8 +309,8 @@ struct SettingsRow<Trailing: View>: View {
 }
 
 extension SettingsRow where Trailing == EmptyView {
-    init(icon: String? = nil, iconTint: Color? = nil, iconImage: NSImage? = nil, title: String, subtitle: String? = nil, help: String? = nil) {
-        self.init(icon: icon, iconTint: iconTint, iconImage: iconImage, title: title, subtitle: subtitle, help: help) { EmptyView() }
+    init(icon: String? = nil, iconTint: Color? = nil, iconImage: NSImage? = nil, title: String) {
+        self.init(icon: icon, iconTint: iconTint, iconImage: iconImage, title: title) { EmptyView() }
     }
 }
 
@@ -348,11 +342,8 @@ struct SettingsNote<Content: View>: View {
 struct SettingsSubRow<Trailing: View>: View {
     var title: String?
 
-    var subtitle: String?
-
     var trailingWidth: CGFloat?
 
-    var help: String?
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
@@ -417,8 +408,6 @@ struct SettingsRawRow<Content: View>: View {
 struct SettingsPopoverShell<Content: View>: View {
     let title: String
 
-    var help: String?
-
     var width: CGFloat = 380
     @ViewBuilder let content: () -> Content
 
@@ -427,7 +416,7 @@ struct SettingsPopoverShell<Content: View>: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                SettingsCardHeader(title: title, help: help)
+                SettingsCardHeader(title: title)
                 CardDivider()
                 content()
             }

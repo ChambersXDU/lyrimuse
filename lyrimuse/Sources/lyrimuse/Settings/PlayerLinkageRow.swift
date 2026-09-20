@@ -4,19 +4,13 @@ import SwiftUI
 struct PlayerLinkageRow: View {
     let icon: String
     let title: String
-    var help: String?
 
     let candidates: [PlaybackPlayer]
     let chosen: Set<PlaybackPlayer>
     let onChange: (Set<PlaybackPlayer>) -> Void
 
-    private var summary: String {
-        let picked = candidates.filter { chosen.contains($0) }
-        return picked.isEmpty ? L10n.t("未勾选，此项关闭") : picked.map(\.displayName).joined(separator: "、")
-    }
-
     var body: some View {
-        SettingsRow(icon: icon, title: title, subtitle: summary, help: help) {
+        SettingsRow(icon: icon, title: title) {
             PlayerLinkageChips(candidates: candidates, chosen: chosen) { player in
                 var next = chosen
                 if next.contains(player) { next.remove(player) } else { next.insert(player) }
@@ -71,7 +65,6 @@ private struct PlayerChip<Icon: View>: View {
                         .strokeBorder(selected ? Color.accentColor : Color.clear, lineWidth: 1.5))
         }
         .buttonStyle(.plain)
-        .help(label)
 
         .accessibilityLabel(label)
         .accessibilityAddTraits(selected ? .isSelected : [])

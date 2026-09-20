@@ -185,13 +185,6 @@ func sourceDisplayName(_ source: String) -> String {
     }
 }
 
-func sourceHelpText(_ source: String) -> String {
-    switch source {
-    case "lyricfind": return L10n.t("LyricFind（经由 YouTube Music 检索）")
-    default: return sourceDisplayName(source)
-    }
-}
-
 private enum LyricsColumnHeaderSpace {
     static let name = "lyricsColumnHeader"
 }
@@ -613,7 +606,6 @@ struct LyricsManagerView: View {
             Button(action: commitSearch) {
                 Image(systemName: "magnifyingglass")
             }
-            .help(L10n.t("搜索(或在搜索框按回车)"))
             .disabled(searchText == committedSearchText)
         }
         .font(.callout)
@@ -1021,7 +1013,6 @@ struct LyricsManagerView: View {
                             Label(cacheSizeText, systemImage: "internaldrive")
                                 .labelStyle(.titleAndIcon)
                         }
-                        .help(L10n.t("歌词缓存文件，加上已导出的 .lrc 歌词文件夹，合计占用的磁盘空间"))
                     }
                 }
 
@@ -1328,9 +1319,6 @@ struct LyricsManagerView: View {
                     .labelStyle(.titleAndIcon)
             }
         }
-        .help(running
-              ? String(format: L10n.t("重试中 %1$@/%2$@"), "\(status?.done ?? 0)", "\(status?.total ?? 0)")
-              : L10n.t("让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放"))
     }
 
     private var cacheSizeText: String {
@@ -1598,7 +1586,7 @@ struct LyricsManagerView: View {
                 Task { await runRematch(key: summary.key, summary: summary) }
             }
             ActionTile(icon: "magnifyingglass", title: L10n.t("联网搜索候选歌词"),
-                       help: L10n.t("联网搜索候选歌词"), disabled: rematchRunningKey != nil) {
+                       disabled: rematchRunningKey != nil) {
                 showSearchSheet = true
             }
 
@@ -1616,7 +1604,7 @@ struct LyricsManagerView: View {
                 }
             }
             ActionTile(icon: "trash", title: L10n.t("删除本地记录"),
-                       help: L10n.t("删除本地记录"), destructive: true) {
+                       destructive: true) {
                 requestDelete([summary.key])
             }
         }
@@ -2013,7 +2001,7 @@ private struct ActionTile: View {
 
     let icon: String
     let title: String
-    let help: String
+    var help: String? = nil
     var destructive: Bool = false
     var disabled: Bool = false
     let action: () -> Void
@@ -2042,7 +2030,7 @@ private struct ActionTile: View {
         .buttonStyle(.plain)
         .disabled(disabled)
         .opacity(disabled ? 0.4 : 1)
-        .help(help)
+        .help(help ?? "")
     }
 }
 

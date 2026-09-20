@@ -160,7 +160,6 @@ struct LyricsSearchSheet: View {
                 .foregroundStyle(.tertiary)
         }
         .font(.callout)
-        .help(L10n.t("在「设置 → 歌词 → 歌词来源」里关掉的源，这一轮没有查它"))
     }
 
     @State private var sourceFailureReasonCodes: [String: String] = [:]
@@ -271,9 +270,9 @@ struct LyricsSearchSheet: View {
                 ],
                 spacing: 10, minWidth: 88
             ) {
-                TextField(L10n.t("歌名"), text: $title).textFieldStyle(.roundedBorder).help(title)
-                TextField(L10n.t("歌手"), text: $artist).textFieldStyle(.roundedBorder).help(artist)
-                TextField(L10n.t("专辑"), text: $album).textFieldStyle(.roundedBorder).help(album)
+                TextField(L10n.t("歌名"), text: $title).textFieldStyle(.roundedBorder)
+                TextField(L10n.t("歌手"), text: $artist).textFieldStyle(.roundedBorder)
+                TextField(L10n.t("专辑"), text: $album).textFieldStyle(.roundedBorder)
             }
             if isDirty {
                 Button(L10n.t("恢复原信息")) {
@@ -537,21 +536,18 @@ struct LyricsSearchSheet: View {
             Text(c.title)
                 .font(titleFont)
                 .lineLimit(2)
-                .help(c.title)
         }
         if !c.artist.isEmpty {
             Text(c.artist)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
-                .help(c.artist)
         }
         if !c.album.isEmpty {
             Text(c.album)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
-                .help(c.album)
         }
     }
 

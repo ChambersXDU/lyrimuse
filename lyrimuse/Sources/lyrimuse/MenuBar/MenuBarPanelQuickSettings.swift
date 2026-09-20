@@ -172,7 +172,6 @@ struct PanelQuickSettings: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(L10n.t("返回"))
             Image(systemName: surface.symbolName)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(surface.isEnabled ? Color.accentColor : Color.secondary)
@@ -207,9 +206,7 @@ struct PanelQuickSettings: View {
             alignmentRow(selection: $settings.overlayDuetAlignmentOverride,
                          options: Array(OverlayDuetAlignmentOverride.allCases),
                          label: OverlayAlignmentSegmentedControl.label(for:))
-            toggleRow(L10n.t("锁定位置"),
-                      help: L10n.t("解锁后鼠标点击会穿到桌面上；拖动方式见设置里的「拖动前先长按」"),
-                      isOn: Binding(
+            toggleRow(L10n.t("锁定位置"), isOn: Binding(
                         get: { settings.lockPosition },
                         set: { newValue in
                             settings.lockPosition = newValue
@@ -247,7 +244,7 @@ struct PanelQuickSettings: View {
         }
     }
 
-    private func row<Control: View>(_ title: String, help: String? = nil,
+    private func row<Control: View>(_ title: String,
                                    @ViewBuilder control: () -> Control) -> some View {
         HStack(spacing: 8) {
             Text(title)
@@ -258,7 +255,6 @@ struct PanelQuickSettings: View {
             control()
         }
         .frame(minHeight: 20)
-        .modifier(OptionalHelp(text: help))
     }
 
     private func sliderRow(_ title: String, value: Binding<Double>,
@@ -279,9 +275,8 @@ struct PanelQuickSettings: View {
         }
     }
 
-    private func toggleRow(_ title: String, help: String? = nil,
-                           isOn: Binding<Bool>) -> some View {
-        row(title, help: help) {
+    private func toggleRow(_ title: String, isOn: Binding<Bool>) -> some View {
+        row(title) {
             Toggle("", isOn: isOn).labelsHidden().controlSize(.mini)
         }
     }
@@ -321,17 +316,5 @@ struct PanelQuickSettings: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-}
-
-struct OptionalHelp: ViewModifier {
-    let text: String?
-
-    func body(content: Content) -> some View {
-        if let text, !text.isEmpty {
-            content.help(text)
-        } else {
-            content
-        }
     }
 }

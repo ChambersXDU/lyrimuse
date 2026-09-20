@@ -138,7 +138,6 @@ struct LyricsDecisionSheet: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(plainTextDump, forType: .string)
             }
-            .help(L10n.t("把整份决策记录拷到剪贴板（纯文本）"))
             Button(L10n.t("完成")) { dismiss() }
                 .keyboardShortcut(.defaultAction)
         }

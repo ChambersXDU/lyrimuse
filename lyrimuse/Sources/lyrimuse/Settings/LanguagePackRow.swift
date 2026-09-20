@@ -261,7 +261,6 @@ struct LanguagePackRow: View {
 
         if installed {
             label
-                .help(L10n.t("已下载"))
                 .accessibilityLabel(String(format: L10n.t("%@，已下载"), name))
         } else {
             let hovered = hoveredCode == code
@@ -277,7 +276,6 @@ struct LanguagePackRow: View {
             .buttonStyle(.plain)
 
             .disabled(downloading != nil && !isDownloading)
-            .help(isDownloading ? L10n.t("下载中…") : L10n.t("点击下载"))
             .onHover { hoveredCode = $0 ? code : (hoveredCode == code ? nil : hoveredCode) }
             .animation(.easeOut(duration: 0.12), value: hovered)
             .accessibilityLabel(String(format: L10n.t("%@，点击下载"), name))

@@ -303,7 +303,6 @@ struct SettingsView: View {
                 if tab == .player, let warning = playerHealth.warningText {
                     Spacer(minLength: 4)
                     SidebarCountBadge(count: max(1, playerHealth.warnings.count))
-                        .help(warning)
                         .accessibilityLabel(warning)
                 }
             }
@@ -334,7 +333,7 @@ private struct LyricsSettingsTab: View {
     @State private var priorityRowFrames: [LyricsSource: CGRect] = [:]
 
     private func romanizationToggle(
-        _ title: String, _ option: RomanizationScripts, help: String
+        _ title: String, _ option: RomanizationScripts
     ) -> some View {
         HStack(spacing: 4) {
             Toggle("", isOn: Binding(
@@ -349,7 +348,6 @@ private struct LyricsSettingsTab: View {
             .toggleStyle(.checkbox)
             Text(title).font(.system(size: 12))
         }
-        .help(help)
     }
     @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.openWindow) private var openWindow
@@ -522,13 +520,6 @@ private struct LyricsSettingsTab: View {
         }
     }
 
-    private var matchingModeSubtitle: String {
-        switch features.lyricsSourceMode {
-        case .smart: return L10n.t("给每个来源打分，取分最高的")
-        case .priority: return L10n.t("不打分，按下面的顺序取第一个有结果的来源")
-        }
-    }
-
     private func matchingModeLabel(_ mode: LyricsSourceMode) -> String {
         mode == .smart
             ? String(format: L10n.t("%@（推荐）"), mode.displayName)
@@ -540,8 +531,7 @@ private struct LyricsSettingsTab: View {
 
             SettingsRow(
                 icon: "slider.horizontal.3",
-                title: L10n.t("匹配算法"),
-                subtitle: matchingModeSubtitle
+                title: L10n.t("匹配算法")
             ) {
                 Picker("", selection: Binding(
                     get: { features.lyricsSourceMode },
@@ -565,8 +555,7 @@ private struct LyricsSettingsTab: View {
 
             SettingsRow(
                 icon: "arrow.triangle.2.circlepath",
-                title: L10n.t("跟进算法升级"),
-                help: L10n.t("开（默认）：匹配算法或打分规则更新后，后台会重新评估已有歌词，可能换成更合适的一份\n关：一旦定下来就不再自动更换；首次解析、手动重搜和手动编辑不受影响")
+                title: L10n.t("跟进算法升级")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.lyricsAutoUpgrade },
@@ -589,9 +578,7 @@ private struct LyricsSettingsTab: View {
 
             SettingsRow(
                 icon: "lock.circle",
-                title: L10n.t("锁定手选歌词"),
-
-                help: L10n.t("关（默认）：只换这一次，以后自动重搜或打分变化仍可能换掉\n开：锁住这首歌的歌词，自动匹配不再碰它\n打开时，之前手动选过的歌一并锁定（已被自动换掉的除外）")
+                title: L10n.t("锁定手选歌词")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.manualPickLocksLyrics },
@@ -743,7 +730,6 @@ private struct LyricsSettingsTab: View {
             .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
-        .help(sourceHelpText(id))
         .onHover { hoveredSource = $0 ? id : (hoveredSource == id ? nil : hoveredSource) }
         .animation(.easeOut(duration: 0.12), value: hovered)
         .accessibilityAddTraits(on ? [.isSelected] : [])
@@ -920,8 +906,7 @@ private struct LyricsSettingsTab: View {
 
             SettingsRow(
                 icon: "text.bubble",
-                title: L10n.t("显示译文"),
-                help: L10n.t("只影响桌面悬浮歌词；菜单栏受空间所限只能显示一行。")
+                title: L10n.t("显示译文")
             ) {
                 Toggle("", isOn: $settings.showTranslation)
             }
@@ -944,8 +929,7 @@ private struct LyricsSettingsTab: View {
             CardDivider()
             SettingsRow(
                 icon: "character.book.closed",
-                title: L10n.t("系统兜底翻译"),
-                help: L10n.t("歌词源没带译文时补充")
+                title: L10n.t("系统兜底翻译")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.lyricsMachineTranslation },
@@ -968,8 +952,7 @@ private struct LyricsSettingsTab: View {
             {
             SettingsRow(
                 icon: "character.bubble",
-                title: L10n.t("繁简转换"),
-                help: L10n.t("把中文歌词统一显示成简体或繁体")
+                title: L10n.t("繁简转换")
             ) {
                 Picker("", selection: Binding(
                     get: { settings.lyricsChineseVariant },
@@ -989,8 +972,7 @@ private struct LyricsSettingsTab: View {
             }
             SettingsRow(
                 icon: "textformat.alt",
-                title: L10n.t("显示罗马音"),
-                help: L10n.t("只影响桌面悬浮歌词；菜单栏受空间所限只能显示一行。")
+                title: L10n.t("显示罗马音")
             ) {
                 Toggle("", isOn: $settings.showRomanization)
             }
@@ -1003,28 +985,21 @@ private struct LyricsSettingsTab: View {
                 ) {
                     HStack(spacing: 12) {
                         romanizationToggle(
-                            L10n.t("日语"), .japanese,
-                            help: L10n.t("只对判定为日语的歌词生效，例如 こんにちは → konnichiwa"))
+                            L10n.t("日语"), .japanese)
                         romanizationToggle(
-                            L10n.t("韩语"), .korean,
-                            help: L10n.t("只对判定为韩语的歌词生效，例如 안녕하세요 → annyeonghaseyo"))
+                            L10n.t("韩语"), .korean)
                         romanizationToggle(
-                            L10n.t("拼音"), .chinese,
-                            help: L10n.t("只对判定为普通话的歌词生效，例如 你好 → nǐ hǎo"))
+                            L10n.t("拼音"), .chinese)
                         romanizationToggle(
-                            L10n.t("粤拼"), .cantonese,
-                            help: L10n.t("只对判定为粤语的歌词生效，用的是粤拼(Jyutping)方案，例如 你好 → nei5 hou2"))
+                            L10n.t("粤拼"), .cantonese)
                     }
                 }
-
-                .help(L10n.t("日语、韩语标成罗马字，普通话标成拼音，粤语标成粤拼"))
             }
             CardDivider()
 
             SettingsRow(
                 icon: "timer",
-                title: L10n.t("全局时间轴偏移"),
-                help: L10n.t("正数＝歌词提前，负数＝歌词延后；常用来抵消蓝牙耳机的声音延迟")
+                title: L10n.t("全局时间轴偏移")
             ) {
                 HStack(spacing: 8) {
                     Picker("", selection: $offsetScope) {
@@ -1073,7 +1048,6 @@ private struct LyricsSettingsTab: View {
                 .font(.system(size: 11, weight: .medium))
                 .controlSize(.small)
                 .settingsGlassButtons()
-                .help(L10n.t("查看、编辑、重搜已缓存的歌词"))
             }
             CardDivider()
 
@@ -1099,8 +1073,7 @@ private struct LyricsSettingsTab: View {
         let url = features.effectiveLyricsDir
         return SettingsRow(
             icon: "folder",
-            title: L10n.t("歌词文件夹"),
-            help: L10n.t("换文件夹后，旧文件不会自动搬过去")
+            title: L10n.t("歌词文件夹")
         ) {
             HStack(spacing: 8) {
                 Text((url.path as NSString).abbreviatingWithTildeInPath)
@@ -1109,8 +1082,6 @@ private struct LyricsSettingsTab: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .layoutPriority(-1)
-                    .help(url.path)
-
                     .accessibilityLabel(L10n.t("歌词文件夹"))
                     .accessibilityValue(url.path)
                 Button(L10n.t("在访达中显示")) {
@@ -1169,7 +1140,6 @@ private struct LyricsSettingsTab: View {
                     .environment(\.locale, Locale(identifier: "en"))
                     .frame(width: 16, height: 20)
                     .contentShape(Rectangle())
-                    .help(L10n.t("拖动调整顺序"))
                     .accessibilityLabel(L10n.t("拖动调整顺序"))
                     .gesture(priorityDragGesture(index: index, visible: visible))
                 Text("\(index + 1)")
@@ -1355,10 +1325,10 @@ private struct AppearanceSettingsTab: View {
     }
 
     private func modeToggleCard(
-        icon: String, title: String, subtitle: String? = nil, isOn: Binding<Bool>
+        icon: String, title: String, isOn: Binding<Bool>
     ) -> some View {
         SettingsCard {
-            SettingsRow(icon: icon, title: title, subtitle: subtitle) {
+            SettingsRow(icon: icon, title: title) {
                 Toggle("", isOn: Binding(
                     get: { isOn.wrappedValue },
                     set: { newValue in
@@ -1521,9 +1491,7 @@ private struct PlayerSettingsTab: View {
 
                     icon: "questionmark.app.dashed",
                     iconImage: AppIconResolver.icon(forBundleID: seen.bundleID),
-                    title: FeatureSettingsStore.appDisplayName(forBundleID: seen.bundleID) ?? seen.bundleID,
-                    subtitle: unknownPlayerSubtitle(seen),
-                    help: L10n.t("信任之后它跟内置播放器完全同权:显示歌词，也会记进收听历史")
+                    title: FeatureSettingsStore.appDisplayName(forBundleID: seen.bundleID) ?? seen.bundleID
                 ) {
                     Button(L10n.t("加入信任列表")) {
                         Task { await FeatureSettingsStore.shared.trust(bundleID: seen.bundleID) }
@@ -1539,8 +1507,7 @@ private struct PlayerSettingsTab: View {
             SettingsCard {
                 SettingsRow(
                     icon: "bell.slash",
-                    title: L10n.t("新播放器提醒"),
-                    subtitle: L10n.t("系统通知已关闭")
+                    title: L10n.t("新播放器提醒")
                 ) {
                     Button(L10n.t("打开系统设置")) {
                         if let url = URL(string:
@@ -1551,12 +1518,6 @@ private struct PlayerSettingsTab: View {
                 }
             }
         }
-    }
-
-    private func unknownPlayerSubtitle(_ seen: MediaControlClient.UngatedNowPlaying) -> String {
-        let what = [seen.artist, seen.title].filter { !$0.isEmpty }.joined(separator: " - ")
-        if what.isEmpty { return seen.bundleID }
-        return seen.bundleID + " · " + String(format: L10n.t("正在放：%@"), what)
     }
 
     @ViewBuilder
@@ -1572,8 +1533,7 @@ private struct PlayerSettingsTab: View {
                     SettingsRow(
                         icon: "checkmark.seal",
                         iconImage: AppIconResolver.icon(forBundleID: bundleID),
-                        title: displayNameForTrusted(bundleID),
-                        subtitle: bundleID
+                        title: displayNameForTrusted(bundleID)
                     ) {
                         Button(L10n.t("移除")) {
                             Task {
@@ -1720,8 +1680,7 @@ private struct PlayerSettingsTab: View {
         if anySupportedInstalled {
             SettingsCard {
                 SettingsCardHeader(
-                    title: L10n.t("网页播放器"),
-                    help: L10n.t("网页播放器不会主动汇报精确进度，切歌后需要这个开关才能立刻校准。")
+                    title: L10n.t("网页播放器")
                 )
                 SettingsRawRow {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
@@ -1824,9 +1783,6 @@ private struct PlayerSettingsTab: View {
                 }
         }
         .buttonStyle(.plain)
-        .help(browserSetupIncomplete(bundleID: bundleID)
-              ? L10n.t("还没配置完，点开看看还差什么")
-              : L10n.t("已配置好，点开可查看或移除"))
         .popover(isPresented: Binding(
             get: { expandedBrowserBundleID == bundleID && expandedBrowserPlatformID == platformID },
             set: { if !$0 { expandedBrowserBundleID = nil; expandedBrowserPlatformID = nil } }
@@ -2088,10 +2044,7 @@ private struct PlayerSettingsTab: View {
                 SettingsRow(
                     icon: automationStatusIconName,
                     iconTint: automationStatusIconColor,
-                    title: L10n.t("Apple Music 自动化"),
-
-                    subtitle: automationStatusCaption,
-                    help: L10n.t("没有它读不到播放状态")
+                    title: L10n.t("Apple Music 自动化")
                 ) {
                     if isRequestingAutomation {
                         ProgressView().controlSize(.small)
@@ -2126,10 +2079,7 @@ private struct PlayerSettingsTab: View {
             SettingsRow(
                 icon: collectorStatusIconName,
                 iconTint: collectorStatusIconColor,
-                title: L10n.t("后台采集服务"),
-
-                subtitle: collectorStatusCaption,
-                help: L10n.t("读取播放状态、抓歌词和封面")
+                title: L10n.t("后台采集服务")
             ) {
 
                 if isTogglingCollectorService {
@@ -2189,14 +2139,11 @@ private struct PlayerSettingsTab: View {
 
     private var companionCard: some View {
         SettingsCard {
-            SettingsCardHeader(
-                title: L10n.t("播放器联动"),
-                help: L10n.t("每一项都按播放器单独勾选；选了「自动识别」时五个播放器都可勾"))
+            SettingsCardHeader(title: L10n.t("播放器联动"))
             CardDivider()
             PlayerLinkageRow(
                 icon: "arrow.up.forward.app",
                 title: L10n.t("打开 Lyrimuse 时启动"),
-                help: L10n.t("Lyrimuse 启动时把勾选的播放器一起打开，已经在跑的不动，也不抢焦点"),
                 candidates: linkageCandidates,
                 chosen: stores.launchPlayersOnLyrimuseOpen
             ) { AppSettings.shared.launchPlayersOnLyrimuseOpen = $0 }
@@ -2204,7 +2151,6 @@ private struct PlayerSettingsTab: View {
             PlayerLinkageRow(
                 icon: "arrow.down.app",
                 title: L10n.t("跟随播放器启动"),
-                help: L10n.t("检测到播放器打开时自动拉起 Lyrimuse"),
                 candidates: linkageCandidates,
                 chosen: stores.launchLyrimuseOnPlayers
             ) { chosen in
@@ -2215,18 +2161,9 @@ private struct PlayerSettingsTab: View {
             PlayerLinkageRow(
                 icon: "power",
                 title: L10n.t("跟随播放器退出"),
-                    help: L10n.t("勾选的播放器全部退出后，等 5 秒再退出 Lyrimuse；期间任一个重新打开就取消。设置或歌词管理开着时不退"),
                 candidates: linkageCandidates,
                 chosen: stores.quitWithPlayers
             ) { AppSettings.shared.quitWithPlayers = $0 }
-        }
-    }
-
-    private var automationStatusCaption: String {
-        switch automationStatus {
-        case .authorized: return L10n.t("已授权")
-        case .denied: return L10n.t("已拒绝")
-        case .notDetermined: return L10n.t("未授权")
         }
     }
 
@@ -2269,23 +2206,6 @@ private struct PlayerSettingsTab: View {
             } else {
                 automationRequestTimedOut = true
             }
-        }
-    }
-
-    private var collectorStatusCaption: String {
-        switch collectorState {
-        case .running:
-            return L10n.t("运行中")
-        case .registeredNotRunning(let code):
-
-            if let code {
-                return String(format: L10n.t("已安装但未运行（上次退出码 %d）"), code)
-            }
-            return L10n.t("已安装但未运行")
-        case .unknown:
-            return L10n.t("状态未知")
-        case .notRegistered:
-            return L10n.t("未运行")
         }
     }
 
@@ -2415,16 +2335,14 @@ private struct GeneralSettingsTab: View {
 
                 SettingsRow(
                     icon: "figure.dance",
-                    title: L10n.t("随播放律动"),
-                    help: L10n.t("播放时图标动起来，暂停即静止")
+                    title: L10n.t("随播放律动")
                 ) {
                     Toggle("", isOn: $settings.menuBarIconAnimates)
                 }
                 CardDivider()
                 SettingsRow(
                     icon: "macwindow",
-                    title: L10n.t("在 Dock 中显示"),
-                    help: L10n.t("关闭后只保留菜单栏图标，不占 Dock 位置")
+                    title: L10n.t("在 Dock 中显示")
                 ) {
                     Toggle("", isOn: $settings.showInDock)
                 }
@@ -2481,8 +2399,7 @@ private struct GeneralSettingsTab: View {
                 SettingsRow(
                     icon: ICloudConfigStore.usingCustomFolder ? "folder" : "icloud",
                     title: ICloudConfigStore.usingCustomFolder
-                        ? L10n.t("备份文件夹") : L10n.t("iCloud 备份"),
-                    subtitle: iCloudSubtitle
+                        ? L10n.t("备份文件夹") : L10n.t("iCloud 备份")
                 ) {
                     HStack(spacing: 8) {
                         if iCloudBusy { ProgressView().controlSize(.small) }
@@ -2516,10 +2433,7 @@ private struct GeneralSettingsTab: View {
 
                 SettingsRow(
                     icon: "doc.badge.gearshape",
-                    title: L10n.t("设置文件"),
-
-                    subtitle: L10n.t("含明文凭证；导入会覆盖全部设置并重启"),
-                    help: L10n.t("歌词库是同名的第二个文件，搬家时两个都要拷。\n凭证别发给别人；导入连已连接的账号、播放数据发往的地址一起覆盖")
+                    title: L10n.t("设置文件")
                 ) {
                     HStack(spacing: 8) {
                         Button(L10n.t("导出…")) { showExportConfigWarning = true }
@@ -2652,8 +2566,7 @@ private struct GeneralSettingsTab: View {
                 CardDivider()
                 SettingsRow(
                     icon: "photo.badge.arrow.down",
-                    title: L10n.t("动态封面"),
-                    help: L10n.t("歌词显示中的封面：部分专辑在 Apple Music 上有会动的封面，没有的照旧静态显示。低电量或开了「减弱动态效果」时自动暂停")
+                    title: L10n.t("动态封面")
                 ) {
                     Toggle("", isOn: $settings.motionCoverEnabled)
                 }
@@ -2662,8 +2575,7 @@ private struct GeneralSettingsTab: View {
             SettingsCard {
                 SettingsRow(
                     icon: "trash",
-                    title: L10n.t("清除所有设置"),
-                    subtitle: L10n.t("本机设置，无法撤销")
+                    title: L10n.t("清除所有设置")
                 ) {
                     DestructiveButton(title: L10n.t("清除…")) { showClearConfigWarning = true }
                 }
@@ -2702,29 +2614,6 @@ private struct GeneralSettingsTab: View {
 
             return nil
         }
-    }
-
-    private var iCloudSubtitle: String {
-        guard let snap = iCloudSnapshot else {
-
-            guard ICloudConfigStore.usingCustomFolder else {
-                return L10n.t("存一份到 iCloud，换 Mac 时直接读回来")
-            }
-            return String(format: L10n.t("备份到「%@」，还没存过"), ICloudConfigStore.folderURL.lastPathComponent)
-        }
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        let when = formatter.string(from: snap.exportedAt ?? snap.modifiedAt)
-        let base: String
-        if let device = snap.deviceName, !device.isEmpty {
-            base = String(format: L10n.t("%1$@ · 来自 %2$@"), when, device)
-        } else {
-            base = when
-        }
-
-        guard ICloudConfigStore.usingCustomFolder else { return base }
-        return base + " · " + ICloudConfigStore.folderURL.lastPathComponent
     }
 
     private func chooseBackupFolder() {
@@ -2886,8 +2775,7 @@ private struct ShortcutsSettingsTab: View {
 
                 SettingsRow(
                     icon: "timer",
-                    title: L10n.t("步长"),
-                    subtitle: L10n.t("每按一次调整的幅度")
+                    title: L10n.t("步长")
                 ) {
                     HStack(spacing: 8) {
                         Text("\(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))")
@@ -2933,7 +2821,6 @@ private struct GitHubStarsBadge: View {
         }
         .foregroundStyle(.secondary)
         .fixedSize()
-        .help(L10n.t("GitHub Star 数"))
 
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.t("GitHub Star 数"))
@@ -2983,13 +2870,6 @@ private struct AboutSettingsTab: View {
             Text(LyrimuseIdentity.displayName)
                 .font(.system(size: 24, weight: .bold))
             versionChip
-            Text(L10n.t("Lyric × Muse——把你的歌词交给音乐女神吧"))
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 380)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
             HStack(spacing: 10) {
 
                 Button {
@@ -3014,9 +2894,6 @@ private struct AboutSettingsTab: View {
             }
             .padding(.top, 8)
 
-            Text(L10n.t("开源免费，你的 ⭐ 是最大的鼓励，谢谢支持"))
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
         }
 
         .frame(maxWidth: .infinity)
@@ -3049,7 +2926,6 @@ private struct AboutSettingsTab: View {
             .overlay(Capsule().strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
-        .help(L10n.t("点击复制版本信息，反馈问题时贴上"))
         .animation(.easeInOut(duration: 0.15), value: versionCopied)
     }
 
@@ -3079,8 +2955,7 @@ private struct AboutSettingsTab: View {
             CardDivider()
             SettingsRow(
                 icon: "exclamationmark.bubble",
-                title: L10n.t("反馈问题"),
-                subtitle: L10n.t("GitHub Issues")
+                title: L10n.t("反馈问题")
             ) {
                 Button(L10n.t("前往")) {
                     NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/issues")!)
@@ -3090,8 +2965,7 @@ private struct AboutSettingsTab: View {
 
             SettingsRow(
                 icon: "lightbulb",
-                title: L10n.t("想法与建议"),
-                subtitle: L10n.t("GitHub Discussions")
+                title: L10n.t("想法与建议")
             ) {
                 Button(L10n.t("前往")) {
                     NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/discussions/categories/ideas")!)
@@ -3115,16 +2989,14 @@ private struct AboutSettingsTab: View {
 
             SettingsRow(
                 icon: "checkmark.seal",
-                title: L10n.t("第三方许可"),
-                subtitle: L10n.t("开源组件与词典")
+                title: L10n.t("第三方许可")
             ) {
                 Button(L10n.t("打开")) { LegalNotices.openThirdPartyLicenses() }
             }
             CardDivider()
             SettingsRow(
                 icon: "scroll",
-                title: L10n.t("开源许可证"),
-                subtitle: L10n.t("GPL-3.0")
+                title: L10n.t("开源许可证")
             ) {
                 Button(L10n.t("打开")) { LegalNotices.openLicense() }
             }
@@ -3138,8 +3010,7 @@ private struct AboutSettingsTab: View {
 
             SettingsRow(
                 icon: "doc.text.magnifyingglass",
-                title: L10n.t("导出诊断"),
-                subtitle: L10n.t("不含账号与密钥")
+                title: L10n.t("导出诊断")
             ) {
                 Button(L10n.t("导出…")) {
                     DiagnosticsExporter.exportInteractively()
@@ -3149,11 +3020,7 @@ private struct AboutSettingsTab: View {
 
             SettingsRow(
                 icon: "folder",
-                title: L10n.t("配置文件夹"),
-
-                subtitle: String(format: L10n.t("%@，纯文本可直接编辑；外观与快捷键不在里面（它们在 UserDefaults）"),
-                                 "~/.config/" + LyrimuseIdentity.configDirName),
-                help: L10n.t("含账号凭据，不要发给别人；要连外观、快捷键一起搬走，用「备份与迁移」")
+                title: L10n.t("配置文件夹")
             ) {
                 Button(L10n.t("打开配置文件夹")) {
                     NSWorkspace.shared.activateFileViewerSelecting([ConfigPortability.configFolderURL])

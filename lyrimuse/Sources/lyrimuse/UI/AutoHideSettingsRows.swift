@@ -25,20 +25,6 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
         }
     }
 
-    var subtitle: String? {
-        switch self {
-        case .duringScreenCapture: return L10n.t("别人看不到，你仍看得见")
-        case .whenNotPlaying: return nil
-        }
-    }
-
-    var help: String? {
-        switch self {
-        case .duringScreenCapture: return L10n.t("截图、录屏、视频会议共享屏幕都拍不到它")
-        case .whenNotPlaying: return nil
-        }
-    }
-
     @MainActor
     func binding(for surface: AutoHideSurface) -> Binding<Bool> {
         let settings = AppSettings.shared
@@ -76,9 +62,7 @@ struct AutoHideSettingsRows: View {
                 if index > 0 { CardDivider() }
                 SettingsRow(
                     icon: item.icon,
-                    title: item.title,
-                    subtitle: item.subtitle,
-                    help: item.help
+                    title: item.title
                 ) {
                     Toggle("", isOn: item.binding(for: surface))
                 }
