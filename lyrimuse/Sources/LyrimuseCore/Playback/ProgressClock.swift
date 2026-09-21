@@ -31,13 +31,6 @@ public struct ProgressAnchor {
         return rate * (correctionMs < 0 ? 0.8 : 1.2)
     }
 
-    public static func correctionForContinuousPlayback(
-        displayedMs: Int?, targetMs: Int, continuous: Bool
-    ) -> Int {
-        guard continuous, let displayedMs, abs(targetMs - displayedMs) <= 2000 else { return 0 }
-        return targetMs - displayedMs
-    }
-
     public func extrapolatedPositionMs(now: Date = Date()) -> Int {
         let ageMs: Double
         if let base = baseAgeMs {

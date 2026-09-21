@@ -53,14 +53,14 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     @Published public private(set) var anchor: ProgressAnchor?
-    @Published public private(set) var enrichContentVersion: Date?
+    @Published public private(set) var cacheContentVersion: Date?
 
     private let syncEngine = LyricsSyncEngine()
-    private var lastSnapshot: MediaControlSnapshot?
+    private var lastSnapshot: AppleMusicPlaybackSnapshot?
     private var lastKey = ""
     private var currentOffsetKey = ""
     private var currentPinKey = ""
-    private var lastEnrichMTime: Date?
+    private var lastCacheVersion: Date?
     private var lastReloadSnapshot: LyricsReloadSnapshot?
     private var fastTimer: Timer?
     private var playerInfoObserver: NSObjectProtocol?
@@ -74,8 +74,7 @@ public final class LocalPlaybackSource: ObservableObject {
     private var lastSeekAt: Date?
 
     public var lastResolvedBundleID: String? {
-        guard let id = lastSnapshot?.bundleIdentifier, !id.isEmpty else { return nil }
-        return id
+        lastSnapshot == nil ? nil : MusicPlaybackController.appleMusicBundleIdentifier
     }
 
     public func setNetworkDown(_ value: Bool) {
@@ -91,67 +90,13 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
-    public enum PositionSourceTier { case precise, cleanExtrapolated, noisyFloored }
-    public nonisolated static let groundTruthSnapToleranceSecs = 0.30
-    public nonisolated static let seekSettleWindow: TimeInterval = 1.2
-
-    public nonisolated static func positionSourceTier(forBundleID bundleID: String?) -> PositionSourceTier {
-        bundleID == PlaybackPlayer.appleMusic.bundleIdentifier ? .precise : .cleanExtrapolated
-    }
-
-    public nonisolated static func shouldRatchetForward(
-        reported: Double, predicted: Double, tier: PositionSourceTier
-    ) -> Bool { tier == .noisyFloored && reported - predicted > 0.05 }
-
-    public nonisolated static func servoDecision(
-        errEMA: Double, error: Double, tier: PositionSourceTier
-    ) -> (newEMA: Double, snap: Bool) {
-        let alpha: Double = tier == .precise ? 0.5 : 0.3
-        let threshold: Double = tier == .precise ? 0.15 : (tier == .noisyFloored ? 1 : 0.4)
-        let clamped = tier == .cleanExtrapolated ? max(-0.75, min(0.75, error)) : error
-        let next = errEMA * (1 - alpha) + clamped * alpha
-        return (next, abs(next) > threshold)
-    }
-
-    public nonisolated static func naturalAdvanceCorrection(
-        reported: Double, overrun: Double
-    ) -> (seed: Double, bias: Double)? {
-        guard abs(overrun) <= 4 else { return nil }
-        let bias = reported - overrun
-        guard bias > 0.05, bias <= 2.5 else { return nil }
-        return (overrun, bias)
-    }
-
-    public nonisolated static func learnedProbeLead(current: Double, residual: Double, hasPrior: Bool) -> Double {
-        guard abs(residual) <= 1.5 else { return current }
-        return current + residual * (hasPrior ? 0.5 : 1)
-    }
-
-    public nonisolated static func biasSurvivesAnchor(anchorElapsedTime: Double?, measuredAgainst: Double? = nil) -> Bool {
-        guard let anchorElapsedTime else { return true }
-        guard let measuredAgainst else { return anchorElapsedTime <= 0.001 }
-        return abs(anchorElapsedTime - measuredAgainst) <= 0.001
-    }
-
-    public nonisolated static func shouldRejectStalePositionAfterSeek(
-        reported: Double, target: Double, previous: Double, elapsedSinceSeek: TimeInterval
-    ) -> Bool {
-        guard elapsedSinceSeek >= 0, elapsedSinceSeek < seekSettleWindow else { return false }
-        return abs(reported - previous) < abs(reported - target)
-    }
-
-    public nonisolated static func shouldFreezeForPlayerEvent(currentBundleID: String?, eventBundleID: String?) -> Bool {
-        guard let currentBundleID, !currentBundleID.isEmpty else { return false }
-        return currentBundleID == eventBundleID
-    }
-
-    public nonisolated static func shouldRunFastTimer(
+    private nonisolated static func shouldRunFastTimer(
         isPlaying: Bool, hasContent: Bool, screenLocked: Bool, needsRealtimeLyricsUpdates: Bool
     ) -> Bool {
         isPlaying && hasContent && !screenLocked && needsRealtimeLyricsUpdates
     }
 
-    public nonisolated static func supportsChineseVariant(
+    private nonisolated static func supportsChineseVariant(
         lyrics: String, translation: String, translationVisible: Bool
     ) -> Bool {
         ChineseVariant.affects(lyrics) || (translationVisible && ChineseVariant.affects(translation))
@@ -159,7 +104,6 @@ public final class LocalPlaybackSource: ObservableObject {
 
     public func start() {
         guard playerInfoObserver == nil else { return }
-        EnrichCacheReader.installMemoryPressureRelief()
         playerInfoObserver = DistributedNotificationCenter.default().addObserver(
             forName: NSNotification.Name("com.apple.Music.playerInfo"), object: nil, queue: .main
         ) { [weak self] _ in
@@ -186,9 +130,9 @@ public final class LocalPlaybackSource: ObservableObject {
         pollGeneration += 1
         let generation = pollGeneration
         Task {
-            let snapshot = await Task.detached(priority: .utility) { MediaControlClient.fetchSnapshot() }.value
+            let snapshot = await Task.detached(priority: .utility) { MusicPlaybackController.fetchSnapshot() }.value
             guard generation == pollGeneration else { return }
-            guard let snapshot, snapshot.isMusicApp == true else {
+            guard let snapshot else {
                 clearIfStopped()
                 return
             }
@@ -196,7 +140,7 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
-    private func apply(_ snapshot: MediaControlSnapshot) {
+    private func apply(_ snapshot: AppleMusicPlaybackSnapshot) {
         let trackChanged = snapshot.trackKey != lastKey
         if trackChanged { networkDown = false }
         lastSnapshot = snapshot
@@ -206,12 +150,11 @@ public final class LocalPlaybackSource: ObservableObject {
         isPlayingNow = snapshot.playing == true
         currentDurationMs = snapshot.duration.flatMap { $0 > 0 ? Int($0 * 1000) : nil }
 
-        EnrichCacheReader.refreshIfNeeded()
-        let version = EnrichCacheReader.decodedContentVersion
-        if enrichContentVersion != version { enrichContentVersion = version }
-        if trackChanged || version != lastEnrichMTime {
+        let version = EnrichCacheReader.contentVersion
+        if cacheContentVersion != version { cacheContentVersion = version }
+        if trackChanged || version != lastCacheVersion {
             lastKey = snapshot.trackKey
-            lastEnrichMTime = version
+            lastCacheVersion = version
             reloadCurrentLyrics()
             if trackChanged, let onTrackChanged, !(snapshot.title ?? "").isEmpty, !(snapshot.artist ?? "").isEmpty {
                 onTrackChanged(snapshot.artist ?? "", snapshot.title ?? "", snapshot.album ?? "", snapshot.duration ?? 0)
@@ -309,8 +252,7 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     public func forceReloadLyricsForCurrentTrack() {
-        EnrichCacheReader.reloadNow()
-        lastEnrichMTime = EnrichCacheReader.decodedContentVersion
+        lastCacheVersion = EnrichCacheReader.contentVersion
         reloadCurrentLyrics()
         ensureFastTimerRunning()
         fastTick()
@@ -347,11 +289,6 @@ public final class LocalPlaybackSource: ObservableObject {
     public func setGlobalLyricsOffset(_ ms: Int) {
         LyricsOffsetStore.shared.setGlobalOffset(ms)
         if lastSnapshot != nil { applyOffsets() }
-    }
-
-    public func setPlayerLyricsOffset(_ ms: Int, forBundleID bundleID: String) {
-        LyricsOffsetStore.shared.setPlayerOffset(ms, forBundleID: bundleID)
-        if bundleID == lastResolvedBundleID { applyOffsets() }
     }
 
     public func refreshOffsetFromStore() {
@@ -413,17 +350,8 @@ public final class LocalPlaybackSource: ObservableObject {
         currentTrackPlainLyrics = hasLyricsContent ? "" : reload.plainLyrics
     }
 
-    public nonisolated static func artworkKeyMatches(_ payloadKey: String, _ expectedKey: String) -> Bool {
-        payloadKey.compare(expectedKey, options: [.caseInsensitive]) == .orderedSame
-    }
-
     public nonisolated static func computeAverageHex(cgImage: CGImage) -> String? {
         computeAverageHex(ciImage: CIImage(cgImage: cgImage))
-    }
-
-    private nonisolated static func computeAverageHex(from data: Data) -> String? {
-        guard let image = CIImage(data: data) else { return nil }
-        return computeAverageHex(ciImage: image)
     }
 
     private nonisolated static func computeAverageHex(ciImage: CIImage) -> String? {
@@ -500,7 +428,7 @@ public final class LocalPlaybackSource: ObservableObject {
             ? (0, 0, 0) : (1, 1, 1)
     }
 
-    nonisolated public static func relativeLuminance(r: Double, g: Double, b: Double) -> Double {
+    private nonisolated static func relativeLuminance(r: Double, g: Double, b: Double) -> Double {
         func linear(_ value: Double) -> Double {
             let value = min(1, max(0, value))
             return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
@@ -508,7 +436,7 @@ public final class LocalPlaybackSource: ObservableObject {
         return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
     }
 
-    nonisolated public static func contrastRatio(_ l1: Double, _ l2: Double) -> Double {
+    private nonisolated static func contrastRatio(_ l1: Double, _ l2: Double) -> Double {
         let high = max(l1, l2), low = min(l1, l2)
         return (high + 0.05) / (low + 0.05)
     }

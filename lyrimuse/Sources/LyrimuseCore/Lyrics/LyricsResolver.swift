@@ -1,8 +1,6 @@
 import Foundation
 
 public struct LyricsResolver: Sendable {
-    public static let sourceIDs = ["lrclib", "kuwo", "netease", "kugou", "qq"]
-
     private static let earlyReturnScore = 600
 
     private let providers: [any LyricsProvider]

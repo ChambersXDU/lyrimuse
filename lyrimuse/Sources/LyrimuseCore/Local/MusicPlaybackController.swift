@@ -1,6 +1,55 @@
 import Foundation
 
+struct AppleMusicPlaybackSnapshot: Decodable {
+    let title: String?
+    let artist: String?
+    let album: String?
+    let duration: Double?
+    let elapsedTime: Double?
+    let playing: Bool?
+    let playbackRate: Double?
+    var trackKey: String { Self.trackKey(artist: artist, title: title) }
+
+    static func trackKey(artist: String?, title: String?) -> String {
+        "\(artist ?? "")|\(title ?? "")"
+    }
+}
+
 public enum MusicPlaybackController {
+    public static let appleMusicBundleIdentifier = "com.apple.Music"
+    static let appleScriptTimeout: TimeInterval = 5
+
+    private static let snapshotScript = #"""
+    (() => {
+        const music = Application("Music");
+        try {
+            if (!music.running()) return JSON.stringify(null);
+            const state = music.playerState();
+            if (state === "stopped") return JSON.stringify(null);
+            const track = music.currentTrack;
+            if (!track.exists()) return JSON.stringify(null);
+            return JSON.stringify({
+                title: track.name(),
+                artist: track.artist(),
+                album: track.album(),
+                duration: track.duration(),
+                elapsedTime: music.playerPosition(),
+                playing: state === "playing",
+                playbackRate: state === "playing" ? 1 : 0
+            });
+        } catch (error) {
+            return JSON.stringify(null);
+        }
+    })()
+    """#
+
+    static func fetchSnapshot() -> AppleMusicPlaybackSnapshot? {
+        guard let result = ProcessRunner.run(
+            "/usr/bin/osascript", ["-l", "JavaScript", "-e", snapshotScript],
+            timeout: appleScriptTimeout), result.succeeded else { return nil }
+        return try? JSONDecoder().decode(AppleMusicPlaybackSnapshot.self, from: result.stdout)
+    }
+
     @MainActor
     public static func playPause() { runAppleScript(#"tell application "Music" to playpause"#) }
 
@@ -26,106 +75,23 @@ public enum MusicPlaybackController {
 
     @discardableResult
     public static func setFavorited(_ value: Bool) -> Bool {
-        favoritedPropertyNames.contains { runAppleScriptCapturing(#"tell application "Music" to set \#($0) of current track to \#(value)"#) != nil }
-    }
-
-    @discardableResult
-    public static func addCurrentTrackToLibrary() -> Bool {
-        runAppleScriptCapturing(#"""
-        tell application "Music"
-            try
-                duplicate current track to source 1
-            on error
-                duplicate current track to library playlist 1
-            end try
-            return "ok"
-        end tell
-        """#) != nil
-    }
-
-    public static func currentTrackIsInLibrary() -> Bool? {
-        guard let output = runAppleScriptCapturing(#"""
-        tell application "Music"
-            set t to current track
-            set tName to name of t
-            set tArtist to artist of t
-            set tAlbum to album of t
-            if tAlbum is not "" then
-                return (count of (every track of library playlist 1 whose name is tName and artist is tArtist and album is tAlbum)) > 0
-            end if
-            return (count of (every track of library playlist 1 whose name is tName and artist is tArtist)) > 0
-        end tell
-        """#) else { return nil }
-        if output.contains("true") { return true }
-        if output.contains("false") { return false }
-        return nil
-    }
-
-    @discardableResult
-    public static func removeCurrentTrackFromLibrary() -> Bool {
-        runAppleScriptCapturing(#"""
-        tell application "Music"
-            set t to current track
-            set tName to name of t
-            set tArtist to artist of t
-            set tAlbum to album of t
-            set matches to {}
-            if tAlbum is not "" then
-                set matches to (every track of library playlist 1 whose name is tName and artist is tArtist and album is tAlbum)
-            end if
-            if (count of matches) is 0 then
-                set matches to (every track of library playlist 1 whose name is tName and artist is tArtist)
-            end if
-            if (count of matches) is 0 then error "not in library"
-            delete (item 1 of matches)
-            return "ok"
-        end tell
-        """#) != nil
-    }
-
-    public static func resumePlayback(lastTitle: String?, lastArtist: String?) -> Bool {
-        _ = runAppleScriptCapturing(#"tell application "Music" to play"#)
-        guard let state = runAppleScriptCapturing(#"tell application "Music" to player state as text"#), state.contains("playing") else { return false }
-        return true
-    }
-
-    @discardableResult
-    public static func setDisliked(_ value: Bool) -> Bool {
-        runAppleScriptCapturing(#"tell application "Music" to set disliked of current track to \#(value)"#) != nil
-    }
-
-    public static func currentTrackDisliked() -> Bool? {
-        guard let output = runAppleScriptCapturing(#"tell application "Music" to get disliked of current track"#) else { return nil }
-        if output.contains("true") { return true }
-        if output.contains("false") { return false }
-        return nil
-    }
-
-    @discardableResult
-    public static func revealCurrentTrack() -> Bool {
-        runAppleScriptCapturing(#"""
-        tell application "Music"
-            reveal current track
-            activate
-        end tell
-        """#) != nil
-    }
-
-    public enum MusicPlaybackMode: String, CaseIterable, Sendable {
-        case list, shuffle, repeatOne, repeatAll
-
-        public func next(allowsRepeatOne: Bool) -> MusicPlaybackMode {
-            switch self {
-            case .list: return .shuffle
-            case .shuffle: return allowsRepeatOne ? .repeatOne : .list
-            case .repeatOne: return .list
-            case .repeatAll: return allowsRepeatOne ? .repeatOne : .list
-            }
+        favoritedPropertyNames.contains {
+            runAppleScriptCapturing(#"tell application "Music" to set \#($0) of current track to \#(value)"#) != nil
         }
     }
 
-    public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool { player == .appleMusic }
-    public static func supportsRepeatOne(_ player: PlaybackPlayer) -> Bool { player == .appleMusic }
+    public enum MusicPlaybackMode: String, Sendable {
+        case list, shuffle, repeatOne, repeatAll
+
+        public func next() -> MusicPlaybackMode {
+            switch self {
+            case .list: return .shuffle
+            case .shuffle: return .repeatOne
+            case .repeatOne: return .list
+            case .repeatAll: return .repeatOne
+            }
+        }
+    }
 
     public struct ExtendedControlsState {
         public let favorited: Bool?
@@ -134,39 +100,36 @@ public enum MusicPlaybackController {
         public static let empty = ExtendedControlsState(favorited: nil, mode: nil, volume: nil)
     }
 
-    public static func extendedControlsState(for player: PlaybackPlayer, includeFavorited: Bool) -> ExtendedControlsState {
-        guard player == .appleMusic,
-              let output = runAppleScriptCapturing(#"""
-              tell application "Music"
-                  set favPart to "nil"
-                  try
-                      set favPart to ((favorited of current track) as text)
-                  on error
-                      try
-                          set favPart to ((loved of current track) as text)
-                      end try
-                  end try
-                  set modePart to (shuffle enabled as text) & ";" & (song repeat as text)
-                  set volPart to (sound volume as text)
-                  return favPart & "|" & modePart & "|" & volPart
-              end tell
-              """#) else { return .empty }
+    public static func extendedControlsState() -> ExtendedControlsState {
+        guard let output = runAppleScriptCapturing(#"""
+        tell application "Music"
+            set favPart to "nil"
+            try
+                set favPart to ((favorited of current track) as text)
+            on error
+                try
+                    set favPart to ((loved of current track) as text)
+                end try
+            end try
+            set modePart to (shuffle enabled as text) & ";" & (song repeat as text)
+            set volPart to (sound volume as text)
+            return favPart & "|" & modePart & "|" & volPart
+        end tell
+        """#) else { return .empty }
         let parts = output.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "|")
         guard parts.count == 3 else { return .empty }
-        let favorite: Bool? = includeFavorited ? (parts[0] == "true" ? true : parts[0] == "false" ? false : nil) : nil
-        let mode = parseMusicMode(parts[1])
-        return ExtendedControlsState(favorited: favorite, mode: mode, volume: Int(parts[2]))
+        let favorite: Bool? = parts[0] == "true" ? true : parts[0] == "false" ? false : nil
+        return ExtendedControlsState(favorited: favorite, mode: parseMusicMode(parts[1]), volume: Int(parts[2]))
     }
 
-    public static func playbackMode(for player: PlaybackPlayer) -> MusicPlaybackMode? {
-        guard player == .appleMusic,
-              let output = runAppleScriptCapturing(#"tell application "Music" to return (shuffle enabled as text) & "," & (song repeat as text)"#) else { return nil }
+    public static func playbackMode() -> MusicPlaybackMode? {
+        guard let output = runAppleScriptCapturing(
+            #"tell application "Music" to return (shuffle enabled as text) & "," & (song repeat as text)"#) else { return nil }
         return parseMusicMode(output.replacingOccurrences(of: ",", with: ";"))
     }
 
     @discardableResult
-    public static func setPlaybackMode(_ mode: MusicPlaybackMode, for player: PlaybackPlayer) -> Bool {
-        guard player == .appleMusic else { return false }
+    public static func setPlaybackMode(_ mode: MusicPlaybackMode) -> Bool {
         let script: String
         switch mode {
         case .list: script = #"tell application "Music" to set {shuffle enabled, song repeat} to {false, off}"#
@@ -177,38 +140,22 @@ public enum MusicPlaybackController {
         return runAppleScriptCapturing(script) != nil
     }
 
-    public static func soundVolume(for player: PlaybackPlayer) -> Int? {
-        guard player == .appleMusic, let output = runAppleScriptCapturing(#"tell application "Music" to get sound volume"#) else { return nil }
+    public static func soundVolume() -> Int? {
+        guard let output = runAppleScriptCapturing(#"tell application "Music" to get sound volume"#) else { return nil }
         return Int(output.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     @discardableResult
-    public static func setSoundVolume(_ value: Int, for player: PlaybackPlayer) -> Bool {
-        guard player == .appleMusic else { return false }
+    public static func setSoundVolume(_ value: Int) -> Bool {
         let volume = min(100, max(0, value))
         return runAppleScriptCapturing(#"tell application "Music" to set sound volume to \#(volume)"#) != nil
     }
 
     @MainActor
-    public static func seek(toSeconds seconds: Double, preferAppleScript: Bool = true) {
-        let value = seekArgument(forSeconds: seconds)
-        runAppleScript(#"tell application "Music" to set player position to \#(value)"#)
+    public static func seek(toSeconds seconds: Double) {
+        let value = seconds.isFinite ? max(0, seconds) : 0
+        runAppleScript(#"tell application "Music" to set player position to \#(String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), value))"#)
     }
-
-    public static func seekArgument(forSeconds seconds: Double) -> String {
-        let clamped = seconds.isFinite ? max(0, seconds) : 0
-        return String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), clamped)
-    }
-
-    public static func controlTargetBundleID(players: Set<PlaybackPlayer>, resolvedBundleID: String?, trusted: [String: String]) -> String? {
-        guard resolvedBundleID == nil || resolvedBundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return nil }
-        return PlaybackPlayer.appleMusic.bundleIdentifier
-    }
-
-    @MainActor
-    public static var currentControlTargetBundleID: String? { PlaybackPlayer.appleMusic.bundleIdentifier }
-
-    public static let appleScriptTimeout: TimeInterval = 5
 
     private static func parseMusicMode(_ value: String) -> MusicPlaybackMode? {
         let fields = value.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ";")

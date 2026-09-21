@@ -54,7 +54,6 @@ public struct LyricQueryDigest: Sendable, Equatable {
         self.total = total
     }
 
-    public var queriesFlatCount: Int { groups.reduce(0) { $0 + $1.queries.count } }
 }
 
 public enum LyricQueryDigestBuilder {

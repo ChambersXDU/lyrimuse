@@ -33,12 +33,6 @@ public enum MenuBarHoverControls {
         MenuBarTransportControl.allCases.first { rects[$0]?.contains(point) == true }
     }
 
-    public static func glyphRect(in hitRect: CGRect, side: CGFloat) -> CGRect {
-        CGRect(x: (hitRect.midX - side / 2).rounded(),
-               y: (hitRect.midY - side / 2).rounded(),
-               width: side, height: side)
-    }
-
     public static func lyricsSlot(
         buttonWidth: CGFloat, contentWidth: CGFloat,
         reservedIconWidth: CGFloat, iconLeading: Bool

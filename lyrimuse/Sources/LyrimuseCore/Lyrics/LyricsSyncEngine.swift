@@ -905,7 +905,6 @@ public final class LyricsSyncEngine {
     }
 
     private var builtLinesCache: [Int: SyncedLyricLine] = [:]
-    public var cachedLinesCount: Int { builtLinesCache.count }
     private var cachedActiveIdx = Int.min
     private var cachedActiveLine: SyncedLyricLine?
     private var cachedNextIdx = Int.min
@@ -1217,10 +1216,4 @@ public final class LyricsSyncEngine {
         return out
     }
 
-    public func activeGapIndex(atMs rawPosMs: Int) -> Int? {
-        let posMs = rawPosMs + effectiveOffsetMs
-        let idx = activeIndexCorrected(posMs)
-        guard let window = gapWindow(after: idx) else { return nil }
-        return (posMs >= window.start && posMs < window.end) ? idx : nil
-    }
 }

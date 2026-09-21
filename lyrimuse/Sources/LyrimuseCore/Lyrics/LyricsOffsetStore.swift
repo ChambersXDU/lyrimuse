@@ -37,30 +37,14 @@ public final class LyricsOffsetStore: ObservableObject {
         UserDefaults.standard.set(ms, forKey: Self.globalDefaultsKey)
     }
 
-    @Published public private(set) var playerOffsets: [String: Int]
+    private var playerOffsets: [String: Int]
 
-    public func playerOffset(forBundleID bundleID: String?) -> Int {
-        guard let bundleID, !bundleID.isEmpty else { return 0 }
-        return playerOffsets[bundleID] ?? 0
-    }
-
-    public func setPlayerOffset(_ ms: Int, forBundleID bundleID: String) {
-        guard !bundleID.isEmpty else { return }
-        guard playerOffsets[bundleID] ?? 0 != ms else { return }
-        if ms == 0 {
-            playerOffsets.removeValue(forKey: bundleID)
-        } else {
-            playerOffsets[bundleID] = ms
-        }
-        persistPlayerOffsets()
-    }
-
-    public func baseOffsetMs(forBundleID bundleID: String?) -> Int {
+    private func baseOffsetMs(forBundleID bundleID: String?) -> Int {
         if let bundleID, !bundleID.isEmpty, let own = playerOffsets[bundleID] { return own }
         return globalOffsetMs
     }
 
-    public func effectiveOffset(forKey key: String, bundleID: String? = nil) -> Int {
+    func effectiveOffset(forKey key: String, bundleID: String? = nil) -> Int {
         baseOffsetMs(forBundleID: bundleID) + offset(forKey: key)
     }
 
@@ -157,14 +141,6 @@ public final class LyricsOffsetStore: ObservableObject {
         if !pinKey.isEmpty {
             LyricsPinStore.shared.setPinned(ms != 0, forKey: pinKey)
         }
-    }
-
-    private func persistPlayerOffsets() {
-        guard
-            let data = try? JSONEncoder().encode(playerOffsets),
-            let json = String(data: data, encoding: .utf8)
-        else { return }
-        UserDefaults.standard.set(json, forKey: Self.playerDefaultsKey)
     }
 
     private static func loadPlayerOffsets() -> [String: Int] {

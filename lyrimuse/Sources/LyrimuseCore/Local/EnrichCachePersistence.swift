@@ -3,14 +3,15 @@ import Foundation
 public enum EnrichCachePersistence {
     public static func save(
         cacheURL: URL,
-        data: Data,
+        entries: [String: [String: Any]],
         fileChanges: [ReversibleFileChanges.Change] = [],
         clearLyricsDirectory: URL? = nil,
         exportKeys: Set<String> = [],
         lyricsDirectory: URL? = nil
     ) throws {
-        guard let entries = try JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
-            throw CocoaError(.propertyListReadCorrupt)
+        guard JSONSerialization.isValidJSONObject(entries),
+              let data = try? JSONSerialization.data(withJSONObject: entries, options: [.sortedKeys]) else {
+            throw CocoaError(.propertyListWriteInvalid)
         }
         var changes: [URL: ReversibleFileChanges.Change] = [:]
         if let directory = clearLyricsDirectory {

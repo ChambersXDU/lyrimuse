@@ -7,7 +7,6 @@ enum AppExit {
         case restartAfterConfigChange = "restart_after_config_change"
 
         case olderInstanceReplaced = "older_instance_replaced"
-        case followedPlayerQuit = "followed_player_quit"
         case sigterm = "sigterm"
         case externalRequest = "external_request"
 

@@ -37,16 +37,11 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
         return "\(dest)|\(sectionValue ?? "")|\(pathKeys.joined(separator: "/"))|\(titleKey)"
     }
 
-    public var localizedKeys: [String] {
-        [titleKey] + alternateTitleKeys + pathKeys
-    }
 }
 
 public enum SettingsSearchCatalog {
 
     public static let lyricsSectionKey = "settings:lyricsSection"
-
-    public static let brandPathComponents: Set<String> = []
 
     private static func lyrics(_ section: String, _ title: String, alt: [String] = [],
                                kw: [String] = [], group: String? = nil) -> SettingsSearchEntry {

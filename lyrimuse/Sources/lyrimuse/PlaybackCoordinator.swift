@@ -115,40 +115,32 @@ final class PlaybackCoordinator: ObservableObject {
         LocalPlaybackSource.shared.seek(toMs: targetMs)
     }
 
-    var resolvedPlayerDescription: String {
-        guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return "none (no snapshot yet)" }
-        if let known = PlaybackPlayer.allCases.first(where: { $0.bundleIdentifier == id }) {
-            return "\(known.rawValue) (\(id))"
-        }
-        return "unknown (\(id))"
-    }
-
     var resolvedPlayerDisplayName: String? {
-        guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
-        return id == PlaybackPlayer.appleMusic.bundleIdentifier ? "Apple Music" : nil
+        LocalPlaybackSource.shared.lastResolvedBundleID == nil ? nil : "Apple Music"
     }
 
     var resolvedPlayerIcon: NSImage? {
-        guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
-        return AppIconResolver.icon(forBundleID: id)
+        guard LocalPlaybackSource.shared.lastResolvedBundleID != nil else { return nil }
+        return AppIconResolver.icon(forBundleID: MusicPlaybackController.appleMusicBundleIdentifier)
     }
 
     func openResolvedPlayerApp() {
-        guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else {
+        guard LocalPlaybackSource.shared.lastResolvedBundleID != nil else {
             logger.notice("openResolvedPlayerApp: no resolved player")
             return
         }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else {
-            logger.notice("openResolvedPlayerApp: no app for \(id, privacy: .public)")
+        let bundleID = MusicPlaybackController.appleMusicBundleIdentifier
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            logger.notice("openResolvedPlayerApp: no app for \(bundleID, privacy: .public)")
             return
         }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, error in
             if let error {
-                logger.notice("openResolvedPlayerApp: \(id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+                logger.notice("openResolvedPlayerApp: \(bundleID, privacy: .public) failed: \(String(describing: error), privacy: .public)")
             } else {
-                logger.notice("openResolvedPlayerApp: activated \(id, privacy: .public)")
+                logger.notice("openResolvedPlayerApp: activated \(bundleID, privacy: .public)")
             }
         }
     }
@@ -166,21 +158,9 @@ final class PlaybackCoordinator: ObservableObject {
         LocalPlaybackSource.shared.refreshOffsetFromStore()
     }
 
-    var globalLyricsOffsetMs: Int { LyricsOffsetStore.shared.globalOffsetMs }
-
     func setGlobalLyricsOffset(_ ms: Int) {
         LocalPlaybackSource.shared.setGlobalLyricsOffset(ms)
     }
-
-    func playerLyricsOffsetMs(forBundleID bundleID: String) -> Int {
-        LyricsOffsetStore.shared.playerOffset(forBundleID: bundleID)
-    }
-
-    func setPlayerLyricsOffset(_ ms: Int, forBundleID bundleID: String) {
-        LocalPlaybackSource.shared.setPlayerLyricsOffset(ms, forBundleID: bundleID)
-    }
-
-    var resolvedPlayerBundleID: String? { LocalPlaybackSource.shared.lastResolvedBundleID }
 
     @Published private(set) var isFavorited: Bool?
 
@@ -198,31 +178,15 @@ final class PlaybackCoordinator: ObservableObject {
     private var volumeBeforeMute: Int?
 
     private var isAppleMusicPlayingNow: Bool {
-        LocalPlaybackSource.shared.lastResolvedBundleID == PlaybackPlayer.appleMusic.bundleIdentifier
+        LocalPlaybackSource.shared.lastResolvedBundleID == MusicPlaybackController.appleMusicBundleIdentifier
     }
 
-    private var currentPlayer: PlaybackPlayer? {
-        guard LocalPlaybackSource.shared.lastResolvedBundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return nil }
-        return .appleMusic
-    }
-
-    private var extendedControlPlayer: PlaybackPlayer? {
-        guard let player = currentPlayer,
-              MusicPlaybackController.supportsExtendedControls(player) else { return nil }
-        return player
-    }
-
-    private func extendedControlPlayerForBackgroundRefresh() -> PlaybackPlayer? {
-        guard let player = extendedControlPlayer else { return nil }
-        if player == .appleMusic,
-           !MusicAutomationPermission.check(askIfNeeded: false).isAuthorized { return nil }
-        return player
+    private var canRefreshAppleMusicControls: Bool {
+        isAppleMusicPlayingNow && MusicAutomationPermission.check(askIfNeeded: false).isAuthorized
     }
 
     func refreshExtendedControls() {
-        let includeFavorited = isAppleMusicPlayingNow
-            && MusicAutomationPermission.check(askIfNeeded: false).isAuthorized
-        guard let player = extendedControlPlayerForBackgroundRefresh() else {
+        guard canRefreshAppleMusicControls else {
             if isFavorited != nil { isFavorited = nil }
             if playbackMode != nil { playbackMode = nil }
             if soundVolume != nil { soundVolume = nil }
@@ -232,12 +196,11 @@ final class PlaybackCoordinator: ObservableObject {
         let modeSeq = playbackModeActionSeq
         let volSeq = volumeActionSeq
         Task.detached(priority: .utility) {
-            let state = MusicPlaybackController.extendedControlsState(
-                for: player, includeFavorited: includeFavorited && player == .appleMusic)
+            let state = MusicPlaybackController.extendedControlsState()
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 if self.favoritedActionSeq == favSeq {
-                    let value = includeFavorited ? state.favorited : nil
+                    let value = state.favorited
                     if self.isFavorited != value { self.isFavorited = value }
                 }
                 if self.playbackModeActionSeq == modeSeq, self.playbackMode != state.mode {
@@ -268,13 +231,13 @@ final class PlaybackCoordinator: ObservableObject {
     }
 
     func refreshPlaybackMode() {
-        guard let player = extendedControlPlayerForBackgroundRefresh() else {
+        guard canRefreshAppleMusicControls else {
             if playbackMode != nil { playbackMode = nil }
             return
         }
         let seq = playbackModeActionSeq
         Task.detached(priority: .utility) {
-            let value = MusicPlaybackController.playbackMode(for: player)
+            let value = MusicPlaybackController.playbackMode()
             await MainActor.run { [weak self] in
                 guard let self, self.playbackModeActionSeq == seq else { return }
                 guard self.playbackMode != value else { return }
@@ -284,13 +247,13 @@ final class PlaybackCoordinator: ObservableObject {
     }
 
     func refreshVolume() {
-        guard let player = extendedControlPlayerForBackgroundRefresh() else {
+        guard canRefreshAppleMusicControls else {
             if soundVolume != nil { soundVolume = nil }
             return
         }
         let seq = volumeActionSeq
         Task.detached(priority: .utility) {
-            let value = MusicPlaybackController.soundVolume(for: player)
+            let value = MusicPlaybackController.soundVolume()
             await MainActor.run { [weak self] in
                 guard let self, self.volumeActionSeq == seq else { return }
                 guard self.soundVolume != value else { return }
@@ -300,35 +263,34 @@ final class PlaybackCoordinator: ObservableObject {
     }
 
     func setVolume(_ value: Int) {
-        guard let player = extendedControlPlayer else { return }
+        guard isAppleMusicPlayingNow else { return }
         let target = min(100, max(0, value))
 
         if soundVolume != target { soundVolume = target }
         volumeActionSeq &+= 1
 
         pendingVolumeTarget = target
-        pumpVolumeWrite(for: player)
+        pumpVolumeWrite()
     }
 
-    private func pumpVolumeWrite(for player: PlaybackPlayer) {
+    private func pumpVolumeWrite() {
         guard !volumeWriteInFlight, let target = pendingVolumeTarget else { return }
         pendingVolumeTarget = nil
         volumeWriteInFlight = true
         Task.detached(priority: .userInitiated) {
 
             let ok: Bool
-            if player == .appleMusic,
-               await !MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
+            if await !MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
                 ok = false
             } else {
-                ok = MusicPlaybackController.setSoundVolume(target, for: player)
+                ok = MusicPlaybackController.setSoundVolume(target)
             }
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.volumeWriteInFlight = false
                 if self.pendingVolumeTarget != nil {
 
-                    self.pumpVolumeWrite(for: player)
+                    self.pumpVolumeWrite()
                 } else if !ok {
 
                     self.refreshVolume()
@@ -349,34 +311,26 @@ final class PlaybackCoordinator: ObservableObject {
     }
 
     func cyclePlaybackMode() {
-        guard let player = extendedControlPlayer else { return }
+        guard isAppleMusicPlayingNow else { return }
 
-        let target = (playbackMode ?? .list)
-            .next(allowsRepeatOne: MusicPlaybackController.supportsRepeatOne(player))
+        let target = (playbackMode ?? .list).next()
         setPlaybackMode(target)
     }
 
     var playbackModeSupportsRepeatOne: Bool {
-        guard let player = extendedControlPlayer else { return false }
-        return MusicPlaybackController.supportsRepeatOne(player)
+        isAppleMusicPlayingNow
     }
 
     func setPlaybackMode(_ target: MusicPlaybackController.MusicPlaybackMode) {
-        guard let player = extendedControlPlayer else { return }
-
-        let resolved: MusicPlaybackController.MusicPlaybackMode =
-            ((target == .repeatOne || target == .repeatAll)
-                && !MusicPlaybackController.supportsRepeatOne(player))
-            ? .list : target
-        playbackMode = resolved
+        guard isAppleMusicPlayingNow else { return }
+        playbackMode = target
         playbackModeActionSeq &+= 1
         Task.detached(priority: .userInitiated) {
-            if player == .appleMusic,
-               await !MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
+            if await !MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
                 await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
                 return
             }
-            let wrote = MusicPlaybackController.setPlaybackMode(resolved, for: player)
+            let wrote = MusicPlaybackController.setPlaybackMode(target)
 
             guard !wrote else { return }
             await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
@@ -494,7 +448,7 @@ final class PlaybackCoordinator: ObservableObject {
 
                 },
 
-            s.$enrichContentVersion
+            s.$cacheContentVersion
                 .dropFirst()
                 .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
                 .sink { [weak self] _ in

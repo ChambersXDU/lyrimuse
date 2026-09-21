@@ -15,7 +15,7 @@ enum MusicAutomationPermissionStatus {
 }
 
 enum MusicAutomationPermission {
-    private static let musicBundleID = "com.apple.Music"
+    private static let musicBundleID = MusicPlaybackController.appleMusicBundleIdentifier
 
     @discardableResult
     static func check(askIfNeeded: Bool) -> MusicAutomationPermissionStatus {
@@ -58,14 +58,7 @@ enum MusicAutomationPermission {
     }
 
     @MainActor
-    static func checkForCurrentPlayer(askIfNeeded: Bool) -> Bool {
-        guard MusicPlaybackController.currentControlTargetBundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return true }
-        return check(askIfNeeded: askIfNeeded).isAuthorized
-    }
-
-    @MainActor
     static func checkForCurrentPlayerSafely(askIfNeeded: Bool) async -> Bool {
-        guard MusicPlaybackController.currentControlTargetBundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return true }
         return await checkAppleMusicSafely(askIfNeeded: askIfNeeded)
     }
 

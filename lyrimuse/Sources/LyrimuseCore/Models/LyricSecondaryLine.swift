@@ -24,7 +24,4 @@ public enum LyricSecondaryLine: String, CaseIterable, Sendable {
 
     public var hidesExpandedNextLinePreview: Bool { self == .nextLine }
 
-    public static func expandedNextLinePreviewVisible(userToggle: Bool, secondary: LyricSecondaryLine) -> Bool {
-        userToggle && !secondary.hidesExpandedNextLinePreview
-    }
 }

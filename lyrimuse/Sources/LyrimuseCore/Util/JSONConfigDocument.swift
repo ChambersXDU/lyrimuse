@@ -33,16 +33,6 @@ public struct JSONConfigDocument {
         self.state = state
     }
 
-    public var isCorrupt: Bool {
-        if case .corrupt = state { return true }
-        return false
-    }
-
-    public var corruptReason: String? {
-        if case .corrupt(let reason) = state { return reason }
-        return nil
-    }
-
     public static func load(url: URL) -> JSONConfigDocument {
         let fm = FileManager.default
         var isDirectory: ObjCBool = false
@@ -111,26 +101,6 @@ public struct JSONConfigDocument {
         guard state == .loaded else { return }
         raw = [:]
         state = .corrupt(reason: reason)
-    }
-
-    @discardableResult
-    public mutating func quarantineCorruptFile(now: Date = Date()) throws -> URL? {
-        guard isCorrupt else { return nil }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        let stamp = formatter.string(from: now)
-        let fm = FileManager.default
-        var destination = url.appendingPathExtension("corrupt-\(stamp)")
-        var counter = 1
-        while fm.fileExists(atPath: destination.path) {
-            destination = url.appendingPathExtension("corrupt-\(stamp)-\(counter)")
-            counter += 1
-        }
-        try fm.moveItem(at: url, to: destination)
-        raw = [:]
-        state = .missing
-        return destination
     }
 
     private static func describe(_ error: Error) -> String {

@@ -207,7 +207,6 @@ enum ConfigPortability {
             logger.notice("importData: import bundle has no 'appSettings' section")
         }
 
-        await EnrichCacheReader.reloadNow()
         return true
     }
 

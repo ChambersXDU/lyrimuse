@@ -10,8 +10,6 @@ public enum LyrimuseIdentity {
         public let configDirName: String
         public let appLogFileName: String
 
-        public let defaultAppBundlePath: String
-
         public let urlScheme: String
 
     }
@@ -21,7 +19,6 @@ public enum LyrimuseIdentity {
         bundleIdentifier: "me.yudaotor.lyrimuse",
         configDirName: "lyrimuse",
         appLogFileName: "lyrimuse-app.log",
-        defaultAppBundlePath: "/Applications/Lyrimuse.app",
         urlScheme: "lyrimuse"
     )
 
@@ -37,8 +34,6 @@ public enum LyrimusePaths {
     public static var configDir: URL { home.appendingPathComponent(".config/\(LyrimuseIdentity.configDirName)") }
 
     public static func configFile(_ name: String) -> URL { configDir.appendingPathComponent(name) }
-
-    public static var defaultAppBundleURL: URL { URL(fileURLWithPath: LyrimuseIdentity.current.defaultAppBundlePath) }
 
 }
 

@@ -11,13 +11,11 @@ categories          aqua audio
 license             GPL-3
 maintainers         {@Yudaotor} openmaintainer
 
-description         Word-synced desktop lyrics for Apple Music, Spotify and \
-                    browser web players
+description         Word-synced desktop lyrics for Apple Music
 
 long_description    Lyrimuse shows word-by-word synced lyrics as a floating \
-                    overlay or right in the menu bar, \
-                    for Apple Music, Spotify and YouTube Music / Spotify Web \
-                    playing in a browser. Lyrics are fetched from five \
+                    overlay or right in the menu bar for Apple Music. Lyrics \
+                    are fetched from five \
                     sources and every candidate is scored on one scale so the \
                     best match wins. Translation, per-line romanization \
                     (pinyin, Cantonese Jyutping, Japanese furigana) and \

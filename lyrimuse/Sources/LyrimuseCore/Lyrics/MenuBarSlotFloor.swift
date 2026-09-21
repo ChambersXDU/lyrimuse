@@ -30,5 +30,4 @@ public struct MenuBarSlotFloor: Sendable, Equatable {
         didResetOnLastCall = true
     }
 
-    public var currentFloor: CGFloat { floor }
 }

@@ -54,10 +54,6 @@ public final class FeatureSettingsStore: ObservableObject {
 
     @Published public private(set) var lastError: String?
 
-    @Published public private(set) var pendingUntilServiceEnabled = false
-
-    @Published public private(set) var loadFailure: String?
-
     static let fileURL = LyrimusePaths.configFile("lyrimuse-features.json")
 
     private var savedSnapshot = FeatureFlagsFile()
@@ -86,17 +82,13 @@ public final class FeatureSettingsStore: ObservableObject {
 
     private var document = JSONConfigDocument(url: FeatureSettingsStore.fileURL)
 
-    public var fileState: JSONConfigDocument.LoadState { document.state }
-
-    public func load() {
+    private func load() {
         document = JSONConfigDocument.load(url: Self.fileURL)
-        loadFailure = nil
         var decoded: FeatureFlagsFile?
         switch document.state {
         case .missing:
             break
         case .corrupt(let reason):
-            loadFailure = reason
             logger.error("features.json is unusable, saves refused until it is fixed or discarded: \(reason, privacy: .public)")
         case .loaded:
 
@@ -105,7 +97,6 @@ public final class FeatureSettingsStore: ObservableObject {
             } catch {
                 let reason = "fields do not decode: \(Self.describeDecodingError(error))"
                 document.markCorrupt(reason: reason)
-                loadFailure = reason
                 logger.error("features.json fields do not decode, saves refused: \(reason, privacy: .public)")
             }
         }
@@ -131,7 +122,7 @@ public final class FeatureSettingsStore: ObservableObject {
         savedSnapshot = currentSnapshot
     }
 
-    public func persistFile() throws {
+    private func persistFile() throws {
 
         let encoded = try JSONEncoder().encode(currentSnapshot)
         guard let fields = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] else {
@@ -147,21 +138,6 @@ public final class FeatureSettingsStore: ObservableObject {
         }
     }
 
-    @discardableResult
-    public func discardCorruptFileAndSave() async -> Bool {
-        do {
-            if let moved = try document.quarantineCorruptFile() {
-                logger.notice("corrupt features.json moved aside as \(moved.lastPathComponent, privacy: .public)")
-            }
-        } catch {
-            lastError = String(format: L10n.t("无法移走损坏的配置文件: %@"), error.localizedDescription)
-            logger.error("quarantine failed: \(String(describing: error), privacy: .public)")
-            return false
-        }
-        loadFailure = nil
-        return await save()
-    }
-
     private static func describeDecodingError(_ error: Error) -> String {
         guard let decoding = error as? DecodingError else { return String(describing: error) }
         let context: DecodingError.Context
@@ -175,13 +151,8 @@ public final class FeatureSettingsStore: ObservableObject {
         return path.isEmpty ? context.debugDescription : "\(path): \(context.debugDescription)"
     }
 
-    public func commitSnapshot() {
+    private func commitSnapshot() {
         savedSnapshot = currentSnapshot
-    }
-
-    public func clearApplyStatus() {
-        lastError = nil
-        pendingUntilServiceEnabled = false
     }
 
     @discardableResult
@@ -201,7 +172,6 @@ public final class FeatureSettingsStore: ObservableObject {
         }
 
         lastError = nil
-        pendingUntilServiceEnabled = false
         commitSnapshot()
         return true
     }

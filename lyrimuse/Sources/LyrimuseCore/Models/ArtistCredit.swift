@@ -49,33 +49,4 @@ public enum ArtistCredit {
         primary(artist) ?? artist.trimmingCharacters(in: .whitespaces)
     }
 
-    public static func albumConsensusKey(artist: String, album: String?) -> String? {
-        guard let album = album?.trimmingCharacters(in: .whitespaces), !album.isEmpty else { return nil }
-        return mergeArtist(artist).lowercased() + "|" + album.lowercased()
-    }
-
-    public static func albumConsensusCovers(
-        rows: [(artist: String, album: String?, image: URL?)]
-    ) -> [String: URL] {
-        var tally: [String: [(url: URL, count: Int, firstIndex: Int)]] = [:]
-        for (i, row) in rows.enumerated() {
-            guard let image = row.image,
-                  let key = albumConsensusKey(artist: row.artist, album: row.album) else { continue }
-            var bucket = tally[key] ?? []
-            if let pos = bucket.firstIndex(where: { $0.url == image }) {
-                bucket[pos].count += 1
-            } else {
-                bucket.append((image, 1, i))
-            }
-            tally[key] = bucket
-        }
-        var out: [String: URL] = [:]
-        for (key, bucket) in tally {
-            guard let best = bucket.max(by: { a, b in
-                a.count != b.count ? a.count < b.count : a.firstIndex > b.firstIndex
-            }), best.count >= 2 else { continue }
-            out[key] = best.url
-        }
-        return out
-    }
 }

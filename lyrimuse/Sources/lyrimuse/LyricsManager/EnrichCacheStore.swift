@@ -90,79 +90,30 @@ public final class EnrichCacheStore: ObservableObject {
 
     private static var lyricsDir: URL { FeatureSettingsStore.shared.effectiveLyricsDir }
 
-    private var raw: [String: [String: Any]] = [:]
+    private var raw: [String: [String: Any]] {
+        get { EnrichCacheReader.entries }
+        set { EnrichCacheReader.entries = newValue }
+    }
     private var pendingExportKeys: Set<String> = []
     private var pendingFileChanges: [URL: ReversibleFileChanges.Change] = [:]
-    private var editGeneration = 0
 
     private init() {}
 
-    private func markEdited(_ key: String) {
-        editGeneration += 1
-    }
-
-    private var lastLoadedFingerprint: FileFingerprint?
-
-    struct FileFingerprint: Equatable {
-        var mtime: Date
-        var size: Int64
-    }
-
-    private nonisolated static func fileFingerprint(_ url: URL) -> FileFingerprint? {
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let mtime = attrs[.modificationDate] as? Date else { return nil }
-        return FileFingerprint(mtime: mtime, size: (attrs[.size] as? NSNumber)?.int64Value ?? 0)
-    }
-
     public func reload(onlyIfChanged: Bool = false) async {
-        let generation = editGeneration
-        let cacheURL = Self.cacheURL
-        if onlyIfChanged,
-           let fp = Self.fileFingerprint(cacheURL),
-           fp == lastLoadedFingerprint {
-            return
-        }
-
+        if onlyIfChanged, !summaries.isEmpty { return }
         refreshSizeBytes()
         isLoading = summaries.isEmpty
         defer { isLoading = false }
-        final class ResultBox: @unchecked Sendable {
-            var obj: [String: [String: Any]]?
-            var bundle: SummariesBundle?
-            var fingerprint: FileFingerprint?
-            var errorMessage: String?
-        }
-        let box = ResultBox()
-
-        let offsetsSnapshot = LyricsOffsetStore.shared.offsetsSnapshot
-
-        let lyricsDir = Self.lyricsDir
-        await Task.detached(priority: .userInitiated) {
-            box.fingerprint = Self.fileFingerprint(cacheURL)
-            guard let data = try? Data(contentsOf: cacheURL) else {
-                box.errorMessage = L10n.t("读取本地记录文件失败")
-                return
-            }
-            guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
-                box.errorMessage = L10n.t("解析本地记录文件失败")
-                return
-            }
-            box.obj = obj
-
-            box.bundle = Self.buildSummaries(from: obj, offsetsSnapshot: offsetsSnapshot, lyricsDir: lyricsDir)
-        }.value
-        guard generation == editGeneration else { return }
-        if let obj = box.obj, let bundle = box.bundle {
-            raw = obj
-            lastLoadedFingerprint = box.fingerprint
+        let loaded = EnrichCacheReader.reloadNow()
+        if loaded {
             lastError = nil
-            applySummaries(bundle)
         } else {
-            raw = [:]
-            lastLoadedFingerprint = nil
-            lastError = box.errorMessage ?? L10n.t("读取本地记录文件失败")
-            applySummaries(Self.buildSummaries(from: [:], offsetsSnapshot: offsetsSnapshot, lyricsDir: Self.lyricsDir))
+            lastError = L10n.t("读取本地记录文件失败")
         }
+        applySummaries(Self.buildSummaries(
+            from: raw,
+            offsetsSnapshot: LyricsOffsetStore.shared.offsetsSnapshot,
+            lyricsDir: Self.lyricsDir))
     }
 
     private nonisolated static func fileSizeBytes(_ url: URL) -> Int64 {
@@ -439,7 +390,6 @@ public final class EnrichCacheStore: ObservableObject {
             entry["manual_pick_sha"] = pickSHA
         }
         raw[key] = entry
-        markEdited(key)
         pendingExportKeys.insert(key)
 
         rebuildSummaries()
@@ -494,7 +444,6 @@ public final class EnrichCacheStore: ObservableObject {
                 entry.removeValue(forKey: "manual_lyrics")
             }
             raw[key] = entry
-            markEdited(key)
             pendingExportKeys.insert(key)
         }
         rebuildSummaries()
@@ -512,7 +461,6 @@ public final class EnrichCacheStore: ObservableObject {
             entry["plain_lyrics_source"] = source
         }
         raw[key] = entry
-        markEdited(key)
         rebuildSummaries()
         guard await persist() else { return false }
         return true
@@ -530,7 +478,6 @@ public final class EnrichCacheStore: ObservableObject {
             entry.removeValue(forKey: "instrumental")
         }
         raw[key] = entry
-        markEdited(key)
         rebuildSummaries()
         guard await persist() else { return }
     }
@@ -557,7 +504,6 @@ public final class EnrichCacheStore: ObservableObject {
         entry["lyrics_decision"] = decision
         entry["lyrics_decision_applied"] = decision
         raw[key] = entry
-        markEdited(key)
         rebuildSummaries()
         guard await persist() else { return }
     }
@@ -574,7 +520,6 @@ public final class EnrichCacheStore: ObservableObject {
         if victims.count >= Self.autoSnapshotDeleteThreshold {
             lastAutoSnapshotURL = await LyricsBackupStore.writeAutoSnapshot(reason: "delete")
         }
-        editGeneration += 1
         var removed: [String: [String: Any]] = [:]
         removed.reserveCapacity(victims.count)
         for key in victims {
@@ -596,7 +541,6 @@ public final class EnrichCacheStore: ObservableObject {
     public func clearAll() async {
         lastAutoSnapshotURL = await LyricsBackupStore.writeAutoSnapshot(reason: "clear")
         let removed = raw
-        editGeneration += 1
         raw = [:]
         pendingFileChanges.removeAll()
         pendingExportKeys.removeAll()
@@ -627,7 +571,6 @@ public final class EnrichCacheStore: ObservableObject {
     func restoreFromAutoSnapshot(_ snapshot: LyricsBackupStore.Snapshot) async -> String? {
         guard let result = await LyricsBackupStore.restoreAutoSnapshot(snapshot) else { return nil }
         await reload()
-        EnrichCacheReader.reloadNow()
         PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
         refreshSizeBytes()
         return String(format: L10n.t("已恢复 %d 个歌词文件（新增 %d、覆盖 %d）"),
@@ -644,16 +587,10 @@ public final class EnrichCacheStore: ObservableObject {
 
     @discardableResult
     private func persist(replacingEverything: Bool = false) async -> Bool {
-        guard JSONSerialization.isValidJSONObject(raw),
-              let data = try? JSONSerialization.data(withJSONObject: raw, options: [.sortedKeys]) else {
-            lastError = L10n.t("内部数据不是合法 JSON,已放弃保存")
-            logger.error("raw dict is not valid JSON, aborting save")
-            return false
-        }
         do {
             try EnrichCachePersistence.save(
                 cacheURL: Self.cacheURL,
-                data: data,
+                entries: raw,
                 fileChanges: Array(pendingFileChanges.values),
                 clearLyricsDirectory: replacingEverything ? Self.lyricsDir : nil,
                 exportKeys: pendingExportKeys,
@@ -661,8 +598,7 @@ public final class EnrichCacheStore: ObservableObject {
             pendingExportKeys.removeAll()
             pendingFileChanges.removeAll()
             lastError = nil
-            lastLoadedFingerprint = Self.fileFingerprint(Self.cacheURL)
-            EnrichCacheReader.reloadNow()
+            EnrichCacheReader.noteCacheWrite()
             PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
             return true
         } catch {

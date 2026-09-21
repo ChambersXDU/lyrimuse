@@ -69,23 +69,6 @@
         }
       }
     },
-    "已保存，但后台采集服务重启失败，改动要等下次重启才生效" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saved, but the background service could not be restarted. The change takes effect the next time it restarts."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已保存，但后台采集服务重启失败，改动要等下次重启才生效"
-          }
-        }
-      }
-    },
     "源里有歌、无词" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10218,23 +10201,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "标题反查：Apple 原产地商店"
-          }
-        }
-      }
-    },
-    "后台歌词服务" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Background lyrics service"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后台歌词服务"
           }
         }
       }
