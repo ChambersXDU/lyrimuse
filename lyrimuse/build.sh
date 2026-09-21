@@ -95,7 +95,6 @@ cp -R Sources/lyrimuse/Resources/en.lproj "$APP_DIR/Contents/Resources/en.lproj"
 for png in Sources/lyrimuse/Resources/*.png; do
   cp "$png" "$APP_DIR/Contents/Resources/$(basename "$png")"
 done
-cp ../THIRD_PARTY_LICENSES "$APP_DIR/Contents/Resources/THIRD_PARTY_LICENSES"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
