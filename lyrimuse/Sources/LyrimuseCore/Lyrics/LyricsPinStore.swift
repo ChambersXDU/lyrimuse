@@ -14,12 +14,7 @@ public final class LyricsPinStore: ObservableObject {
 
     private static let defaultURL = LyrimusePaths.configFile("lyrimuse-lyrics-pins.json")
 
-    private static var url = defaultURL
-
-    public static func redirectForTesting(to url: URL) {
-        Self.url = url
-        shared.pins = load()
-    }
+    private static let url = defaultURL
 
     @Published public private(set) var pins: [String: Int]
 

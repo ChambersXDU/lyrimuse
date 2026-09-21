@@ -37,4 +37,4 @@ Provider 只负责请求、必要的协议解码和候选解析；Resolver 负�
 
 ## 构建与测试
 
-`lyrimuse/build.sh` 只构建 Swift targets、组装 App、签名和可选重启 App。`swift run --package-path lyrimuse lyrimuse-selftest --quiet` 覆盖 Core、缓存、设置和 UI 相关的纯 Swift 守卫。
+`lyrimuse/build.sh` 只构建 Swift targets、组装 App、签名和可选重启 App。`swift run --package-path lyrimuse lyrimuse-selftest` 只保留歌词解析、候选解析和同步时间轴三组核心回归；UI、设置和几何通过实际使用检查。

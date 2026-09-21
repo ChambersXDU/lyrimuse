@@ -8,7 +8,7 @@
 
 ```bash
 swift build --package-path lyrimuse --product lyrimuse
-swift run --package-path lyrimuse lyrimuse-selftest --quiet
+swift run --package-path lyrimuse lyrimuse-selftest
 bash -n lyrimuse/build.sh lyrimuse/package.sh
 ```
 
@@ -20,6 +20,6 @@ App 通过 `SMAppService` 管理可选的登录启动。歌词搜索、缓存写
 
 ## 发布前检查
 
-- 运行完整 selftest，并确认字符串和第三方许可证检查通过。
+- 运行三组核心 selftest，并确认字符串和第三方许可证检查通过。
 - 用 `build.sh --dest <目录> --no-restart` 构建 App，检查 bundle 中只有 Swift App、现有资源和必要的 media-control 工具。
 - 用 `codesign --verify --deep --strict` 校验 bundle，并确认 App 启动后 Apple Music 换歌、悬浮歌词、菜单栏歌词和缓存重启恢复正常。

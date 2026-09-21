@@ -7,7 +7,7 @@
 ```bash
 swift build -c release --package-path lyrimuse --product lyrimuse
 swift build -c release --package-path lyrimuse --product lyrimuse-selftest
-swift run -c release --package-path lyrimuse lyrimuse-selftest --quiet
+swift run -c release --package-path lyrimuse lyrimuse-selftest
 bash -n lyrimuse/build.sh lyrimuse/package.sh
 python3 lyrimuse/scripts/check_strings_parity.py
 python3 lyrimuse/scripts/check_third_party_licenses.py

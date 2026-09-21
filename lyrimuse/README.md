@@ -40,7 +40,7 @@ Resolver 直接并发请求 LRCLIB、酷我、网易云、酷狗和 QQ 音乐，
 - `Sources/LyrimuseCore/` —— 纯逻辑 library target（歌词解析/网络/进度外推/数据模型），
   不依赖 AppKit/SwiftUI，方便脱离 GUI 单独测试。
 - `Sources/lyrimuse/` —— App 本体（菜单栏、悬浮窗、设置面板、开机启动管理）。
-- `Sources/lyrimuse-selftest/` —— 手写的极简断言测试(`swift run lyrimuse-selftest`)。
+- `Sources/lyrimuse-selftest/` —— 手写的极简断言测试(`swift run lyrimuse-selftest`)，只覆盖歌词解析、候选解析和同步时间轴。
   **这台机器没有完整 Xcode，`XCTest`/`Testing` 两个官方测试框架都用不了**(`swift test` 报
   "no such module")，所以用普通可执行 target + 手写比较代替。
 
@@ -51,7 +51,7 @@ Resolver 直接并发请求 LRCLIB、酷我、网易云、酷狗和 QQ 音乐，
 ./build.sh --universal   # 编 arm64 + x86_64(给 Intel 的兼容包)
 ./build.sh --no-restart  # 只构建
 ./build.sh --dest <路径> # 组装到指定路径(隐含 --no-restart),package.sh 用这个一次出两种架构
-swift run lyrimuse-selftest   # 跑歌词解析器的合成字符串测试
+swift run lyrimuse-selftest   # 跑歌词解析、候选解析和同步时间轴测试
 ```
 
 发布资产由 `package.sh` 打(输出到 `lyrimuse/dist/`)。它**自己调 `build.sh --dest` 构建两份**,

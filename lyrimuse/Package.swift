@@ -28,11 +28,5 @@ let package = Package(
             dependencies: ["LyrimuseCore"],
             path: "Sources/lyrimuse-selftest"
         ),
-
-        .executableTarget(
-            name: "lyrimuse-benchmark",
-            dependencies: ["LyrimuseCore"],
-            path: "Sources/lyrimuse-benchmark"
-        ),
     ]
 )

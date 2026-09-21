@@ -473,15 +473,6 @@ public enum EnrichCacheReader {
         return (entries, keys)
     }
 
-    public static func setEntriesForTesting(_ entries: [String: EnrichCacheEntry]?) {
-        cachedMTime = entries != nil ? Date() : nil
-        cachedEntries = entries
-        cachedCoverIndex = nil
-        cachedLooseIndex = nil
-        cachedEntryIndex = nil
-        cachedResolvedKeyIndex = nil
-    }
-
     public static func cacheModifiedAt() -> Date? {
         (try? FileManager.default.attributesOfItem(atPath: cacheURL.path))?[.modificationDate] as? Date
     }
