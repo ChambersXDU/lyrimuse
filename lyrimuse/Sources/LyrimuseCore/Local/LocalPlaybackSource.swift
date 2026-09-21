@@ -62,10 +62,10 @@ public final class LocalPlaybackSource: ObservableObject {
     private var currentPinKey = ""
     private var lastEnrichMTime: Date?
     private var lastReloadSnapshot: LyricsReloadSnapshot?
-    private var pollTimer: Timer?
     private var fastTimer: Timer?
     private var playerInfoObserver: NSObjectProtocol?
     private var screenLocked = false
+    private var needsRealtimeLyricsUpdates = false
     private var pollGeneration = 0
     private var settledThresholdIndex: Int?
     private var settledThresholdMs = 0
@@ -80,6 +80,15 @@ public final class LocalPlaybackSource: ObservableObject {
 
     public func setNetworkDown(_ value: Bool) {
         networkDown = value
+    }
+
+    public func setNeedsRealtimeLyricsUpdates(_ needs: Bool) {
+        needsRealtimeLyricsUpdates = needs
+        if needs {
+            ensureFastTimerRunning()
+        } else {
+            stopFastTimer()
+        }
     }
 
     public enum PositionSourceTier { case precise, cleanExtrapolated, noisyFloored }
@@ -136,6 +145,12 @@ public final class LocalPlaybackSource: ObservableObject {
         return currentBundleID == eventBundleID
     }
 
+    public nonisolated static func shouldRunFastTimer(
+        isPlaying: Bool, hasContent: Bool, screenLocked: Bool, needsRealtimeLyricsUpdates: Bool
+    ) -> Bool {
+        isPlaying && hasContent && !screenLocked && needsRealtimeLyricsUpdates
+    }
+
     public nonisolated static func supportsChineseVariant(
         lyrics: String, translation: String, translationVisible: Bool
     ) -> Bool {
@@ -143,25 +158,17 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     public func start() {
-        guard pollTimer == nil else { return }
+        guard playerInfoObserver == nil else { return }
         EnrichCacheReader.installMemoryPressureRelief()
-        let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+        playerInfoObserver = DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.apple.Music.playerInfo"), object: nil, queue: .main
+        ) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        pollTimer = timer
-        if playerInfoObserver == nil {
-            playerInfoObserver = DistributedNotificationCenter.default().addObserver(
-                forName: NSNotification.Name("com.apple.Music.playerInfo"), object: nil, queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.poll() }
-            }
         }
         poll()
     }
 
     public func stop() {
-        pollTimer?.invalidate(); pollTimer = nil
         fastTimer?.invalidate(); fastTimer = nil
         if let observer = playerInfoObserver {
             DistributedNotificationCenter.default().removeObserver(observer)
@@ -241,7 +248,16 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     private func ensureFastTimerRunning() {
-        guard !screenLocked, fastTimer == nil else { return }
+        guard Self.shouldRunFastTimer(
+            isPlaying: isPlayingNow,
+            hasContent: syncEngine.hasContent,
+            screenLocked: screenLocked,
+            needsRealtimeLyricsUpdates: needsRealtimeLyricsUpdates
+        ) else {
+            stopFastTimer()
+            return
+        }
+        guard fastTimer == nil else { return }
         let timer = Timer(timeInterval: 1 / 20, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.fastTick() }
         }
@@ -296,6 +312,7 @@ public final class LocalPlaybackSource: ObservableObject {
         EnrichCacheReader.reloadNow()
         lastEnrichMTime = EnrichCacheReader.decodedContentVersion
         reloadCurrentLyrics()
+        ensureFastTimerRunning()
         fastTick()
     }
 

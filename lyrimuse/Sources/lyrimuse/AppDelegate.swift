@@ -106,6 +106,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LocalPlaybackSource.shared.romanizationScripts = settings.romanizationScripts
         LocalPlaybackSource.shared.showsTranslation = settings.showTranslation
 
+        Publishers.CombineLatest(settings.$classicOverlayEnabled, settings.$showLyricsInMenuBar)
+            .map { $0 || $1 }
+            .removeDuplicates()
+            .sink { needsRealtimeUpdates in
+                LocalPlaybackSource.shared.setNeedsRealtimeLyricsUpdates(needsRealtimeUpdates)
+            }
+            .store(in: &cancellables)
+
         PlaybackCoordinator.shared.start()
         LyricsSearchService.shared.startAutomaticSearch()
         MenuBarStatusItem.shared.start()

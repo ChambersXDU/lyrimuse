@@ -5,8 +5,25 @@ private struct StubProvider: LyricsProvider {
     let id: String
     let candidates: [LyricsCandidate]
     let fails: Bool
+    let delayNanoseconds: UInt64
+    let callCount: LockedValue<Int>?
+
+    init(
+        id: String, candidates: [LyricsCandidate], fails: Bool,
+        delayNanoseconds: UInt64 = 0, callCount: LockedValue<Int>? = nil
+    ) {
+        self.id = id
+        self.candidates = candidates
+        self.fails = fails
+        self.delayNanoseconds = delayNanoseconds
+        self.callCount = callCount
+    }
 
     func search(_ query: LyricsQuery) async throws -> [LyricsCandidate] {
+        callCount?.increment()
+        if delayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: delayNanoseconds)
+        }
         if fails { throw StubProviderError.unavailable }
         return candidates
     }
@@ -31,6 +48,12 @@ private final class LockedValue<Value>: @unchecked Sendable {
         defer { lock.unlock() }
         return value
     }
+
+    func increment() where Value == Int {
+        lock.lock()
+        value = (value ?? 0) + 1
+        lock.unlock()
+    }
 }
 
 private func timedCandidate(
@@ -43,11 +66,13 @@ private func timedCandidate(
         duration: Double(end), title: title, artist: artist, album: album)
 }
 
-private func resolveSynchronously(_ resolver: LyricsResolver, query: LyricsQuery) -> LyricsResolution? {
+private func resolveSynchronously(
+    _ resolver: LyricsResolver, query: LyricsQuery, enabledIDs: [String]? = nil
+) -> LyricsResolution? {
     let result = LockedValue<LyricsResolution>()
     let semaphore = DispatchSemaphore(value: 0)
     Task.detached {
-        result.set(await resolver.resolve(query))
+        result.set(await resolver.resolve(query, enabledIDs: enabledIDs))
         semaphore.signal()
     }
     semaphore.wait()
@@ -73,6 +98,18 @@ func runLyricsResolverTests() {
     expectEqual(featMatches.first?.candidate.artist, "Taylor Swift & Ed Sheeran")
 
     let versionQuery = LyricsQuery(title: "Song", artist: "Artist", duration: 180)
+
+    let disabledCalls = LockedValue<Int>()
+    let disabledResolution = resolveSynchronously(
+        LyricsResolver(providers: [
+            StubProvider(
+                id: "disabled", candidates: [timedCandidate(source: "disabled", title: "Song", artist: "Artist")],
+                fails: false, callCount: disabledCalls)
+        ]), query: versionQuery, enabledIDs: [])
+    expectEqual(disabledResolution?.sourcesSeen, [], "没有启用歌词源时不恢复全部源")
+    expectEqual(disabledResolution?.sourcesResponded, [])
+    expectEqual(disabledCalls.get() ?? 0, 0, "没有启用歌词源时不发起搜索")
+
     let exact = timedCandidate(source: "lrclib", title: "Song", artist: "Artist", end: 178)
     let live = timedCandidate(source: "kugou", title: "Song (Live)", artist: "Artist", end: 178)
     let remaster = timedCandidate(source: "netease", title: "Song (Remastered 2024)", artist: "Artist", end: 179)
@@ -105,6 +142,44 @@ func runLyricsResolverTests() {
     expectEqual(resolution?.sourcesResponded, ["kuwo", "lrclib", "netease", "qq"], "单源失败不阻断其他源")
     expectEqual(resolution?.failures.keys.sorted(), ["kugou"])
     expectEqual(resolution?.winner?.source, "kuwo", "多源结果由 Matcher 统一排序")
+
+    let fast = LyricsCandidate(
+        source: "fast", lyrics: "[02:59.00]one\n[03:00.00]last", duration: 180,
+        title: "Song", artist: "Artist", album: "Album")
+    let earlyQuery = LyricsQuery(title: "Song", artist: "Artist", album: "Album", duration: 180)
+    let earlyStarted = Date()
+    let earlyResolution = resolveSynchronously(LyricsResolver(providers: [
+        StubProvider(id: "fast", candidates: [fast], fails: false),
+        StubProvider(id: "slow-a", candidates: [], fails: false, delayNanoseconds: 1_000_000_000),
+        StubProvider(id: "slow-b", candidates: [], fails: false, delayNanoseconds: 1_000_000_000),
+    ]), query: earlyQuery)
+    let earlyElapsed = Date().timeIntervalSince(earlyStarted)
+    expectEqual(earlyResolution?.winner?.source, "fast", "高置信候选可以提前结束")
+    expectEqual(earlyResolution?.sourcesResponded, ["fast"], "提前结束不等待剩余源")
+    expectEqual(earlyElapsed < 0.7, true, "提前结束不受慢源等待影响")
+
+    let lowConfidence = resolveSynchronously(LyricsResolver(providers: [
+        StubProvider(id: "one", candidates: [timedCandidate(source: "one", title: "Other", artist: "Artist", end: 180)], fails: false),
+        StubProvider(id: "two", candidates: [], fails: false, delayNanoseconds: 100_000_000),
+        StubProvider(id: "three", candidates: [], fails: false, delayNanoseconds: 100_000_000),
+    ]), query: versionQuery)
+    expectEqual(lowConfidence?.sourcesResponded, ["one", "three", "two"], "没有高置信候选时收集全部源")
+
+    expectEqual(LocalPlaybackSource.shouldRunFastTimer(
+        isPlaying: true, hasContent: true, screenLocked: false, needsRealtimeLyricsUpdates: false),
+        false, "没有实时歌词需求时不启动 fastTimer")
+    expectEqual(LocalPlaybackSource.shouldRunFastTimer(
+        isPlaying: true, hasContent: true, screenLocked: false, needsRealtimeLyricsUpdates: true),
+        true, "实时歌词需求恢复后允许启动 fastTimer")
+    expectEqual(LocalPlaybackSource.shouldRunFastTimer(
+        isPlaying: false, hasContent: true, screenLocked: false, needsRealtimeLyricsUpdates: true),
+        false, "暂停时不启动 fastTimer")
+    expectEqual(LocalPlaybackSource.shouldRunFastTimer(
+        isPlaying: true, hasContent: false, screenLocked: false, needsRealtimeLyricsUpdates: true),
+        false, "无歌词时不启动 fastTimer")
+    expectEqual(LocalPlaybackSource.shouldRunFastTimer(
+        isPlaying: true, hasContent: true, screenLocked: true, needsRealtimeLyricsUpdates: true),
+        false, "锁屏时不启动 fastTimer")
 
     let instrumental = LyricsMatcher.rank([
         LyricsCandidate(source: "lrclib", lyrics: "", title: "Intro", artist: "Artist", instrumental: true)
