@@ -37,9 +37,8 @@ accordingly.
 
 Worth knowing before you look for issues:
 
-- **No listening sockets.** Neither the menu-bar app nor the background helper
-  (`com.lyrimuse.collector`, a launchd agent) opens one. All network activity is
-  outbound.
+- **No listening sockets.** The menu-bar app opens no listening socket. All
+  network activity is outbound.
 - **Credentials sit in a file, not the Keychain.** The ListenBrainz token lives
   in `~/.config/lyrimuse/config.json`, written
   atomically with mode `0600`. Anything that can read your user's files can read
@@ -72,8 +71,8 @@ as vulnerabilities, but do tell me if you think the reasoning is wrong.
 
 ## Scope
 
-In scope: this repository, the released app and its background helper, and the
-Homebrew tap at `Yudaotor/homebrew-lyrimuse`.
+In scope: this repository, the released app, and the Homebrew tap at
+`Yudaotor/homebrew-lyrimuse`.
 
 Out of scope: the third-party lyrics, metadata and listening services the app
 talks to. Report those to the service in question.

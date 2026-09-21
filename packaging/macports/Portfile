@@ -17,7 +17,7 @@ description         Word-synced desktop lyrics for Apple Music, Spotify and \
 long_description    Lyrimuse shows word-by-word synced lyrics as a floating \
                     overlay or right in the menu bar, \
                     for Apple Music, Spotify and YouTube Music / Spotify Web \
-                    playing in a browser. Lyrics are fetched from nine \
+                    playing in a browser. Lyrics are fetched from five \
                     sources and every candidate is scored on one scale so the \
                     best match wins. Translation, per-line romanization \
                     (pinyin, Cantonese Jyutping, Japanese furigana) and \
@@ -37,16 +37,6 @@ current Command Line Tools) to build."
     }
 }
 
-depends_build-append \
-                    port:go
-depends_lib-append  port:media-control
-
-patchfiles          patch-build-env-hooks.diff
-patch.pre_args-append -p1
-
-post-patch {
-}
-
 use_configure       no
 
 build.dir           ${worksrcpath}/lyrimuse
@@ -55,16 +45,10 @@ build.target
 build.args          --dest ${workpath}/stage/Lyrimuse.app
 
 build.env-append    LYRIMUSE_VERSION=${version} \
-                    LYRIMUSE_GOTOOLCHAIN=local \
-                    GOFLAGS=-buildvcs=false \
-                    GOCACHE=${workpath}/.gocache \
-                    GOPATH=${workpath}/.gopath \
-                    GOMODCACHE=${workpath}/.gomodcache \
                     TMPDIR=${workpath}/tmp \
                     HOME=${workpath}/home \
                     LYRIMUSE_SPM_CACHE_PATH=${workpath}/spm-cache \
-                    LYRIMUSE_SPM_SCRATCH_PATH=${workpath}/spm-scratch \
-                    LYRIMUSE_MEDIA_CONTROL_PREFIX=${prefix}
+                    LYRIMUSE_SPM_SCRATCH_PATH=${workpath}/spm-scratch
 
 pre-build {
     file mkdir ${workpath}/tmp

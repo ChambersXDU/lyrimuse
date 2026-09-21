@@ -25,23 +25,6 @@ def brew_installs():
             found.append((m.group(1).split("/")[-1], "lyrimuse/build.sh"))
     return found
 
-def go_requires():
-    found, in_block = [], False
-    for line in (ROOT / "lyrimuse-collector/go.mod").read_text(encoding="utf-8").splitlines():
-        code = line.split("//", 1)[0].strip()
-        if not code:
-            continue
-        if code.startswith("require ("):
-            in_block = True
-            continue
-        if in_block and code == ")":
-            in_block = False
-            continue
-        m = re.match(r"^(?:require\s+)?(\S+)\s+v\S+$", code)
-        if m and (in_block or code.startswith("require ")):
-            found.append((m.group(1), "lyrimuse-collector/go.mod"))
-    return found
-
 def build_copies_licenses():
     for line in (ROOT / "lyrimuse/build.sh").read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
@@ -56,7 +39,7 @@ def main():
     text = LICENSES.read_text(encoding="utf-8").lower()
 
     deps, seen = [], set()
-    for name, src in spm_identities() + brew_installs() + go_requires():
+    for name, src in spm_identities() + brew_installs():
         if name.lower() not in seen:
             seen.add(name.lower())
             deps.append((name, src))

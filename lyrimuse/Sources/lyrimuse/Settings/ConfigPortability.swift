@@ -32,10 +32,6 @@ enum ConfigPortability {
         "np:overlayPositionOrigin",
         "np:launchAtLoginEnabled",
 
-        "np:collectorServiceEnabled",
-
-        CollectorServiceManager.installedFingerprintKey,
-
     ]
 
     static let obsoleteDefaultsKeys: Set<String> = [
@@ -211,8 +207,7 @@ enum ConfigPortability {
             logger.notice("importData: import bundle has no 'appSettings' section")
         }
 
-        let reloaded = await CollectorControl.restartAndWaitAsync()
-        logger.info("importData: collector reload after import — ok=\(reloaded)")
+        await EnrichCacheReader.reloadNow()
         return true
     }
 
@@ -245,8 +240,6 @@ enum ConfigPortability {
         await LyricsPinStore.shared.removeAll()
         logger.info("clearAllConfig: cleared \(clearedCount) UserDefaults keys, filesRemovedOK=\(ok)")
 
-        let state = await CollectorServiceManager.setEnabledAndWait(false)
-        logger.info("clearAllConfig: collector service stopped — stillRunning=\(state.isRunning)")
         return ok
     }
 

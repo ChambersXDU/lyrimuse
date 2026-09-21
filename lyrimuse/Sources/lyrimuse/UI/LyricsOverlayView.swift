@@ -17,7 +17,7 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
-    @Published private(set) var collectorNetworkDown = false
+    @Published private(set) var networkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
 
     @Published private(set) var currentLineFillSettled = true
@@ -67,7 +67,7 @@ private final class OverlayPlayback: ObservableObject {
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
-            p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
+            p.$networkDown.removeDuplicates().sink { [weak self] in self?.networkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
             Publishers.CombineLatest3(p.$artworkAccentColor, s.$followsCoverArt, s.$foregroundColor)
@@ -666,7 +666,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
-        } else if playback.collectorNetworkDown && !playback.hasLyricsContent {
+        } else if playback.networkDown && !playback.hasLyricsContent {
 
             Text(L10n.t("网络连接失败"))
                 .font(playback.mainFont)

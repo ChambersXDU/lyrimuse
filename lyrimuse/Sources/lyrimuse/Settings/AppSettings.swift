@@ -63,7 +63,6 @@ final class AppSettings: ObservableObject {
         static let showTranslation = "np:showTranslation"
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
 
-        static let collectorServiceEnabled = "np:collectorServiceEnabled"
         static let showInDock = "np:showInDock"
         static let showNextLinePreview = "np:showNextLinePreview"
         static let overlayDuetAlignmentOverride = "np:overlayDuetAlignmentOverride"
@@ -175,13 +174,6 @@ final class AppSettings: ObservableObject {
         didSet {
             defaults.set(launchAtLoginEnabled, forKey: Keys.launchAtLoginEnabled)
             LoginItemManager.shared.setEnabled(launchAtLoginEnabled)
-        }
-    }
-
-    @Published var collectorServiceEnabled: Bool {
-        didSet {
-            defaults.set(collectorServiceEnabled, forKey: Keys.collectorServiceEnabled)
-            CollectorServiceManager.setEnabled(collectorServiceEnabled)
         }
     }
 
@@ -425,7 +417,6 @@ final class AppSettings: ObservableObject {
         showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? Self.userReadsChinese
 
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? true
-        collectorServiceEnabled = (defaults.object(forKey: Keys.collectorServiceEnabled) as? Bool) ?? false
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
 
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? true

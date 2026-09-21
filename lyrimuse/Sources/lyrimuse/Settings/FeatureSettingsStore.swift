@@ -6,40 +6,10 @@ import SwiftUI
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "feature-settings")
 
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu, deezer
+    case lrclib, kuwo, netease, kugou, qq
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
-}
-
-public enum MusixmatchTranslationLanguage: String, CaseIterable, Identifiable, Codable {
-    case auto
-    case en, zh, ja, ko, es, fr, de, pt, it, ru, ar, vi, th, id, nl, pl, tr
-
-    public var id: Self { self }
-
-    public var displayName: String {
-        switch self {
-        case .auto: return L10n.t("跟随系统语言")
-        case .en: return "English"
-        case .zh: return "简体中文"
-        case .ja: return "日本語"
-        case .ko: return "한국어"
-        case .es: return "Español"
-        case .fr: return "Français"
-        case .de: return "Deutsch"
-        case .pt: return "Português"
-        case .it: return "Italiano"
-        case .ru: return "Русский"
-        case .ar: return "العربية"
-        case .vi: return "Tiếng Việt"
-        case .th: return "ไทย"
-        case .id: return "Bahasa Indonesia"
-        case .nl: return "Nederlands"
-        case .pl: return "Polski"
-        case .tr: return "Türkçe"
-        }
-    }
 }
 
 public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
@@ -55,39 +25,17 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
 
 struct FeatureFlagsFile: Codable, Equatable {
 
-    var albumPrefetch: Bool?
-
-    var lyricsAutoUpgrade: Bool?
     var lyricsSources: [String]?
 
-    var amllLyrics: Bool?
-
-    var lyricFindLyrics: Bool?
-
-    var kuwoLyrics: Bool?
-
-    var miguLyrics: Bool?
-
-    var deezerLyrics: Bool?
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
     var lyricsDir: String?
 
-    var lyricsTranslationLanguage: String?
-
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case albumPrefetch = "album_prefetch"
-        case lyricsAutoUpgrade = "lyrics_auto_upgrade"
         case lyricsSources = "lyrics_sources"
-        case amllLyrics = "amll_lyrics"
-        case lyricFindLyrics = "lyricfind_lyrics"
-        case kuwoLyrics = "kuwo_lyrics"
-        case miguLyrics = "migu_lyrics"
-        case deezerLyrics = "deezer_lyrics"
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
-        case lyricsTranslationLanguage = "lyrics_translation_language"
     }
 
     static let knownFileKeys: Set<String> = Set(CodingKeys.allCases.map(\.rawValue))
@@ -97,18 +45,12 @@ struct FeatureFlagsFile: Codable, Equatable {
 public final class FeatureSettingsStore: ObservableObject {
     public static let shared = FeatureSettingsStore()
 
-    @Published public var albumPrefetch = true
-
-    @Published public var lyricsAutoUpgrade = true
-
     @Published public var lyricsSources: Set<LyricsSource> = Set(LyricsSource.allCases)
     @Published public var lyricsSourceMode: LyricsSourceMode = .smart
 
     @Published public var lyricsSourceOrder: [LyricsSource] = LyricsSource.allCases
 
     @Published public var lyricsDir = ""
-
-    @Published public var lyricsTranslationLanguage: MusixmatchTranslationLanguage = .auto
 
     @Published public private(set) var lastError: String?
 
@@ -122,23 +64,11 @@ public final class FeatureSettingsStore: ObservableObject {
     private var currentSnapshot: FeatureFlagsFile {
         FeatureFlagsFile(
 
-            albumPrefetch: albumPrefetch,
-            lyricsAutoUpgrade: lyricsAutoUpgrade,
             lyricsSources: lyricsSources.map(\.rawValue).sorted(),
 
-            amllLyrics: lyricsSources.contains(.amll),
-
-            lyricFindLyrics: lyricsSources.contains(.lyricfind),
-
-            kuwoLyrics: lyricsSources.contains(.kuwo),
-
-            miguLyrics: lyricsSources.contains(.migu),
-
-            deezerLyrics: lyricsSources.contains(.deezer),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
-            lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
-            lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue
+            lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir
         )
     }
 
@@ -190,42 +120,14 @@ public final class FeatureSettingsStore: ObservableObject {
             logger.notice("features.json carries \(unknownCount) key(s) this build doesn't know; they will be preserved on write")
         }
 
-        albumPrefetch = f.albumPrefetch ?? true
-        lyricsAutoUpgrade = f.lyricsAutoUpgrade ?? true
         let decodedSources = (f.lyricsSources ?? []).compactMap(LyricsSource.init(rawValue:))
-        var enabled = Set(decodedSources)
-        if enabled.isEmpty {
-            enabled = Set(LyricsSource.allCases)
-        } else {
-
-            if f.amllLyrics == nil {
-
-                enabled.insert(.amll)
-            }
-            if f.lyricFindLyrics == nil {
-
-                enabled.insert(.lyricfind)
-            }
-            if f.kuwoLyrics == nil {
-
-                enabled.insert(.kuwo)
-            }
-            if f.miguLyrics == nil {
-
-                enabled.insert(.migu)
-            }
-            if f.deezerLyrics == nil {
-
-                enabled.insert(.deezer)
-            }
-        }
+        let enabled = decodedSources.isEmpty ? Set(LyricsSource.allCases) : Set(decodedSources)
         lyricsSources = enabled
         lyricsSourceMode = f.lyricsSourceMode.flatMap(LyricsSourceMode.init(rawValue:)) ?? .smart
 
         let decodedOrder = (f.lyricsSourceOrder ?? []).compactMap(LyricsSource.init(rawValue:))
         lyricsSourceOrder = decodedOrder.count == LyricsSource.allCases.count ? decodedOrder : LyricsSource.allCases
         lyricsDir = f.lyricsDir ?? ""
-        lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
         savedSnapshot = currentSnapshot
     }
 
@@ -282,20 +184,9 @@ public final class FeatureSettingsStore: ObservableObject {
         pendingUntilServiceEnabled = false
     }
 
-    private var changedFileKeysSinceLastSave: Set<String> {
-        func fields(_ snapshot: FeatureFlagsFile) -> [String: Any] {
-            guard let data = try? JSONEncoder().encode(snapshot),
-                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { return [:] }
-            return dict
-        }
-        return CollectorRestartPolicy.changedKeys(from: fields(savedSnapshot), to: fields(currentSnapshot))
-    }
-
     @discardableResult
     public func save() async -> Bool {
 
-        let changedKeys = changedFileKeysSinceLastSave
         do {
             try persistFile()
         } catch ConfigFileSaveError.refusedCorruptFile {
@@ -309,31 +200,10 @@ public final class FeatureSettingsStore: ObservableObject {
             return false
         }
 
-        if !CollectorRestartPolicy.needsRestart(changedKeys: changedKeys) {
-            logger.notice("collector restart skipped: only hot-reloaded keys changed (\(changedKeys.sorted().joined(separator: ","), privacy: .public))")
-            lastError = nil
-            pendingUntilServiceEnabled = false
-            commitSnapshot()
-            return true
-        }
-
-        if await CollectorRestartCoordinator.shared.requestRestart() {
-            lastError = nil
-            pendingUntilServiceEnabled = false
-            commitSnapshot()
-            return true
-        }
-        if !AppSettings.shared.collectorServiceEnabled {
-
-            logger.notice("collector restart skipped: service disabled by the user; change applies on next start")
-            lastError = nil
-            pendingUntilServiceEnabled = true
-            commitSnapshot()
-            return true
-        }
-
-        lastError = L10n.t("已保存，但后台采集服务重启失败，改动要等下次重启才生效")
-        return false
+        lastError = nil
+        pendingUntilServiceEnabled = false
+        commitSnapshot()
+        return true
     }
 
 }

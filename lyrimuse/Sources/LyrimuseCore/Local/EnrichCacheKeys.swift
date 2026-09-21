@@ -1,37 +1,5 @@
 import Foundation
 
-public enum EnrichCacheMerge {
-
-    public static func merge(
-        disk: [String: [String: Any]],
-        memory: [String: [String: Any]],
-        edited: Set<String>,
-        deleted: Set<String>,
-        baseline: [String: [String: Any]]? = nil
-    ) -> [String: [String: Any]] {
-        var out = disk
-        for k in edited {
-            guard let value = memory[k] else {
-                out.removeValue(forKey: k)
-                continue
-            }
-            guard let original = baseline?[k], var current = disk[k] else {
-                out[k] = value
-                continue
-            }
-            // Apply only fields the editor changed; keep enrichment added since it loaded the entry.
-            for field in Set(original.keys).union(value.keys) {
-                let before = original[field].map { ["value": $0] as NSDictionary }
-                let after = value[field].map { ["value": $0] as NSDictionary }
-                if before != after { current[field] = value[field] }
-            }
-            out[k] = current
-        }
-        for k in deleted { out.removeValue(forKey: k) }
-        return out
-    }
-}
-
 public enum EnrichCacheKeys {
 
     public static let lyricsFileSuffixes = [".lrc", ".tr.lrc", ".roma.lrc", ".yrc"]

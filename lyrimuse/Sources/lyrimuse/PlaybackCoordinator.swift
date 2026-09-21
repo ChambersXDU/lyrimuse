@@ -33,7 +33,7 @@ final class PlaybackCoordinator: ObservableObject {
 
     @Published private(set) var currentTrackPlainLyrics: String = ""
 
-    @Published private(set) var collectorNetworkDown: Bool = false
+    @Published private(set) var networkDown: Bool = false
 
     @Published private(set) var isCurrentTrackAdBreak: Bool = false
 
@@ -419,7 +419,7 @@ final class PlaybackCoordinator: ObservableObject {
         s.$isCurrentTrackInstrumental.assign(to: &$isCurrentTrackInstrumental)
         s.$currentTrackHasNoLyrics.assign(to: &$currentTrackHasNoLyrics)
         s.$currentTrackPlainLyrics.assign(to: &$currentTrackPlainLyrics)
-        s.$collectorNetworkDown.assign(to: &$collectorNetworkDown)
+        s.$networkDown.assign(to: &$networkDown)
         s.$isCurrentTrackAdBreak.assign(to: &$isCurrentTrackAdBreak)
         s.$currentLineIndex.assign(to: &$currentLineIndex)
         s.$scrollLineIndex.assign(to: &$scrollLineIndex)

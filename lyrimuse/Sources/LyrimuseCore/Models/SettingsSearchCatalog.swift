@@ -100,15 +100,11 @@ public enum SettingsSearchCatalog {
 
     public static let entries: [SettingsSearchEntry] = [
 
-        lyrics("fetch", "歌词来源", kw: ["歌词源", "网易云音乐", "QQ音乐", "酷狗", "Musixmatch", "LRCLIB", "AMLL",
-                                      "LyricFind", "酷我", "咪咕", "测试", "顺序"]),
+        lyrics("fetch", "歌词来源", kw: ["歌词源", "LRCLIB", "酷我", "网易云音乐", "酷狗", "QQ音乐", "测试", "顺序"]),
         lyrics("fetch", "匹配算法", kw: ["智能", "顺序优先", "打分"]),
-        lyrics("fetch", "跟进算法升级", kw: ["重打分", "自动升级"]),
-        lyrics("fetch", "提前解析同专辑其它曲目", kw: ["预解析", "专辑"]),
         lyrics("fetch", "锁定手选歌词", kw: ["手动选定", "锁定"]),
 
         lyrics("translation", "显示译文", kw: ["翻译"]),
-        lyrics("translation", "译文语言", kw: ["翻译", "语言"]),
 
         lyrics("display", "繁简转换", kw: ["繁体", "简体", "OpenCC"]),
         lyrics("display", "显示罗马音", kw: ["罗马字", "发音"]),
@@ -119,7 +115,6 @@ public enum SettingsSearchCatalog {
         lyrics("manage", "歌词文件夹", kw: ["lyrics", "自定义位置", "目录", "lrc"]),
 
         player("Apple Music 自动化", kw: ["权限", "AppleScript", "自动化"]),
-        player("后台采集服务", kw: ["collector", "launchd", "服务", "运行状态"]),
 
         surface(.overlay, "桌面悬浮歌词", kw: ["开关", "悬浮窗", "总开关"], inDrawer: false),
         surface(.overlay, "跟随封面", kw: ["封面色", "取色", "配色"], group: "主题"),

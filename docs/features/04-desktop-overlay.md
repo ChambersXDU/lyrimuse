@@ -28,11 +28,11 @@
 4. Spotify 广告插播 → 「广告中」;
 5. 联网确认过是纯音乐 → 「纯音乐」;
 6. 搜完了确实没有 → 「暂无歌词」;
-7. collector 报断网且无内容 → 「网络连接失败」;
+7. App 网络状态异常且无内容 → 「网络连接失败」;
 8. 正在播但还没解析出内容 → 「搜索歌词中…」;
 9. 兜底 → 「♪」(有曲目、此刻没词:曲内间奏 / 暂停在间奏上)。
 
-4~8 全部以 50% 前景色显示,3 用 70%(要看得见"它在",又不跟歌词抢眼),9 用 30%;分支顺序是修过多轮的关键行为——有明确结论的状态必须排在含糊的「搜索中」前面,否则永远显示搜索中;3 排在 4~8 前面的理由见决策 22(停播时那几条本来就被 `clearIfWasPlaying` 清空,唯独 `collectorNetworkDown` 是全局健康位、跟有没有曲目无关)。
+4~8 全部以 50% 前景色显示,3 用 70%(要看得见"它在",又不跟歌词抢眼),9 用 30%;分支顺序是修过多轮的关键行为——有明确结论的状态必须排在含糊的「搜索中」前面,否则永远显示搜索中;3 排在 4~8 前面的理由是网络状态与当前是否有曲目无关。
 
 ### 逐字卡拉OK填色
 
@@ -104,9 +104,9 @@
   - **刻意不做成四行各自可调**:那是四个下拉的复杂度,换来的是"译文比主歌词还粗"这种没人想要、却要用界面去防的状态。档位差全为正 ⇒ 派生行**永远不会比主行粗**,这条也在 selftest 里(六档 × 三个差值全覆盖)。
   - ⚠️ **界面上这一行叫「粗细」,代码里叫 `overlayFontWeight` / `OverlayFontWeight`,这条不对称是有意的**。第一版界面文案写的是「字重」,当天被用户驳回(「这个命名为字重是不是不太合适啊」)——他提这个需求时自己的原话就是"控制字体粗细",用户已经说出口的那个词就是这一行该有的名字;「字重」是排版行话。同一次把档位名里的「中等 / 半粗」(medium / semibold 直译)也换成了「稍粗 / 较粗」,稍 / 较 / 加 / 特 这条程度副词阶梯自己就把顺序说清楚了。**英文不动**:Light/Regular/Medium/Semibold/Bold/Heavy 是任何字体选择器里的通用说法,那边行业术语才是对的。标识符保持 `*FontWeight` —— 它面向的是写代码的人。
   - 落点在编辑台工具栏「文字」浮层(和抽屉「文字」组),排在字体和字号**之间**——字重是"这个字体族的哪一个粗细",跟字体是同一件事的两半。菜单栏快捷面板**没有**这一项:那一栏是「各形态自己的旋钮」,只放连续量的滑杆(字号 / 宽度),字体本来也不在那儿。
-- 前景色:`PlaybackCoordinator.displayForegroundColor`——「跟随封面」(`followsCoverArt`)开着且已算出封面强调色时用动态色,否则用手选固定色。动态色从封面均值色派生:描边开着且描边色 alpha≥0.5 时按"与描边色够对比"算,否则按"够亮"提升;封面过小时用 collector 缓存里的高清替代图均值。**只接管文字颜色**,背景色/描边色始终生效。
+- 前景色:`PlaybackCoordinator.displayForegroundColor`——「跟随封面」(`followsCoverArt`)开着且已算出封面强调色时用动态色,否则用手选固定色。动态色从封面均值色派生:描边开着且描边色 alpha≥0.5 时按"与描边色够对比"算,否则按"够亮"提升;封面过小时用 Swift 缓存里的高清替代图均值。**只接管文字颜色**,背景色/描边色始终生效。
 - 背景色:alpha > 0.02 才画(圆角 16 固定值);默认全透明,此时垫一层 `Color.black.opacity(0.001)` 保证拖拽手势能命中。
-- 文字描边:开关+颜色可调,粗细固定 1.2pt。实现是 blur+alphaThreshold 剪影垫底(`OptionalTextStroke`),整行套一次、开销不随描边粗细变化。逐字行的剪影 mask 用**静态副本**当 Canvas symbol(2026-08-19:`lyricsTextStroke(maskSource:)`,同排版纯色版 `karaokeLineContent(atMs: nil)`)——原来 symbol 是内容本身,填色渐变每 tick 一变整行就重跑 blur+threshold,而剪影只由文字/字体/换行决定,一行存续期内不变。历史上的 `.compositingGroup()` 已删除:它是给早已移除的每字阴影合并用的,当前树里只剩离屏渲染开销。⚠️ **剪影必须跟 content 吃同一道 `.padding(width*2)`**(2026-08-23 修):Canvas 是**居中**绘制剪影的,只有两者在 canvas 里占同一块矩形才逐点对齐。普通 Text 按自然宽度收缩、居中能补回来;但逐字行的 `WrapLayout` **撑满被提议的宽度** —— content 撑满 padding 内的宽度、剪影撑满 canvas 整宽,差正好一圈 padding。居中排版时两边各差一半抵消掉(所以非对唱歌看不出),一旦按 leading/trailing 靠边(对唱左右声部)就偏 2.4pt,而描边本身才 1.2pt,整圈甩到一侧。源码守卫在 collector 的 `strokemaskpadding_test.go`(纯 SwiftUI 布局行为,selftest 覆盖不了)。
+- 文字描边:开关+颜色可调,粗细固定 1.2pt。实现是 blur+alphaThreshold 剪影垫底(`OptionalTextStroke`),整行套一次、开销不随描边粗细变化。逐字行的剪影 mask 用**静态副本**当 Canvas symbol(`lyricsTextStroke(maskSource:)`,同排版纯色版 `karaokeLineContent(atMs: nil)`)；剪影只由文字、字体和换行决定，不随每个 tick 的填色重算。剪影与 content 使用同一层 padding，避免对唱靠边时错位。
 - 配色主题:内置预设 + 用户自存主题(只打包文字/背景/描边四字段,不含字体字号);「恢复默认」重置九个字段(2026-09-02 加入毛玻璃开关)。
   ⚠️ **2026-09-03 改名 + 改副标题**(三形态设置审计发现):老那两句合起来**在说谎** —— 标题「恢复默认文字与配色」+ 副标题「不含宽度和锁定位置」会让人理解成"除这两样之外都恢复",而它实际只写 9 个字段,「排版」「行为」两个浮层里的 6 项(双行显示 / 对齐方式 / 长按拖动 / 悬浮淡化 / 截屏录屏时隐藏 / 暂停无播放时隐藏)一个都不碰。现在标题念**真正覆盖的那三个浮层**、副标题念**没覆盖的**(2026-09-03 是「不含排版、行为和宽度」;2026-09-11 「位置」单开一个浮层后改成「不含排版、行为、位置和宽度」,两个入口仍一字不差),两句合起来才是完整准确的作用范围声明。**功能本身没改** —— 排版和行为该不该纳入是产品取舍,不在那次修复范围里。两个入口(工具栏「重置 ▾」和抽屉里的 `resetRow`)必须一字不差。内置预设(`ColorTheme.builtInPresets`)现在是六款:经典白字/白字描边/经典黑字/黑字描边/深色卡片/浅色卡片——2026-08-26 去掉了"暖黄"/"赛博青"，换成"白字描边"/"黑字描边"(经典白字/黑字各自的加描边版本,前景/背景色不变,只是把描边开关打开,描边色沿用各自"手动打开描边时"本来就带的那个默认值,不是新配的颜色)。
 - **全新安装/「恢复默认文字与配色」/「清除所有配置」之后的默认样子**(2026-08-26 改):`ColorTheme.defaultTheme` 从 `classicBlack`(不描边)换成 `classicBlackStroke`(黑字描边预设的同款字段:黑字+透明底+白色描边)+ `AppSettings.defaultFollowsCoverArt` 从 `false` 改成 `true`——用户把自己实际在用的这套(跟随封面取色 + 打开文字描边)定为新默认。两处默认值各自独立(`followsCoverArt` 不是 `ColorTheme` 的字段),但都在 `AppSettings.init()` 的 UserDefaults 缺省分支和「恢复默认文字与配色」按钮里同步生效,不会只改一处漏改另一处。`applyColorTheme(_:)`(从下拉菜单套用某个具体主题)不受影响,仍然无条件把 `followsCoverArt` 关掉——套用一个固定命名主题本来就是在明确表态"要固定色、不要动态色"，跟"默认初始化长什么样"是两件事。
@@ -279,8 +279,8 @@
 |---|---|
 | UserDefaults(悬浮窗私有) | `np:overlayPositionTop`(位置,"x,顶边y");`np:overlayPositionOrigin`(旧键,只读迁移);`np:hasShownOverlayDragHint`(拖动提示只弹一次) |
 | UserDefaults(经 AppSettings) | `np:classicOverlayEnabled`、`np:lockPosition`、`np:overlayPlacementMode`(位置模式 free / topCenter / bottomCenter,2026-09-11)、`np:overlayWidth`、`np:fontFamilyName`、`np:fontSize`、`np:overlayFontWeight`、`np:foregroundColorHex`、`np:backgroundColorHex`、`np:followsCoverArt`、`np:textStrokeEnabled`、`np:textStrokeColorHex`、`np:hideDuringScreenCapture`、`np:hideWhenNotPlaying`、`np:customColorThemesJSON` 等 |
-| 磁盘(只读) | collector 的 enrich 缓存文件(歌词六字段+封面 URL,经 EnrichCacheReader);预览条启动时读一次桌面壁纸文件 |
-| 进程边界 | 播放快照经 media-control(外部二进制);播放控制/喜欢/权限经 osascript 子进程;歌词解析由 collector 常驻进程后台完成,本 App 只读缓存 |
+| 磁盘 | Swift 的 enrich 缓存文件(歌词字段+封面 URL,经 EnrichCacheReader);预览条启动时读一次桌面壁纸文件 |
+| 进程边界 | 播放快照经 media-control(外部二进制);播放控制/喜欢/权限经 osascript 子进程;歌词解析与缓存写入都在 App 内完成 |
 
 ## 代码锚点
 

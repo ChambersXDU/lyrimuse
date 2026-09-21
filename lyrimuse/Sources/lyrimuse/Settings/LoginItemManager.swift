@@ -9,16 +9,11 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "login-
 final class LoginItemManager {
     static let shared = LoginItemManager()
 
-    private var legacyPlistURL: URL {
-        LyrimusePaths.launchAgentPlist(label: LyrimuseIdentity.appLaunchdLabel)
-    }
-
     private init() {}
 
     var status: SMAppService.Status { SMAppService.mainApp.status }
 
     func setEnabled(_ enabled: Bool) {
-        removeLegacyLaunchAgentPlist()
         if enabled {
             register()
 
@@ -32,13 +27,11 @@ final class LoginItemManager {
     }
 
     func syncAtLaunch(enabled: Bool) {
-        removeLegacyLaunchAgentPlist()
         guard enabled else { return }
         register()
     }
 
     func unregisterForUninstall() {
-        removeLegacyLaunchAgentPlist()
         unregister()
     }
 
@@ -62,14 +55,4 @@ final class LoginItemManager {
         }
     }
 
-    private func removeLegacyLaunchAgentPlist() {
-        let url = legacyPlistURL
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
-        do {
-            try FileManager.default.removeItem(at: url)
-            logger.notice("removed legacy LaunchAgent plist \(url.lastPathComponent, privacy: .public)")
-        } catch {
-            logger.error("failed to remove legacy LaunchAgent plist: \(error.localizedDescription, privacy: .public)")
-        }
-    }
 }

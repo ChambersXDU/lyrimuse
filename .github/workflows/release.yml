@@ -13,9 +13,6 @@ concurrency:
 permissions:
   contents: write
 
-env:
-  GO_VERSION: "1.24.4"
-
 jobs:
   build:
     name: Build, ad-hoc sign, package
@@ -41,46 +38,14 @@ jobs:
             echo "CHANGELOG_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Set up Go ${{ env.GO_VERSION }}
-        uses: actions/setup-go@v7
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: lyrimuse-collector/go.sum
-
       - name: Verify toolchains
         run: |
           swift --version
-          go version
 
       - name: Run test suites
         run: |
-          echo "==> Go tests (lyrimuse-collector)"
-          (cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go test ./...)
           echo "==> Swift selftest (lyrimuse)"
           (cd lyrimuse && swift build --product lyrimuse-selftest && ./.build/debug/lyrimuse-selftest)
-
-      - name: Install media-control (QQ 音乐支持)
-        run: |
-          MC_PIN_VER=0.7.6
-          MC_ARM_SHA=179a21d0233706e75adcb70048386b3e471ad364e192e8ba0da80121a09d4ce4
-          dst="$RUNNER_TEMP/media-control"
-          mkdir -p "$dst"
-          curl -fsSL -H "Authorization: Bearer QQ==" \
-            "https://ghcr.io/v2/homebrew/core/media-control/blobs/sha256:$MC_ARM_SHA" \
-            -o "$dst/bottle.tar.gz"
-          got="$(shasum -a 256 "$dst/bottle.tar.gz" | awk '{print $1}')"
-          if [ "$got" != "$MC_ARM_SHA" ]; then
-            echo "::error::media-control arm64 bottle 校验不过:拿到 $got,期望 $MC_ARM_SHA" >&2
-            exit 1
-          fi
-          tar -xzf "$dst/bottle.tar.gz" -C "$dst"
-          prefix="$dst/media-control/$MC_PIN_VER"
-          if [ ! -x "$prefix/bin/media-control" ]; then
-            echo "::error::解出来的 bottle 里没有 $prefix/bin/media-control(bottle 结构变了?)" >&2
-            exit 1
-          fi
-          echo "LYRIMUSE_MEDIA_CONTROL_PREFIX=$prefix" >> "$GITHUB_ENV"
-          echo "==> media-control $MC_PIN_VER (arm64, ghcr blob) -> $prefix"
 
       - name: Determine version string
         id: version

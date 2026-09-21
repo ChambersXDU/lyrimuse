@@ -98,8 +98,6 @@ struct LyricsLibrarySizeLabel: View {
 struct LyricsLibraryStatsPanel: View {
     @ObservedObject private var store = EnrichCacheStore.shared
 
-    @State private var fillSweepStatus: LyricsFillSweep.Info?
-
     private static let numberFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -161,13 +159,6 @@ struct LyricsLibraryStatsPanel: View {
 
         .task {
             await store.reload(onlyIfChanged: true)
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(fillSweepStatus?.running == true ? 2 : 5))
-                guard !Task.isCancelled else { break }
-                let sweep = LyricsFillSweep.current
-                if sweep != fillSweepStatus { fillSweepStatus = sweep }
-                if sweep?.running == true { await store.reload(onlyIfChanged: true) }
-            }
         }
     }
 
@@ -222,41 +213,11 @@ struct LyricsLibraryStatsPanel: View {
     }
 
     private func noneRow(_ counts: LyricsLibraryStats.Counts) -> some View {
-        let status = fillSweepStatus
-        let retryable = store.summaries.filter(EnrichCacheStore.isFillSweepRetryable).count
         return HStack(spacing: 10) {
             HStack(spacing: 4) {
                 legendItem(.none, value: counts.count(.none))
             }
             Spacer(minLength: 12)
-            if let status, status.running {
-                ProgressView(value: Double(status.done), total: Double(max(status.total, 1)))
-                    .progressViewStyle(.circular)
-                    .controlSize(.small)
-                Text(String(format: L10n.t("扫描中 %1$@/%2$@"), "\(status.done)", "\(status.total)"))
-                    .font(.system(size: 11))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Button(L10n.t("停止")) { LyricsFillSweep.requestCancel() }
-                    .controlSize(.small)
-                    .fixedSize()
-            } else {
-                if let status, status.finishedAt != nil {
-                    Text(String(format: L10n.t("上次：搜了 %1$@ 首，补出 %2$@ 首"), "\(status.done)", "\(status.filled)"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-
-                Button(String(format: L10n.t("重新扫描（%@ 首）"), Self.format(retryable))) {
-                    LyricsFillSweep.request(keys: [])
-                }
-
-                .controlSize(.small)
-                .fixedSize()
-                .disabled(retryable == 0)
-            }
         }
 
         .settingsGlassButtons()

@@ -392,19 +392,19 @@
         }
       }
     },
-    "这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，采集服务也不再反复重搜" : {
+    "这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，也不再自动重搜" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This track has no lyrics by nature (spoken word, interlude, instrumental): once marked it no longer shows as “No Lyrics” and the collector stops re-searching it"
+            "value" : "This track has no lyrics by nature (spoken word, interlude, instrumental): once marked it no longer shows as “No Lyrics” and automatic searches stop"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，采集服务也不再反复重搜"
+            "value" : "这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，也不再自动重搜"
           }
         }
       }
@@ -562,40 +562,6 @@
         }
       }
     },
-    "Musixmatch 拒绝了匿名 token 请求（反爬限流，hint=captcha），不是网络故障，稍后重试通常会恢复" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Musixmatch rejected the anonymous token request (anti-bot rate limiting, hint=captcha) — not a network fault, this usually recovers after a while"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Musixmatch 拒绝了匿名 token 请求（反爬限流，hint=captcha），不是网络故障，稍后重试通常会恢复"
-          }
-        }
-      }
-    },
-    "Musixmatch 的接口地址在当前网络下直连不通（TCP/TLS 都没有响应），系统代理也不可用——开启代理后通常会恢复" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Musixmatch's API host is unreachable over a direct connection on this network (no TCP/TLS response), and no working system proxy is available — turning on a proxy usually fixes it"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Musixmatch 的接口地址在当前网络下直连不通（TCP/TLS 都没有响应），系统代理也不可用——开启代理后通常会恢复"
-          }
-        }
-      }
-    },
     "QQ音乐" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -609,40 +575,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "QQ音乐"
-          }
-        }
-      }
-    },
-    "Deezer 换取匿名访问令牌失败（不是这首歌没有歌词，稍后重试通常会恢复）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Could not get an anonymous access token from Deezer (this is not about the song having no lyrics; retrying later usually works)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deezer 换取匿名访问令牌失败（不是这首歌没有歌词，稍后重试通常会恢复）"
-          }
-        }
-      }
-    },
-    "YouTube Music 在这个网络所在地区不可用（地区限制，非网络故障）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "YouTube Music is not available in this network's region (a regional restriction, not a network fault)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "YouTube Music 在这个网络所在地区不可用（地区限制，非网络故障）"
           }
         }
       }
@@ -2092,40 +2024,6 @@
         }
       }
     },
-    "后台采集服务" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Background Collector Service"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后台采集服务"
-          }
-        }
-      }
-    },
-    "后台采集服务重启失败" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Could not restart the background service"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后台采集服务重启失败"
-          }
-        }
-      }
-    },
     "启用" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2224,23 +2122,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "声波"
-          }
-        }
-      }
-    },
-    "备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。恢复完 collector 会重启一次，把它们重新读进缓存" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The lyrics files in the backup are written back into the lyrics folder: same-named files are overwritten, missing ones are added. Songs resolved after the backup was made are not removed. The collector restarts once afterwards to read them back into the cache."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。恢复完 collector 会重启一次，把它们重新读进缓存"
           }
         }
       }
@@ -5243,19 +5124,19 @@
         }
       }
     },
-    "正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…" : {
+    "正在查询 LRCLIB / 酷我 / 网易云 / 酷狗 / QQ音乐…" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Searching NetEase Cloud Music / QQ Music / Kugou Music / Musixmatch / LRCLIB…"
+            "value" : "Searching LRCLIB / Kuwo / NetEase Cloud Music / Kugou Music / QQ Music…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…"
+            "value" : "正在查询 LRCLIB / 酷我 / 网易云 / 酷狗 / QQ音乐…"
           }
         }
       }
@@ -8552,23 +8433,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "第三方许可"
-          }
-        }
-      }
-    },
-    "咪咕音乐" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Migu Music"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "咪咕音乐"
           }
         }
       }

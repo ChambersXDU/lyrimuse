@@ -47,8 +47,7 @@ merge_slices() {
 
 APP_NAME="Lyrimuse"
 LABEL="me.yudaotor.lyrimuse"
-COLLECTOR_LABEL="com.lyrimuse.collector"
-LOG_FILE="$HOME/Library/Logs/lyrimuse.log"
+LOG_FILE="$HOME/Library/Logs/lyrimuse-app.log"
 APP_VERSION="${LYRIMUSE_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')}"
 [ -z "$APP_VERSION" ] && APP_VERSION="0.0.0"
 BUILD_VERSION="$(./scripts/build-version.sh "$APP_VERSION")" || {
@@ -84,28 +83,10 @@ for arch in $ARCHES; do
 done
 merge_slices "$FAT_DIR/lyrimuse" "${SWIFT_SLICES[@]}"
 
-echo "==> building collector [$ARCHES]"
-COLLECTOR_SLICES=()
-for arch in $ARCHES; do
-  case "$arch" in
-    arm64) goarch=arm64 ;;
-    x86_64) goarch=amd64 ;;
-    *) echo "!! 不认识的架构:$arch" >&2; exit 2 ;;
-  esac
-  out="$FAT_DIR/collector-$arch"
-  (cd ../lyrimuse-collector && GOTOOLCHAIN="${LYRIMUSE_GOTOOLCHAIN:-go1.24.4}" GOOS=darwin GOARCH="$goarch" \
-    go build -ldflags "-X main.clientVersion=$APP_VERSION" -o "$out" .)
-  COLLECTOR_SLICES+=("$out")
-done
-merge_slices "$FAT_DIR/collector" "${COLLECTOR_SLICES[@]}"
-
 echo "==> assembling .app bundle"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$FAT_DIR/lyrimuse" "$BIN"
 cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
-rm -f "$APP_DIR/Contents/Resources/collector"
-cp "$FAT_DIR/collector" "$APP_DIR/Contents/Resources/collector"
-codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/collector"
 
 
 rm -rf "$APP_DIR/Contents/Resources/zh-hans.lproj" "$APP_DIR/Contents/Resources/en.lproj"
@@ -155,7 +136,6 @@ PLIST
 
 codesign -s "$SIGN_ID" --force --identifier "$LABEL" "$APP_DIR"
 codesign -v "$APP_DIR" && echo "    signature valid"
-codesign -v "$APP_DIR/Contents/Resources/collector" && echo "    collector signature valid"
 
 echo "==> architecture check [$ARCHES]"
 ARCH_BAD=""
@@ -174,22 +154,6 @@ if [ -n "$ARCH_BAD" ]; then
   echo "!! 架构与目标[$ARCHES]不符:" >&2
   for f in $ARCH_BAD; do echo "     $f" >&2; done
   echo "!! 要发布的构建先解决上面这些(package.sh 会硬拦)" >&2
-fi
-
-VERSION_CHECK_BIN="$APP_DIR/Contents/Resources/collector"
-HOST_ARCH="$(uname -m)"
-if ! lipo -archs "$VERSION_CHECK_BIN" 2>/dev/null | grep -qw "$HOST_ARCH"; then
-  echo "    ⚠️ collector 不含本机架构($HOST_ARCH),跳过版本一致性校验" >&2
-elif ! BUNDLED_VER="$("$VERSION_CHECK_BIN" version 2>/dev/null)"; then
-  echo "!! collector 跑不起来,无法校验版本(这本身就不正常)" >&2
-  exit 1
-elif [ "$BUNDLED_VER" != "$APP_VERSION" ]; then
-  echo "!! App 与 collector 版本不一致:App=$APP_VERSION collector=$BUNDLED_VER" >&2
-  echo "!! 版本号由 -ldflags 注入(见上面 go build collector 那段);若 collector 报 'dev'," >&2
-  echo "!! 多半是 main.go 里 clientVersion 被改回 const 了——-X 对 const 静默失效。" >&2
-  exit 1
-else
-  echo "    版本一致 App=$APP_VERSION collector=$BUNDLED_VER"
 fi
 
 if [ -n "$STAGE" ]; then
@@ -216,11 +180,6 @@ if [ "$NO_RESTART" = 1 ]; then
   exit 0
 fi
 
-if launchctl list "$LABEL" >/dev/null 2>&1; then
-  echo "==> legacy LaunchAgent job $LABEL is still loaded in this login session; booting it out"
-  launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-  sleep 1
-fi
 OLD_PIDS="$(pgrep -f "$BIN" 2>/dev/null | tr '\n' ' ' || true)"
 if [ -n "$OLD_PIDS" ]; then
   echo "==> stopping running instance (pid ${OLD_PIDS% })"
@@ -250,19 +209,3 @@ if [ -n "$OLD_PIDS" ] && [ "$pid" = "$OLD_PIDS" ]; then
   exit 1
 fi
 echo "==> $APP_NAME running, pid ${pid% }"
-
-COLLECTOR_PLIST="$HOME/Library/LaunchAgents/$COLLECTOR_LABEL.plist"
-if [ -f "$COLLECTOR_PLIST" ]; then
-  echo "==> reloading collector job (refreshing its launch constraint)"
-  launchctl bootout "gui/$(id -u)/$COLLECTOR_LABEL" 2>/dev/null || true
-  sleep 1
-  launchctl bootstrap "gui/$(id -u)" "$COLLECTOR_PLIST" 2>/dev/null || true
-  sleep 1
-  launchctl kickstart -k "gui/$(id -u)/$COLLECTOR_LABEL" 2>/dev/null || true
-  sleep 2
-  if cpid=$(pgrep -f "$APP_DIR/Contents/Resources/collector"); then
-    echo "==> collector running, pid $cpid"
-  else
-    echo "!! collector not running — launchctl print gui/$(id -u)/$COLLECTOR_LABEL" >&2
-  fi
-fi

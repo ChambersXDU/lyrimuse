@@ -101,14 +101,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             at: LyrimusePaths.configDir,
             withIntermediateDirectories: true)
 
-        CollectorServiceManager.reconcileAfterLaunch()
-
         NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
         LocalPlaybackSource.shared.chineseVariant = settings.lyricsChineseVariant
         LocalPlaybackSource.shared.romanizationScripts = settings.romanizationScripts
         LocalPlaybackSource.shared.showsTranslation = settings.showTranslation
 
         PlaybackCoordinator.shared.start()
+        LyricsSearchService.shared.startAutomaticSearch()
         MenuBarStatusItem.shared.start()
 
         if !settings.hasSeenChineseLyrics {

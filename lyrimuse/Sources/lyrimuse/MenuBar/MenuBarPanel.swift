@@ -16,7 +16,7 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
-    @Published private(set) var collectorNetworkDown = false
+    @Published private(set) var networkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
 
     @Published private(set) var currentLineFillSettled = true
@@ -53,7 +53,7 @@ private final class PanelPlayback: ObservableObject {
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
-            p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
+            p.$networkDown.removeDuplicates().sink { [weak self] in self?.networkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
             p.$artworkImage.removeDuplicates(by: { $0 === $1 })
@@ -339,7 +339,7 @@ private struct MenuBarPanelView: View {
             isAdBreak: playback.isCurrentTrackAdBreak,
             isInstrumental: playback.isCurrentTrackInstrumental,
             hasNoLyrics: playback.currentTrackHasNoLyrics,
-            networkDown: playback.collectorNetworkDown,
+            networkDown: playback.networkDown,
             hasLyricsContent: playback.hasLyricsContent,
             isPlaying: playback.isPlayingNow
         ) {

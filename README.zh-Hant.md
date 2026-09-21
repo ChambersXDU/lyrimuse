@@ -29,9 +29,9 @@ Lyrimuse 常駐在選單列裡，跟著目前播放彈出一個桌面浮動歌�
 
 ### 歌詞，做到位
 - **逐字同步填色**，跟隨播放進度即時顯示
-- **自動查十個歌詞來源**——網易雲音樂、QQ 音樂、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind（經 YouTube Music）、Deezer、AMLL（人工校對過的逐字歌詞庫）——自動挑出最合適的一份，不用自己動手搜尋
+- **自動查五個歌詞來源**——LRCLIB、酷我、網易雲音樂、酷狗、QQ 音樂——自動挑出最合適的一份，不用自己動手搜尋
 - **羅馬拼音 + 翻譯**，跟原文一起顯示——歌詞來源自帶社群翻譯時優先用它，沒有的話走裝置端機器翻譯（Apple 系統翻譯，歌詞不出本機），翻不了再退線上備用，譯文語言可選 18 種；羅馬拼音按行判斷，中日雙語歌只有日文行會標註讀音，不會連中文一起標上拼音；粵語歌自動標註粵拼（按詞消歧）
-- **對唱／多人合唱歌詞分開顯示**，只要來源（或 AMLL 詞條）標出了是誰在唱哪一句，就不會把兩個人的聲部糊成一團
+- **對唱／多人合唱歌詞分開顯示**，只要來源標出了是誰在唱哪一句，就不會把兩個人的聲部糊成一團
 - **簡繁中文切換**，獨立於 App 介面語言，只管歌詞文字本身用哪種寫法
 - **完整的「歌詞管理」視窗**——瀏覽、手動修改、刪除、重新搜尋任何一首歌的歌詞，支援多選批次刪除、欄寬隨手拖移，遇到不同步還能單獨調整這首歌的時間軸偏移；沒搜到詞的既有歌曲還能一鍵全部重試
 - **本機模式完全離線**——已經快取好的歌詞不需要連線也能顯示
@@ -140,10 +140,9 @@ brew install --cask lyrimuse
 
 ```bash
 xcode-select --install   # Xcode 的 Command Line Tools，跑 Swift 用——`swift --version` 能跑就說明已經裝過
-brew install go          # 任何 ≥1.21 的 Go 都行——build.sh 會透過 GOTOOLCHAIN 自動切到 1.24.4
 ```
 
-裝好之後，`build.sh` 會一次性把 App 和它的背景擷取器都建置好：
+裝好之後，`build.sh` 會一次性建置原生 Swift App：
 
 ```bash
 git clone https://github.com/Yudaotor/lyrimuse.git
@@ -158,7 +157,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／Spotify／自動偵測這幾個播�
 
 ### 不管選哪種方案
 
-從 `/Applications` 打開 Lyrimuse——首次啟動的設定引導會帶你完成：選播放器（Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、Spotify，或者自動偵測），選了 Apple Music 的話再允許它以「自動化」方式讀取 Music.app 目前播放的歌曲資訊（其它幾個都不需要額外權限），以及啟用它的背景常駐擷取服務（這樣就算把視窗關掉，歌詞／封面也會持續解析）。走完引導歌詞馬上就會顯示出來（更多建置選項見 [lyrimuse/README.md](lyrimuse/README.md)）。
+從 `/Applications` 打開 Lyrimuse——首次啟動的設定引導會帶你完成：選播放器（Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、Spotify，或者自動偵測），以及在選擇 Apple Music 時允許它以「自動化」方式讀取 Music.app 目前播放的歌曲資訊。走完引導後，原生 Swift 歌詞查詢會自動開始（更多建置選項見 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 不需要再調整任何其它東西才能看到歌詞——上面提到的所有附加功能都是後續在設定裡按需開啟的。
 
@@ -177,7 +176,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／Spotify／自動偵測這幾個播�
 一首歌的歌詞只要解析過一次，之後就能——本機模式直接顯示已快取的歌詞，不用連線。第一次查詢（以及需要機器翻譯的時候）還是要連線的。
 
 **我的資料會傳到外面嗎？**
-解析歌詞要查公開的歌詞介面（網易雲、QQ、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、AMLL），封面要查 iTunes Search——這是這個功能本身決定的。翻譯預設走裝置端（Apple 系統翻譯），只有退到網路翻譯時才會把歌詞內文發給 MyMemory。其餘的——快取的歌詞、設定——都只存在你 Mac 本機的檔案裡，除非你主動去連 ListenBrainz，或者那個可選的網頁中繼。逐項清單見下面「[授權與版權說明](#授權與版權說明)」。
+解析歌詞要查公開的歌詞介面（LRCLIB、酷我、網易雲、酷狗、QQ 音樂），封面要查 iTunes Search——這是這個功能本身決定的。翻譯預設走裝置端（Apple 系統翻譯），只有退到網路翻譯時才會把歌詞內文發給 MyMemory。其餘的——快取的歌詞、設定——都只存在你 Mac 本機的檔案裡，除非你主動去連 ListenBrainz，或者那個可選的網頁中繼。逐項清單見下面「[授權與版權說明](#授權與版權說明)」。
 
 **能標日文／韓文羅馬拼音，或者翻中文嗎？**
 可以——羅馬拼音按行判斷（中日雙語混唱的歌不會整首被判錯），粵語歌還會標粵拼；翻譯來自歌詞來源自帶的社群翻譯，或者裝置端／線上機器翻譯，譯文語言可選 18 種。
@@ -196,51 +195,38 @@ LyricsX（最後一版發布於 2022 年 4 月，支援 macOS 10.11+）涵蓋 Ap
 
 ## 授權與版權說明
 
-- **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授權。** 隨 App 一起發佈的開源元件與詞典資料（media-control、KeyboardShortcuts、OpenCC 與 rime-cantonese 詞典）各自保留原授權條款，全文見 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；這個檔案也打進了 App 包裡，**設定 → 關於 → 第三方授權**能直接打開。
+- **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授權。** 隨 App 一起發佈的開源元件與詞典資料（media-control、KeyboardShortcuts、OpenCC-derived Han variants）各自保留原授權條款，全文見 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；這個檔案也打進了 App 包裡，**設定 → 關於 → 第三方授權**能直接打開。
 - **歌詞、封面與曲目資訊的版權歸各自的權利人所有。** Lyrimuse 只做檢索、快取與顯示：公開歌詞介面回傳什麼，就存在你自己 Mac 上的 `~/.config/lyrimuse/` 裡給你自己看，不代管、不轉發、不再散佈任何歌詞或封面；快取隨時可以在「歌詞管理」裡刪，或者直接刪掉那個檔案夾。
-- **Lyrimuse 是獨立的開源專案**，與 Apple、騰訊（QQ 音樂）、網易（網易雲音樂）、酷狗、酷我、中國移動（咪咕音樂）、Spotify、Google（YouTube Music）、ListenBrainz、Musixmatch、LRCLIB、LyricFind、AMLL 均無隸屬、合作或背書關係。這些名稱和商標歸各自所有者，這裡提到它們只是為了說明支援哪些播放器和歌詞來源。
-- **會離開你 Mac 的只有這些。** 解析歌詞時把歌手、歌名、專輯（部分來源還帶時長）發給上面十個歌詞來源；全部落空時還會把歌手名發給 MusicBrainz 查別名。封面把歌手加歌名發給 iTunes Search。機器翻譯備用（預設關，且只在裝置端 Apple 翻譯不可用時）會把**歌詞內文**分塊發給 MyMemory，附一個隨機產生的電子郵件參數，不是你的。Musixmatch 的網域走 DNS over HTTPS，解析請求發給 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。除此之外只有你主動連線的 ListenBrainz、推播平台和網頁中繼（中繼的 Top10 歌手頁會向 Deezer 查歌手頭像）。每一筆對外請求都記進本機稽核記錄檔（只記網域和操作名，不記參數和憑證），「匯出診斷資訊」裡能看到。
+- **Lyrimuse 是獨立的開源專案**，與 Apple、騰訊（QQ 音樂）、網易（網易雲音樂）、酷狗、酷我、Spotify、Google（YouTube Music）、ListenBrainz、LRCLIB 均無隸屬、合作或背書關係。這些名稱和商標歸各自所有者，這裡提到它們只是為了說明支援哪些播放器和歌詞來源。
+- **會離開你 Mac 的只有這些。** 解析歌詞時把歌手、歌名、專輯（部分來源還帶時長）發給上面五個歌詞來源。封面把歌手加歌名發給 iTunes Search。機器翻譯備用（預設關，且只在裝置端 Apple 翻譯不可用時）會把**歌詞內文**分塊發給 MyMemory，附一個隨機產生的電子郵件參數，不是你的。除此之外只有你主動連線的 ListenBrainz、推播平台和網頁中繼。每一筆對外請求都記進本機稽核記錄檔（只記網域和操作名，不記參數和憑證），「匯出診斷資訊」裡能看到。
 
 ## 疑難排解
 
-歌詞不出來時，直接問 collector：
-
-```sh
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -local-only  # 不連線
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -json
-```
-
-它會檢查那些**會靜默地把整條鏈路搞壞**的東西——某個設定欄位沒解析成功、一個歌詞來源都沒啟用、
-快取檔案讀不了、歌詞匯出目錄寫不進去——然後拿兩首真實曲目（一中一英，避免把某個曲庫的
-盲區誤報成故障）去探目前啟用的每個歌詞來源。單一來源掛掉只報 warn，只有全部掛掉才算 error：
-還有其它來源照樣能出歌詞。
+歌詞不出來時，可以在「設定 → 歌詞來源」逐個測試來源，再在「歌詞管理」裡對目前歌曲重新匹配；
+應用程式日誌在 `~/Library/Logs/lyrimuse-app.log`。五個來源會並發查詢，單個來源失敗不會阻斷其它來源，
+已經快取的歌詞在離線時仍然可以顯示。
 
 ## 解除安裝
 
-把 `Lyrimuse.app` 拖移進垃圾桶**是不夠的**。背景擷取服務在 launchd 裡註冊的是 `KeepAlive`
-類型的 job，它的 LaunchAgent 會留下來，於是 launchd 會一直去啟動一個已經不存在的二進位檔。
+把 `Lyrimuse.app` 拖移進垃圾桶後，使用者資料和可選的開機啟動項仍會保留；需要清理時執行下面的腳本。
 
 ```sh
 lyrimuse/scripts/uninstall.sh              # 只看：回報目前裝了什麼
-lyrimuse/scripts/uninstall.sh --services   # 註銷兩個 launchd job，資料一律保留
 lyrimuse/scripts/uninstall.sh --purge      # 連設定、快取、記錄檔、偏好設定一起刪
 ```
 
 不帶參數執行不會改動任何東西，只是告訴你系統裡現在有什麼。`--purge` 會先把要刪的東西
 逐一列出來、提醒你其中有多少個已匯出的歌詞檔案，並且要求手動輸入 `yes` 才繼續。
 
-`--services` 不碰偏好設定；`--purge` 會連偏好設定一起刪（`defaults delete
-me.yudaotor.lyrimuse`）。留著它會把重裝引向一條死路：LaunchAgent 已經刪了、collector
-沒裝，而 App 仍然認為引導走完過——於是那扇能把服務裝回去的引導頁永遠不出現，桌面就
-一直停在「搜尋歌詞中…」。
+`--purge` 會註銷可選的開機啟動項，並連偏好設定、快取和日誌一起刪（`defaults delete
+me.yudaotor.lyrimuse`）。
 
 ## 專案結構
 
 本儲存庫就是 App 本身：
 
 - [`lyrimuse/`](lyrimuse) —— App 本體（Swift，SwiftUI + AppKit）
-- [`lyrimuse-collector/`](lyrimuse-collector) —— 背景引擎，負責解析歌詞／封面並餵給 App（Go）；建置時自動打包進 App
+- `LyrimuseCore/Lyrics/` —— 原生 Swift 的五個歌詞來源、匹配器、Resolver 與時間軸模型
 - [`docs/features/`](docs/features/README.md) —— 功能現況文件：涵蓋剩餘功能的目前行為、互動點與程式碼錨點（改任何功能前先讀對應章）
 
 可選的網頁體驗拆在兩個獨立的兄弟儲存庫裡，想 fork 哪個都不用碰 App：
@@ -251,7 +237,7 @@ me.yudaotor.lyrimuse`）。留著它會把重裝引向一條死路：LaunchAgent
 | [`Yudaotor/nowplaying-workers`](https://github.com/Yudaotor/nowplaying-workers) | 網頁背後的 Cloudflare Worker 中繼 + 即時 README 徽章，配完整的從零搭建教學 |
 
 ```
-本儲存庫 (App + 擷取器)  ──推送──▶  nowplaying-workers (中繼)  ◀──讀取──  nowplaying (網頁)
+本儲存庫 (Swift App)  ──推送──▶  nowplaying-workers (中繼)  ◀──讀取──  nowplaying (網頁)
 ```
 
 ## 致謝

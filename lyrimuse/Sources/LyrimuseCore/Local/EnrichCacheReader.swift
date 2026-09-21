@@ -1,5 +1,4 @@
 import Foundation
-import Darwin
 
 public struct EnrichCacheEntry: Decodable, Equatable {
     public let lyrics: String?
@@ -129,28 +128,6 @@ public struct EnrichCacheLyrics: Equatable {
 
 @MainActor
 public enum EnrichCacheReader {
-    private static var cacheWatcher: DispatchSourceFileSystemObject?
-
-    public static func startWatching() {
-        guard cacheWatcher == nil else { return }
-        let fd = open(cacheURL.deletingLastPathComponent().path, O_EVTONLY)
-        guard fd >= 0 else { return }
-        let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd, eventMask: [.write, .rename, .delete], queue: .main)
-        source.setEventHandler {
-            MainActor.assumeIsolated { refreshIfNeeded() }
-        }
-        source.setCancelHandler { close(fd) }
-        cacheWatcher = source
-        source.resume()
-        refreshIfNeeded()
-    }
-
-    public static func stopWatching() {
-        cacheWatcher?.cancel()
-        cacheWatcher = nil
-    }
-
     private static let cacheURL = LyrimusePaths.configFile("lyrimuse-enrich-cache.json")
 
     private static var cachedMTime: Date?
@@ -503,45 +480,6 @@ public enum EnrichCacheReader {
         cachedLooseIndex = nil
         cachedEntryIndex = nil
         cachedResolvedKeyIndex = nil
-        cachedAliasTables = nil
-        aliasTablesGeneration += 1
-    }
-
-    public struct LocalAliasTables: Equatable {
-        public var artists: [String: String]
-        public var titles: [String: [String: String]]
-        public static let empty = LocalAliasTables(artists: [:], titles: [:])
-    }
-
-    public static var localAliasTablesIfComputed: LocalAliasTables? { cachedAliasTables }
-    private static var cachedAliasTables: LocalAliasTables?
-    private static var aliasTablesGeneration = 0
-
-    public static func computeLocalAliasTables() async -> LocalAliasTables {
-        if let cachedAliasTables { return cachedAliasTables }
-        guard let all = loadEntries() else { return .empty }
-        aliasTablesGeneration += 1
-        let gen = aliasTablesGeneration
-        let entries = all
-        let caches = ArtistIdentityCaches.load()
-        let tables = await Task.detached(priority: .utility) { () -> LocalAliasTables in
-            var inputs: [EnrichTitleAliases.Entry] = []
-            inputs.reserveCapacity(entries.count)
-            for (key, entry) in entries {
-                let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
-                guard parts.count == 3 else { continue }
-                inputs.append(.init(artist: String(parts[0]), title: String(parts[1]),
-                                    neteaseURL: entry.neteaseURL, qqMusicURL: entry.qqMusicURL,
-                                    durationSecs: entry.durationSecs,
-                                    resolvedDurationSecs: entry.resolvedDurationSecs,
-                                    lyrics: entry.lyrics))
-            }
-            let artists = LocalArtistAliases.derive(caches: caches, entries: inputs)
-            let titles = EnrichTitleAliases.derive(inputs) { LocalArtistAliases.canonicalArtistKey($0, table: artists) }
-            return LocalAliasTables(artists: artists, titles: titles)
-        }.value
-        if gen == aliasTablesGeneration, cachedEntries != nil { cachedAliasTables = tables }
-        return tables
     }
 
     public static func cacheModifiedAt() -> Date? {
@@ -561,7 +499,6 @@ public enum EnrichCacheReader {
             cachedLooseIndex = nil
             cachedEntryIndex = nil
             cachedResolvedKeyIndex = nil
-            cachedAliasTables = nil; aliasTablesGeneration += 1
             return
         }
         if cachedEntries == nil {
@@ -589,7 +526,6 @@ public enum EnrichCacheReader {
             cachedLooseIndex = nil
             cachedEntryIndex = nil
             cachedResolvedKeyIndex = nil
-            cachedAliasTables = nil; aliasTablesGeneration += 1
             return
         }
         adopt(entries: all, mtime: mtime)
@@ -609,23 +545,19 @@ public enum EnrichCacheReader {
                 if inFlightGeneration == gen { inFlightGeneration = nil }
                 guard gen == decodeGeneration else { return }
                 guard let decoded else { return }
-                adopt(entries: decoded, mtime: mtime, notify: true)
+                adopt(entries: decoded, mtime: mtime)
                 if fileModificationDate != mtime { refreshIfNeeded() }
             }
         }
     }
 
-    public static var onContentAdopted: (() -> Void)?
-
-    private static func adopt(entries: [String: EnrichCacheEntry], mtime: Date?, notify: Bool = false) {
+    private static func adopt(entries: [String: EnrichCacheEntry], mtime: Date?) {
         cachedMTime = mtime
         cachedEntries = entries
         cachedCoverIndex = nil
         cachedLooseIndex = nil
         cachedEntryIndex = nil
         cachedResolvedKeyIndex = nil
-        cachedAliasTables = nil; aliasTablesGeneration += 1
-        if notify { onContentAdopted?() }
     }
 
     public static func installMemoryPressureRelief() {
@@ -641,7 +573,6 @@ public enum EnrichCacheReader {
                 cachedLooseIndex = nil
                 cachedEntryIndex = nil
                 cachedResolvedKeyIndex = nil
-                cachedAliasTables = nil; aliasTablesGeneration += 1
             }
         }
         source.resume()

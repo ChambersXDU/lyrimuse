@@ -29,9 +29,9 @@ Lyrimuse sits quietly in your menu bar and shows a floating desktop lyrics overl
 
 ### Lyrics that just work
 - **Word-by-word synced highlighting**, following playback in real time
-- **Ten lyrics sources checked automatically** — NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind (via YouTube Music), Deezer, and AMLL (a hand-curated, word-by-word lyrics database) — always picks the best match, no manual searching required
+- **Five lyrics sources checked automatically** — LRCLIB, Kuwo, NetEase Cloud Music, Kugou Music, and QQ Music — always picks the best match, no manual searching required
 - **Romanization and translation**, shown alongside the original lyrics — translation comes from the source's own community translation when one exists, otherwise from on-device machine translation (Apple's Translation framework — lyrics never leave your Mac) with an online fallback, in any of 18 target languages; romanization is judged per line, so a Chinese song quoting one Japanese line only gets a reading on that line, not pinyin sprinkled over the rest — and Cantonese songs get word-aware Jyutping readings
-- **Duet and multi-singer lyrics show each part separately**, when the source (or an AMLL entry) marks who's singing which line, instead of interleaving both voices into one confusing block
+- **Duet and multi-singer lyrics show each part separately**, when the source marks who's singing which line, instead of interleaving both voices into one confusing block
 - **Simplified/Traditional Chinese**, switchable for the lyrics text independent of the app's own UI language
 - **A dedicated Lyrics Manager** — browse, hand-edit, delete, or re-search lyrics for any track, with multi-select batch delete, resizable columns, per-track timing offset if the sync ever drifts, and a one-click retry that re-searches every track still missing lyrics
 - **Works fully offline** in local mode — no network round-trip needed to show lyrics that are already cached
@@ -96,9 +96,8 @@ Please install Lyrimuse — an open-source macOS menu-bar lyrics app
 5. Launch it (`open -a Lyrimuse`) and verify it is running (`pgrep -x Lyrimuse`
    prints a PID).
 6. A first-run wizard will appear — that part is mine to click through. Tell me
-   it will ask me to pick a music player, to grant Automation access to
-   Music.app (only if I pick Apple Music), and to enable the background
-   collector service — then hand control back to me.
+   it will ask me to pick a music player and to grant Automation access to
+   Music.app (only if I pick Apple Music) — then hand control back to me.
 Finally, report what you did and anything that failed.
 ```
 
@@ -143,10 +142,9 @@ This clears the one-time Gatekeeper quarantine automatically as part of installi
 
 ```bash
 xcode-select --install   # Xcode Command Line Tools, for Swift — skip if `swift --version` already works
-brew install go          # any Go ≥ 1.21 — build.sh switches to 1.24.4 automatically via GOTOOLCHAIN
 ```
 
-Then `build.sh` builds both the app and its background collector in one shot:
+Then `build.sh` builds the native Swift app in one shot:
 
 ```bash
 git clone https://github.com/Yudaotor/lyrimuse.git
@@ -161,7 +159,7 @@ QQ Music / NetEase Cloud Music / Kugou Music / Spotify / auto-detect support add
 
 ### After any option
 
-Open Lyrimuse from `/Applications` — the first-run wizard walks you through picking a player (Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Spotify, or auto-detect), granting Automation access to Music.app if you picked Apple Music (the others need no extra permission), and enabling its background collector service (so lyrics/artwork keep resolving even when the window's closed). Complete the wizard and lyrics will appear right away (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
+Open Lyrimuse from `/Applications` — the first-run wizard walks you through picking a player (Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Spotify, or auto-detect) and granting Automation access to Music.app if you picked Apple Music. Complete the wizard and the native Swift lyrics lookup starts automatically (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
 
 You don't need to configure anything else to get lyrics — every optional extra above is configured later, entirely from Settings.
 
@@ -180,7 +178,7 @@ Same idea, not the same app — Lyrimuse brings that floating-desktop-lyrics exp
 Once a song's lyrics have been resolved once, yes — local mode shows already-cached lyrics with no network round-trip. The initial lookup (and machine translation, when it's needed) does require a connection.
 
 **Does any of my data leave my Mac?**
-Lyrics resolution talks to public lyric APIs (NetEase, QQ, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, AMLL) and cover art to the iTunes Search API, for whatever's playing — that's inherent to the feature. Translation defaults to on-device (Apple's Translation framework) and only sends lyric text to a network translator (MyMemory) as a fallback. Everything else — cached lyrics and settings — stays in files on your Mac unless you explicitly connect ListenBrainz or the optional web relay. The itemized list is under [License and Copyright](#license-and-copyright) below.
+Lyrics resolution talks to five public lyric APIs (LRCLIB, Kuwo, NetEase, Kugou, and QQ Music) and cover art to the iTunes Search API, for whatever's playing — that's inherent to the feature. Translation defaults to on-device (Apple's Translation framework) and only sends lyric text to a network translator (MyMemory) as a fallback. Everything else — cached lyrics and settings — stays in files on your Mac unless you explicitly connect ListenBrainz or the optional web relay. The itemized list is under [License and Copyright](#license-and-copyright) below.
 
 **Can I get Japanese/Korean romanization or Chinese translation of the lyrics?**
 Yes — romanization is judged per line (so a song mixing languages doesn't get the wrong treatment on the wrong lines), and translation comes from either a lyric source's own community translation or on-device/online machine translation, in 18 target languages.
@@ -199,37 +197,28 @@ LyricsX (last release: April 2022, macOS 10.11+) covers Apple Music, Spotify and
 
 ## License and Copyright
 
-- **Lyrimuse itself is [GPL-3.0](LICENSE).** The open-source components and dictionary data shipped inside the app (media-control, KeyboardShortcuts, and the OpenCC and rime-cantonese dictionaries) keep their own licenses; the full texts are in [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES), which is also bundled into the app and can be opened from **Settings → About → Third-party licenses**.
+- **Lyrimuse itself is [GPL-3.0](LICENSE).** The open-source components and dictionary data shipped inside the app (media-control, KeyboardShortcuts, and the OpenCC-derived Han variants) keep their own licenses; the full texts are in [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES), which is also bundled into the app and can be opened from **Settings → About → Third-party licenses**.
 - **Lyrics, artwork and track metadata belong to their respective rights holders.** Lyrimuse only looks them up, caches them and displays them: whatever the public lyric APIs return is stored on your own Mac (`~/.config/lyrimuse/`) for your own viewing. It does not host, relay or redistribute lyrics or artwork, and the cache can be deleted at any time from Lyrics Manager or by removing that folder.
-- **Lyrimuse is an independent open-source project.** It is not affiliated with, endorsed by or connected to Apple, Tencent (QQ Music), NetEase (NetEase Cloud Music), Kugou, Kuwo, China Mobile (Migu Music), Spotify, Google (YouTube Music), ListenBrainz, Musixmatch, LRCLIB, LyricFind or AMLL. Their names and trademarks belong to their owners and appear here only to say which players and lyric sources are supported.
-- **This is everything that leaves your Mac.** Lyrics resolution sends the track's artist, title and album (plus the duration, for sources that accept it) to the ten lyric sources above; when none of them matches, the artist name is also sent to MusicBrainz for alias lookup. Cover art sends artist + title to the iTunes Search API. The machine-translation fallback (off by default, and used only when on-device Apple translation is unavailable) sends the **lyric text itself**, in chunks, to MyMemory, with a randomly generated e-mail parameter — never yours. Musixmatch's domain is resolved over DNS-over-HTTPS via Cloudflare (1.1.1.1) and Google (8.8.8.8). Beyond that, only the services you connect yourself: ListenBrainz, push-notification platforms, and the optional web relay (whose Top-10 artists page looks up artist avatars on Deezer). Every outbound request is written to a local audit log — host and operation only, never parameters or credentials — which "Export diagnostics" includes.
+- **Lyrimuse is an independent open-source project.** It is not affiliated with, endorsed by or connected to Apple, Tencent (QQ Music), NetEase (NetEase Cloud Music), Kugou, Kuwo, Spotify, Google (YouTube Music), ListenBrainz or LRCLIB. Their names and trademarks belong to their owners and appear here only to say which players and lyric sources are supported.
+- **This is everything that leaves your Mac.** Lyrics resolution sends the track's artist, title and album (plus the duration, for sources that accept it) to the five lyric sources above. Cover art sends artist + title to the iTunes Search API. The machine-translation fallback (off by default, and used only when on-device Apple translation is unavailable) sends the **lyric text itself**, in chunks, to MyMemory, with a randomly generated e-mail parameter — never yours. Beyond that, only the services you connect yourself: ListenBrainz, push-notification platforms, and the optional web relay. Every outbound request is written to a local audit log — host and operation only, never parameters or credentials — which "Export diagnostics" includes.
 
 ## Troubleshooting
 
-If lyrics stop appearing, ask the collector what is wrong:
+If lyrics stop appearing, use Settings → Lyrics Sources to test the providers,
+then use Lyrics Manager → Re-match for the current track. The app log is at
+`~/Library/Logs/lyrimuse-app.log`.
 
-```sh
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -local-only  # no network
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -json
-```
-
-It checks the things that silently break the pipeline — a config field that
-failed to parse, no lyric sources enabled, an unreadable cache, a lyrics export
-directory that is not writable — and then probes the enabled lyric sources with
-two real lookups (one Chinese, one English, so that neither catalogue's blind
-spot looks like an outage). A single dead source is a warning; only all of them
-failing is an error, because the others still produce lyrics.
+The five providers are queried concurrently; one provider being unavailable
+does not prevent the others from returning a match. Cached lyrics remain
+available without a network connection.
 
 ## Uninstalling
 
-Dragging `Lyrimuse.app` to the Trash is **not** enough. The background collector is
-registered with launchd as a `KeepAlive` job, so its LaunchAgent stays behind and
-launchd keeps trying to start a binary that is no longer there.
+Dragging `Lyrimuse.app` to the Trash leaves user data and optional login-item
+registration behind. Use the script if you want to remove those too.
 
 ```sh
 lyrimuse/scripts/uninstall.sh              # report only — shows what is installed
-lyrimuse/scripts/uninstall.sh --services   # unregister both launchd jobs, keep your data
 lyrimuse/scripts/uninstall.sh --purge      # also delete config, caches, logs and settings
 ```
 
@@ -237,18 +226,15 @@ Running it with no arguments changes nothing; it just tells you what is on your
 system. `--purge` lists everything it is about to delete, warns you how many exported
 lyrics files are among them, and requires you to type `yes`.
 
-`--services` leaves your settings alone. `--purge` also removes them
-(`defaults delete me.yudaotor.lyrimuse`), because leaving them behind puts a
-reinstall into a dead end: the LaunchAgent is gone, so the collector is not
-installed, but the app still thinks onboarding is done — so the wizard that would
-install it never appears, and the desktop just sits at "searching for lyrics".
+`--purge` removes the optional login item, preferences, cached lyrics and logs
+(`defaults delete me.yudaotor.lyrimuse`).
 
 ## Project Layout
 
 This repo is the app:
 
 - [`lyrimuse/`](lyrimuse) — the app itself (Swift, SwiftUI + AppKit)
-- [`lyrimuse-collector/`](lyrimuse-collector) — the background engine that resolves lyrics/artwork and feeds them to the app (Go); built and bundled into the app automatically
+- `LyrimuseCore/Lyrics/` — the native Swift providers, matcher, resolver, and timeline models
 - [`docs/features/`](docs/features/README.md) — the as-built feature spec for the remaining features, covering current behavior, interactions, and code anchors (read the relevant chapter before changing anything)
 
 The optional web experience lives in two sibling repos, so you can fork either without touching the app:
@@ -259,7 +245,7 @@ The optional web experience lives in two sibling repos, so you can fork either w
 | [`Yudaotor/nowplaying-workers`](https://github.com/Yudaotor/nowplaying-workers) | The Cloudflare Worker relay + live README badge behind it, with a complete from-scratch setup guide |
 
 ```
-this repo (app + collector)  ──push──▶  nowplaying-workers (relay)  ◀──read──  nowplaying (web page)
+this repo (Swift app)  ──push──▶  nowplaying-workers (relay)  ◀──read──  nowplaying (web page)
 ```
 
 ## Credits

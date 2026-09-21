@@ -476,29 +476,6 @@ private struct LyricsSettingsTab: View {
             CardDivider()
 
             SettingsRow(
-                icon: "arrow.triangle.2.circlepath",
-                title: L10n.t("跟进算法升级")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { features.lyricsAutoUpgrade },
-                    set: { features.lyricsAutoUpgrade = $0; Task { await features.save() } }
-                ))
-            }
-            CardDivider()
-
-            SettingsRow(
-                icon: "square.stack",
-
-                title: L10n.t("提前解析同专辑其它曲目")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { features.albumPrefetch },
-                    set: { features.albumPrefetch = $0; Task { await features.save() } }
-                ))
-            }
-            CardDivider()
-
-            SettingsRow(
                 icon: "lock.circle",
                 title: L10n.t("锁定手选歌词")
             ) {
@@ -831,22 +808,6 @@ private struct LyricsSettingsTab: View {
                 title: L10n.t("显示译文")
             ) {
                 Toggle("", isOn: $settings.showTranslation)
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "globe",
-                title: L10n.t("译文语言")
-            ) {
-                Picker("", selection: Binding(
-                    get: { features.lyricsTranslationLanguage },
-                    set: { features.lyricsTranslationLanguage = $0; Task { await features.save() } }
-                )) {
-                    ForEach(MusixmatchTranslationLanguage.allCases) { lang in
-                        Text(lang.displayName).tag(lang)
-                    }
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
             }
         }
     }
@@ -1234,8 +1195,6 @@ private struct AppearanceSettingsTab: View {
 private struct PlayerSettingsTab: View {
     @State private var automationStatus: MusicAutomationPermissionStatus = .notDetermined
     @State private var requestingAutomation = false
-    @State private var collectorState: LaunchdJobState = .notRegistered
-    @State private var collectorBusy = false
 
     var body: some View {
         SettingsPage(title: L10n.t("播放器")) {
@@ -1264,23 +1223,6 @@ private struct PlayerSettingsTab: View {
                 refreshAutomationStatus()
             }
 
-            SettingsCard {
-                SettingsRow(
-                    icon: collectorState.isRunning ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                    iconTint: collectorState.isRunning ? .green : .orange,
-                    title: L10n.t("后台歌词服务")
-                ) {
-                    if collectorBusy {
-                        ProgressView().controlSize(.small)
-                    } else if !collectorState.isRunning {
-                        Button(L10n.t("启用")) { enableCollector() }
-                    }
-                }
-            }
-            .onAppear { refreshCollectorState() }
-            .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
-                refreshCollectorState()
-            }
         }
         .id(L10n.current)
     }
@@ -1311,22 +1253,6 @@ private struct PlayerSettingsTab: View {
         }
     }
 
-    private func refreshCollectorState() {
-        guard !collectorBusy else { return }
-        Task {
-            let state = await Task.detached(priority: .utility) { CollectorServiceManager.state }.value
-            collectorState = state
-        }
-    }
-
-    private func enableCollector() {
-        collectorBusy = true
-        Task {
-            collectorState = await CollectorServiceManager.setEnabledAndWait(true)
-            AppSettings.shared.collectorServiceEnabled = collectorState.isRunning
-            collectorBusy = false
-        }
-    }
 }
 
 private struct GeneralSettingsTab: View {

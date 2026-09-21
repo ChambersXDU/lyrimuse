@@ -634,7 +634,7 @@ Bartender/Ice 这类工具做的是"接管、管理别人的图标"(靠截屏+�
 
 - **UserDefaults(standard)**:上表那些 `np:` 前缀的 key(2026-09-03 起 13 个),经 `AppSettings` 读写;单曲微调与全局基准由 `LyricsOffsetStore` 存 UserDefaults(JSON 字符串 + 独立全局 key,`defaults read` 可读)。
 - **磁盘文件**:无——菜单栏功能本身不落盘;所有位图(歌词长图、染色图标)都是进程内现画现用。老的 `Resources/MenuBarIconTemplate.png` 留作历史资料,不再参与渲染。
-- **进程边界**:全部在 lyrimuse 主 App 进程内,不涉及 collector/worker。
+- **进程边界**:全部在 lyrimuse 主 App 进程内,不涉及独立歌词服务。
 
 ## 代码锚点
 

@@ -29,9 +29,9 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个桌面悬浮歌�
 
 ### 歌词，做到位
 - **逐字同步高亮**，跟随播放进度实时显示
-- **自动查十个歌词源**——网易云音乐、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind（经 YouTube Music）、Deezer、AMLL（人工校对过的逐字歌词库）——自动挑出最合适的一份，不用自己动手搜
+- **自动查五个歌词源**——LRCLIB、酷我、网易云音乐、酷狗、QQ 音乐——自动挑出最合适的一份，不用自己动手搜
 - **罗马音 + 翻译**，跟原文一起显示——歌词源自带社区翻译时优先用它，没有的话走端上机器翻译（Apple 系统翻译，歌词不出本机），翻不了再退联网兜底，译文语言可选 18 种；罗马音按行判断，中日双语歌只有日文行会标注读音，不会连中文一起标上拼音；粤语歌自动标注粤拼（按词消歧）
-- **对唱/多人合唱歌词分开显示**，只要来源（或 AMLL 词条）标出了是谁在唱哪一句，就不会把两个人的声部糊成一团
+- **对唱/多人合唱歌词分开显示**，只要来源标出了是谁在唱哪一句，就不会把两个人的声部糊成一团
 - **简繁中文切换**，独立于 App 界面语言，只管歌词文字本身用哪种写法
 - **完整的「歌词管理」窗口**——浏览、手改、删除、重新搜索任意一首歌的歌词，支持多选批量删除、列宽随手拖，遇到不同步还能单独调整这首歌的时间轴偏移；没搜到词的存量歌曲还能一键全部重试
 - **本地模式完全离线**——已经缓存好的歌词不需要联网也能显示
@@ -142,10 +142,9 @@ brew install --cask lyrimuse
 
 ```bash
 xcode-select --install   # Xcode 的 Command Line Tools，跑 Swift 用——`swift --version` 能跑就说明已经装过
-brew install go          # 任意 ≥1.21 的 Go 都行——build.sh 会通过 GOTOOLCHAIN 自动切到 1.24.4
 ```
 
-装好之后，`build.sh` 会一次性把 App 和它的后台采集器都构建好：
+装好之后，`build.sh` 会一次性构建原生 Swift App：
 
 ```bash
 git clone https://github.com/Yudaotor/lyrimuse.git
@@ -160,7 +159,7 @@ QQ 音乐/网易云音乐/酷狗音乐/Spotify/自动识别这几个播放源支
 
 ### 不管选哪种方案
 
-从 `/Applications` 打开 Lyrimuse——首次启动的引导向导会带你完成：选一个播放器（Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，或者自动识别），选了 Apple Music 的话再允许它以「自动化」方式读取 Music.app 当前播放的歌曲信息（其它几个都不需要额外权限），以及启用它的后台常驻采集服务（这样就算把窗口关掉，歌词/封面也会持续解析）。走完引导歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
+从 `/Applications` 打开 Lyrimuse——首次启动的引导向导会带你完成：选一个播放器（Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，或者自动识别），以及在选择 Apple Music 时允许它以「自动化」方式读取 Music.app 当前播放的歌曲信息。走完引导后，原生 Swift 歌词查询会自动开始（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 不需要再配置任何其它东西才能看到歌词——上面提到的所有附加功能都是后续在设置里按需开启的。
 
@@ -179,7 +178,7 @@ QQ 音乐/网易云音乐/酷狗音乐/Spotify/自动识别这几个播放源支
 一首歌的歌词只要解析过一次，之后就能——本地模式直接显示已缓存的歌词，不用联网。第一次查询（以及需要机器翻译的时候）还是要联网的。
 
 **我的数据会传到外面吗？**
-解析歌词要查公开的歌词接口（网易云、QQ、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、AMLL），封面要查 iTunes Search——这是这个功能本身决定的。翻译默认走端上（Apple 系统翻译），只有退到网络翻译时才会把歌词正文发给 MyMemory。其余的——缓存的歌词、设置——都只存在你 Mac 本地的文件里，除非你主动去连 ListenBrainz，或者那个可选的网页中继。逐项清单见下面「[许可与版权说明](#许可与版权说明)」。
+解析歌词要查公开的歌词接口（LRCLIB、酷我、网易云、酷狗、QQ 音乐），封面要查 iTunes Search——这是这个功能本身决定的。翻译默认走端上（Apple 系统翻译），只有退到网络翻译时才会把歌词正文发给 MyMemory。其余的——缓存的歌词、设置——都只存在你 Mac 本地的文件里，除非你主动去连 ListenBrainz，或者那个可选的网页中继。逐项清单见下面「[许可与版权说明](#许可与版权说明)」。
 
 **能标日语/韩语罗马音，或者翻中文吗？**
 可以——罗马音按行判断（中日双语混唱的歌不会整首被判错），翻译来自歌词源自带的社区翻译，或者端上/联网机器翻译，译文语言可选 18 种。
@@ -198,51 +197,38 @@ LyricsX（最后一版发布于 2022 年 4 月，支持 macOS 10.11+）覆盖 Ap
 
 ## 许可与版权说明
 
-- **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授权。** 随 App 一起分发的开源组件与词典数据（media-control、KeyboardShortcuts、OpenCC 与 rime-cantonese 词典）各自保留原许可证，全文见 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；这个文件也打进了 App 包里，**设置 → 关于 → 第三方许可**能直接打开。
+- **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授权。** 随 App 一起分发的开源组件与词典数据（media-control、KeyboardShortcuts、OpenCC-derived Han variants）各自保留原许可证，全文见 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；这个文件也打进了 App 包里，**设置 → 关于 → 第三方许可**能直接打开。
 - **歌词、封面与曲目信息的版权归各自的权利人所有。** Lyrimuse 只做检索、缓存与展示：公开歌词接口返回什么，就存在你自己 Mac 上的 `~/.config/lyrimuse/` 里给你自己看，不托管、不转发、不再分发任何歌词或封面；缓存随时可以在「歌词管理」里删，或者直接删掉那个文件夹。
-- **Lyrimuse 是独立的开源项目**，与 Apple、腾讯（QQ 音乐）、网易（网易云音乐）、酷狗、酷我、中国移动（咪咕音乐）、Spotify、Google（YouTube Music）、ListenBrainz、Musixmatch、LRCLIB、LyricFind、AMLL 均无隶属、合作或背书关系。这些名称和商标归各自所有者，这里提到它们只是为了说明支持哪些播放器和歌词来源。
-- **会离开你 Mac 的只有这些。** 解析歌词时把歌手、歌名、专辑（部分源还带时长）发给上面十个歌词源；全部落空时还会把歌手名发给 MusicBrainz 查别名。封面把歌手加歌名发给 iTunes Search。机翻兜底（默认关，且只在端上 Apple 翻译不可用时）会把**歌词正文**分块发给 MyMemory，附一个随机生成的邮箱参数，不是你的。Musixmatch 的域名走 DNS over HTTPS，解析请求发给 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。除此之外只有你主动连接的 ListenBrainz、推送平台和网页中继（中继的 Top10 歌手页会向 Deezer 查歌手头像）。每一条对外请求都记进本地审计日志（只记域名和操作名，不记参数和凭据），「导出诊断」里能看到。
+- **Lyrimuse 是独立的开源项目**，与 Apple、腾讯（QQ 音乐）、网易（网易云音乐）、酷狗、酷我、Spotify、Google（YouTube Music）、ListenBrainz、LRCLIB 均无隶属、合作或背书关系。这些名称和商标归各自所有者，这里提到它们只是为了说明支持哪些播放器和歌词来源。
+- **会离开你 Mac 的只有这些。** 解析歌词时把歌手、歌名、专辑（部分源还带时长）发给上面五个歌词源。封面把歌手加歌名发给 iTunes Search。机翻兜底（默认关，且只在端上 Apple 翻译不可用时）会把**歌词正文**分块发给 MyMemory，附一个随机生成的邮箱参数，不是你的。除此之外只有你主动连接的 ListenBrainz、推送平台和网页中继。每一条对外请求都记进本地审计日志（只记域名和操作名，不记参数和凭据），「导出诊断」里能看到。
 
 ## 排查
 
-歌词不出来时，直接问 collector：
-
-```sh
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -local-only  # 不联网
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -json
-```
-
-它会检查那些**会静默地把链路搞坏**的东西——某个配置字段没解析成功、一个歌词源都没启用、
-缓存文件读不了、歌词导出目录写不进去——然后拿两首真实曲目（一中一英，避免把某个曲库的
-盲区误报成故障）去探当前启用的每个歌词源。单个源挂掉只报 warn，只有全部挂掉才算 error：
-还有其它源照样能出歌词。
+歌词不出来时，可以在「设置 → 歌词来源」逐个测试来源，再在「歌词管理」里对当前歌曲重新匹配；
+应用日志在 `~/Library/Logs/lyrimuse-app.log`。五个来源会并发查询，单个来源失败不会阻断其它来源，
+已经缓存的歌词在离线时仍然可以显示。
 
 ## 卸载
 
-把 `Lyrimuse.app` 拖进废纸篓**是不够的**。后台采集服务在 launchd 里注册的是 `KeepAlive`
-类型的 job，它的 LaunchAgent 会留下来，于是 launchd 会一直去启动一个已经不存在的二进制。
+把 `Lyrimuse.app` 拖进废纸篓后，用户数据和可选的开机启动项仍会保留；需要清理时运行下面的脚本。
 
 ```sh
 lyrimuse/scripts/uninstall.sh              # 只看：报告当前装了什么
-lyrimuse/scripts/uninstall.sh --services   # 注销两个 launchd job，数据一律保留
 lyrimuse/scripts/uninstall.sh --purge      # 连配置、缓存、日志、偏好设置一起删
 ```
 
 不带参数运行不会改动任何东西，只是告诉你系统里现在有什么。`--purge` 会先把要删的东西
 逐个列出来、提醒你其中有多少个已导出的歌词文件，并且要求手动输入 `yes` 才继续。
 
-`--services` 不碰偏好设置；`--purge` 会连偏好设置一起删（`defaults delete
-me.yudaotor.lyrimuse`）。留着它会把重装引向一条死路：LaunchAgent 已经删了、collector
-没装，而 App 仍然认为引导走完过——于是那扇能把服务装回去的引导页永远不出现，桌面就
-一直停在「搜索歌词中…」。
+`--purge` 会注销可选的开机启动项，并连偏好设置、缓存和日志一起删（`defaults delete
+me.yudaotor.lyrimuse`）。
 
 ## 项目结构
 
 本仓库就是 App 本身：
 
 - [`lyrimuse/`](lyrimuse) —— App 本体（Swift，SwiftUI + AppKit）
-- [`lyrimuse-collector/`](lyrimuse-collector) —— 后台引擎，负责解析歌词/封面并喂给 App（Go）；构建时自动打包进 App
+- `LyrimuseCore/Lyrics/` —— 原生 Swift 的五个歌词源、匹配器、Resolver 与时间轴模型
 - [`docs/features/`](docs/features/README.md) —— 功能现状文档：覆盖剩余功能的当前行为、交互点与代码锚点（改任何功能前先读对应章）
 
 可选的网页体验拆在两个独立的兄弟仓库里，想 fork 哪个都不用碰 App：
@@ -253,7 +239,7 @@ me.yudaotor.lyrimuse`）。留着它会把重装引向一条死路：LaunchAgent
 | [`Yudaotor/nowplaying-workers`](https://github.com/Yudaotor/nowplaying-workers) | 网页背后的 Cloudflare Worker 中继 + 实时 README 徽章，配完整的从零搭建教程 |
 
 ```
-本仓库 (App + 采集器)  ──推送──▶  nowplaying-workers (中继)  ◀──读取──  nowplaying (网页)
+本仓库 (Swift App)  ──推送──▶  nowplaying-workers (中继)  ◀──读取──  nowplaying (网页)
 ```
 
 ## 致谢

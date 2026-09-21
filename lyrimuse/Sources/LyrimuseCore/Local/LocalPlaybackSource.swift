@@ -31,7 +31,7 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var isCurrentTrackInstrumental = false
     @Published public private(set) var currentTrackHasNoLyrics = false
     @Published public private(set) var currentTrackPlainLyrics = ""
-    @Published public private(set) var collectorNetworkDown = false
+    @Published public private(set) var networkDown = false
     @Published public private(set) var isCurrentTrackAdBreak = false
     @Published public private(set) var currentLyricsOffsetMs = 0
     @Published public private(set) var trackLyricsOffsetMs = 0
@@ -39,6 +39,7 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var artworkAverageHex: String?
     @Published public private(set) var pausedPositionMs: Int?
     @Published public private(set) var currentDurationMs: Int?
+    public var onTrackChanged: ((String, String, String, Double) -> Void)?
     @Published public var romanizationScripts: RomanizationScripts = .default {
         didSet { reloadCurrentLyrics() }
     }
@@ -75,6 +76,10 @@ public final class LocalPlaybackSource: ObservableObject {
     public var lastResolvedBundleID: String? {
         guard let id = lastSnapshot?.bundleIdentifier, !id.isEmpty else { return nil }
         return id
+    }
+
+    public func setNetworkDown(_ value: Bool) {
+        networkDown = value
     }
 
     public enum PositionSourceTier { case precise, cleanExtrapolated, noisyFloored }
@@ -140,10 +145,6 @@ public final class LocalPlaybackSource: ObservableObject {
     public func start() {
         guard pollTimer == nil else { return }
         EnrichCacheReader.installMemoryPressureRelief()
-        EnrichCacheReader.onContentAdopted = { [weak self] in
-            Task { @MainActor [weak self] in self?.handleEnrichContentAdopted() }
-        }
-        EnrichCacheReader.startWatching()
         let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
         }
@@ -166,8 +167,6 @@ public final class LocalPlaybackSource: ObservableObject {
             DistributedNotificationCenter.default().removeObserver(observer)
         }
         playerInfoObserver = nil
-        EnrichCacheReader.stopWatching()
-        EnrichCacheReader.onContentAdopted = nil
     }
 
     public func setScreenLocked(_ locked: Bool) {
@@ -192,6 +191,7 @@ public final class LocalPlaybackSource: ObservableObject {
 
     private func apply(_ snapshot: MediaControlSnapshot) {
         let trackChanged = snapshot.trackKey != lastKey
+        if trackChanged { networkDown = false }
         lastSnapshot = snapshot
         title = snapshot.title ?? ""
         artist = snapshot.artist ?? ""
@@ -206,6 +206,9 @@ public final class LocalPlaybackSource: ObservableObject {
             lastKey = snapshot.trackKey
             lastEnrichMTime = version
             reloadCurrentLyrics()
+            if trackChanged, let onTrackChanged, !(snapshot.title ?? "").isEmpty, !(snapshot.artist ?? "").isEmpty {
+                onTrackChanged(snapshot.artist ?? "", snapshot.title ?? "", snapshot.album ?? "", snapshot.duration ?? 0)
+            }
         }
 
         let now = Date()
@@ -287,14 +290,6 @@ public final class LocalPlaybackSource: ObservableObject {
             settled = true
         }
         currentLineFillSettled = settled
-    }
-
-    private func handleEnrichContentAdopted() {
-        let version = EnrichCacheReader.decodedContentVersion
-        enrichContentVersion = version
-        lastEnrichMTime = version
-        reloadCurrentLyrics()
-        fastTick()
     }
 
     public func forceReloadLyricsForCurrentTrack() {

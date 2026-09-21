@@ -196,14 +196,7 @@ public enum PlayCountFold {
     }
 
     public static func familyKey(artist: String, title: String) -> String {
-        let canonArtist = canonicalArtist(artist)
-        let artistKey = canonicalArtistKey(canonArtist)
-        let foldedTitle = foldTitle(title)
-
-        let canonTitle = lookupLocalTitleAlias(artistKey: artistKey, foldedTitle: foldedTitle)
-            ?? lookupDiscoveredTitleAlias(artistKey: artistKey, foldedTitle: foldedTitle)
-            ?? title
-        return key(artist: canonArtist, title: canonTitle)
+        key(artist: canonicalArtist(artist), title: title)
     }
 
     public static func canonicalArtistKey(_ artist: String) -> String {
@@ -215,56 +208,7 @@ public enum PlayCountFold {
     }
 
     public static func canonicalArtist(_ artist: String) -> String {
-        let primary = ArtistCredit.mergeArtist(artist)
-        return lookupLocalArtistAlias(stripSpaces(normalized(primary))) ?? primary
-    }
-
-    private static let artistLock = NSLock()
-    nonisolated(unsafe) private static var localArtistAliases: [String: String] = [:]
-
-    public static func setLocalArtistAliases(_ table: [String: String]) {
-        artistLock.lock()
-        localArtistAliases = table
-        artistLock.unlock()
-    }
-
-    private static func lookupLocalArtistAlias(_ key: String) -> String? {
-        artistLock.lock()
-        let value = localArtistAliases[key]
-        artistLock.unlock()
-        return value
-    }
-
-    private static let discoveredLock = NSLock()
-    nonisolated(unsafe) private static var discoveredTitleAliasesByArtist: [String: [String: String]] = [:]
-
-    public static func setDiscoveredTitleAliases(_ table: [String: [String: String]]) {
-        discoveredLock.lock()
-        discoveredTitleAliasesByArtist = table
-        discoveredLock.unlock()
-    }
-
-    private static func lookupDiscoveredTitleAlias(artistKey: String, foldedTitle: String) -> String? {
-        discoveredLock.lock()
-        let value = discoveredTitleAliasesByArtist[artistKey]?[foldedTitle]
-        discoveredLock.unlock()
-        return value
-    }
-
-    private static let localLock = NSLock()
-    nonisolated(unsafe) private static var localTitleAliasesByArtist: [String: [String: String]] = [:]
-
-    public static func setLocalTitleAliases(_ table: [String: [String: String]]) {
-        localLock.lock()
-        localTitleAliasesByArtist = table
-        localLock.unlock()
-    }
-
-    private static func lookupLocalTitleAlias(artistKey: String, foldedTitle: String) -> String? {
-        localLock.lock()
-        let value = localTitleAliasesByArtist[artistKey]?[foldedTitle]
-        localLock.unlock()
-        return value
+        ArtistCredit.mergeArtist(artist)
     }
 
     public static func foldTitle(_ title: String) -> String {

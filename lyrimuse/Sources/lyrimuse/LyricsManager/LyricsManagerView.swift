@@ -32,7 +32,7 @@ private enum SourceFilter: Hashable, Identifiable {
     case named(String)
     case none
 
-    static let all_: [SourceFilter] = [.all, .named("amll"), .named("netease"), .named("qq"), .named("kugou"), .named("musixmatch"), .named("lrclib"), .named("lyricfind"), .none]
+    static let all_: [SourceFilter] = [.all, .named("lrclib"), .named("kuwo"), .named("netease"), .named("kugou"), .named("qq"), .none]
 
     var id: String { label }
     var label: String {
@@ -153,15 +153,8 @@ func sourceColor(_ source: String) -> Color {
     case "netease": return .red
     case "qq": return .green
     case "kugou": return .cyan
-    case "musixmatch": return .indigo
     case "lrclib": return .purple
-    case "amll": return .orange
-
-    case "lyricfind": return .pink
-
     case "kuwo": return .brown
-    case "migu": return .mint
-    case "deezer": return .teal
     default: return .secondary
     }
 }
@@ -171,15 +164,8 @@ func sourceDisplayName(_ source: String) -> String {
     case "netease": return L10n.t("网易云音乐")
     case "qq": return L10n.t("QQ音乐")
     case "kugou": return L10n.t("酷狗音乐")
-    case "musixmatch": return "Musixmatch"
     case "lrclib": return "LRCLIB"
-    case "amll": return "AMLL"
-
-    case "lyricfind": return "LyricFind"
     case "kuwo": return L10n.t("酷我音乐")
-    case "migu": return L10n.t("咪咕音乐")
-
-    case "deezer": return "Deezer"
     case "": return L10n.t("无来源")
     default: return source
     }
@@ -417,7 +403,6 @@ struct LyricsManagerView: View {
 
     @State private var thinEvidenceOnly = false
 
-    @State private var fillSweepStatus: LyricsFillSweep.Info?
     @State private var artistFilter: String?
     @State private var albumFilter: String?
     @State private var sortOption: LyricsSortOption = .defaultOrder
@@ -953,9 +938,6 @@ struct LyricsManagerView: View {
                         .keyboardShortcut(.delete, modifiers: .command)
                     }
                     ToolbarItem {
-                        fillSweepToolbarMenu
-                    }
-                    ToolbarItem {
 
                         Menu {
                             Section {
@@ -1028,19 +1010,7 @@ struct LyricsManagerView: View {
                     focusCurrentlyPlaying(scrollProxy: scrollProxy)
                 }
 
-                .task {
-                    while !Task.isCancelled {
-
-                        try? await Task.sleep(for: .seconds(fillSweepStatus?.running == true ? 2 : 5))
-                        guard !Task.isCancelled else { continue }
-
-                        let sweep = LyricsFillSweep.current
-                        if sweep != fillSweepStatus { fillSweepStatus = sweep }
-                        guard placeholderSummary != nil || sweep?.running == true else { continue }
-                        await store.reload(onlyIfChanged: true)
-                        refreshPlaceholder()
-                    }
-                }
+                .task { await store.reload(onlyIfChanged: true) }
             }
         } detail: {
             Group {
@@ -1093,7 +1063,7 @@ struct LyricsManagerView: View {
             Button(L10n.t("取消"), role: .cancel) { pendingRestoreSnapshot = nil }
         } message: {
 
-            Text(L10n.t("备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。恢复完 collector 会重启一次，把它们重新读进缓存"))
+            Text(L10n.t("备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。恢复完成后会自动刷新缓存"))
         }
         .alert(L10n.t("恢复歌词库"), isPresented: Binding(
             get: { restoreSnapshotResult != nil },
@@ -1169,7 +1139,6 @@ struct LyricsManagerView: View {
         let noResponder = noLyrics.filter(\.lastRoundHadNoResponder).count
         let indexed = noLyrics.filter { !$0.lastRoundHadNoResponder && $0.knownOnSources }.count
         let missing = noLyrics.count - indexed - noResponder
-        let retryable = picked.filter(EnrichCacheStore.isFillSweepRetryable).map(\.key)
         return VStack(spacing: 14) {
             Image(systemName: "checklist")
                 .font(.system(size: 40))
@@ -1200,16 +1169,6 @@ struct LyricsManagerView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if !retryable.isEmpty {
-                Button {
-                    LyricsFillSweep.request(keys: retryable)
-                } label: {
-                    Label(String(format: L10n.t("重试选中的无歌词 %@ 条"), "\(retryable.count)"),
-                          systemImage: "arrow.triangle.2.circlepath")
-                }
-                .buttonStyle(.bordered)
-                .disabled(fillSweepStatus?.running == true)
-            }
             Button(role: .destructive) {
                 requestDelete(selectedKeys)
             } label: {
@@ -1222,76 +1181,6 @@ struct LyricsManagerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(24)
-    }
-
-    private var fillSweepToolbarMenu: some View {
-        let status = fillSweepStatus
-        let running = status?.running == true
-        let retryableAll = store.summaries.filter(EnrichCacheStore.isFillSweepRetryable).map(\.key)
-        let retryableVisible = sortedFiltered.filter(EnrichCacheStore.isFillSweepRetryable).map(\.key)
-        return Menu {
-            if let status, running {
-                Section {
-                    Button(role: .destructive) {
-                        LyricsFillSweep.requestCancel()
-                    } label: {
-                        Label(L10n.t("停止重试"), systemImage: "stop.circle")
-                    }
-                } header: {
-
-                    Text(status.current.map { String(format: L10n.t("正在搜：%@"), $0) }
-                         ?? L10n.t("正在重试无歌词条目…"))
-                }
-            } else {
-                Section {
-                    Button {
-                        LyricsFillSweep.request(keys: [])
-                    } label: {
-                        Label(String(format: L10n.t("重试全部无歌词条目（%@ 首）"), "\(retryableAll.count)"),
-                              systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    .disabled(retryableAll.isEmpty)
-                    if hasActiveFilters && retryableVisible.count != retryableAll.count {
-                        Button {
-                            LyricsFillSweep.request(keys: retryableVisible)
-                        } label: {
-                            Label(String(format: L10n.t("重试当前筛选出的无歌词条目（%@ 首）"), "\(retryableVisible.count)"),
-                                  systemImage: "line.3.horizontal.decrease.circle")
-                        }
-                        .disabled(retryableVisible.isEmpty)
-                    }
-                } header: {
-                    Text(L10n.t("逐首联网重搜，每首间隔 15 秒；纯音乐与人工修正过的不碰"))
-                }
-                if let status, status.finishedAt != nil {
-                    Section {
-
-                        Text(String(format: L10n.t("上次：搜了 %1$@ 首，补出 %2$@ 首"), "\(status.done)", "\(status.filled)"))
-                        if status.cancelled == true {
-                            Text(L10n.t("上次被手动停止"))
-                        }
-                    } header: {
-                        Text(L10n.t("上一轮"))
-                    }
-                }
-            }
-        } label: {
-            if let status, running {
-
-                HStack(spacing: 4) {
-                    ProgressView(value: Double(status.done), total: Double(max(status.total, 1)))
-                        .progressViewStyle(.circular)
-                        .controlSize(.small)
-                    Text("\(status.done)/\(status.total)")
-                        .font(.caption)
-                        .monospacedDigit()
-                }
-                .accessibilityLabel(String(format: L10n.t("重试中 %1$@/%2$@"), "\(status.done)", "\(status.total)"))
-            } else {
-                Label(L10n.t("重试无歌词"), systemImage: "arrow.triangle.2.circlepath")
-                    .labelStyle(.titleAndIcon)
-            }
-        }
     }
 
     private var cacheSizeText: String {
@@ -1500,7 +1389,7 @@ struct LyricsManagerView: View {
                 let saved = await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr,
                                                  roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
                                                  source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
-                                                 sourceChoice: "", fromManualPick: true)
+                                                 sourceChoice: "", fromManualPick: true, coverURL: candidate.coverURL)
                 refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: candidate.lyrics, yrc: candidate.lyricsYRC)
                 if saved { flashSaveEditFeedback() }
                 return saved
@@ -1571,7 +1460,7 @@ struct LyricsManagerView: View {
                     }
                 } else {
                     ActionTile(icon: "waveform", title: L10n.t("标为纯音乐"),
-                               help: L10n.t("这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，采集服务也不再反复重搜")) {
+                               help: L10n.t("这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，也不再自动重搜")) {
                         Task { await store.setInstrumental(key: summary.key, true) }
                     }
                 }
@@ -1879,7 +1768,7 @@ struct LyricsManagerView: View {
             score: pick.winnerScore, scoringVersion: pick.scoringVersion,
             resolvedDurationSecs: pick.resolvedDurationSecs,
             sourcesSeen: pick.sourcesSeen, sourcesResponded: pick.sourcesResponded,
-            decision: decision
+            decision: decision, coverURL: winner.coverURL
         )
         refreshOffsetState(artist: summary.artist, title: summary.title,
                            lyrics: winner.lyrics, yrc: winner.lyricsYRC)

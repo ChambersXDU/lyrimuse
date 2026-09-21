@@ -306,7 +306,7 @@ struct LyricsSearchSheet: View {
             if isSearching {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text(L10n.t("正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…")
+                    Text(L10n.t("正在查询 LRCLIB / 酷我 / 网易云 / 酷狗 / QQ音乐…")
                         + searchProgressSuffix)
                         .font(.callout)
                         .foregroundStyle(.secondary)

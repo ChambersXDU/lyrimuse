@@ -12,9 +12,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  GO_VERSION: "1.24.4"
-
 jobs:
   test:
     name: 测试
@@ -22,28 +19,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v7
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: lyrimuse-collector/go.sum
-
-      - name: gofmt
-        run: |
-          cd lyrimuse-collector
-          unformatted="$(gofmt -l .)"
-          if [ -n "$unformatted" ]; then
-            echo "以下文件没有格式化，跑 gofmt -w 修一下："
-            echo "$unformatted"
-            exit 1
-          fi
-
-      - name: go vet
-        run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go vet ./...
-
-      - name: go test
-        run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go test ./...
 
       - name: Localizable.strings 一致性
         run: python3 lyrimuse/scripts/check_strings_parity.py

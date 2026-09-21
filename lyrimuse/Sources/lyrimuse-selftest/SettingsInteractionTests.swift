@@ -135,21 +135,5 @@ func runSettingsInteractionTests() {
         expectEqual(G.size(rows: [], rowHeight: chip, spacing: gap), .zero)
     }
 
-    do {
-        typealias P = CollectorRestartPolicy
-        expectEqual(P.needsRestart(changedKeys: ["players"]), true)
-        expectEqual(P.needsRestart(changedKeys: []), true)
-
-        expectEqual(P.hotReloadedKeys.isEmpty, true)
-
-        expectEqual(P.changedKeys(from: ["a": 1, "b": "x"], to: ["a": 1, "b": "x"]), [])
-        expectEqual(P.changedKeys(from: ["a": 1], to: ["a": 2]), ["a"])
-        expectEqual(P.changedKeys(from: ["a": 1], to: [:]), ["a"])
-        expectEqual(P.changedKeys(from: [:], to: ["a": 1]), ["a"])
-
-        expectEqual(P.changedKeys(from: ["l": ["x", "y"]], to: ["l": ["x", "y"]]), [])
-        expectEqual(P.changedKeys(from: ["l": ["x", "y"]], to: ["l": ["y", "x"]]), ["l"])
-        expectEqual(P.changedKeys(from: ["m": ["k": "v"]], to: ["m": ["k": "v"]]), [])
-        expectEqual(P.changedKeys(from: ["m": ["k": "v"]], to: ["m": ["k": "w"]]), ["m"])
-    }
+    expectEqual(LyricsResolver.sourceIDs.count, 5)
 }

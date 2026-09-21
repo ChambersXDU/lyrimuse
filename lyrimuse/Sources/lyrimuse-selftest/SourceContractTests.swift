@@ -15,7 +15,6 @@ func runSourceContractTests() {
         return false
     }, true)
 
-    expectEqual(CollectorRestartPolicy.hotReloadedKeys, [])
-    expectEqual(CollectorRestartPolicy.needsRestart(changedKeys: ["players"]), true)
-    expectEqual(CollectorRestartPolicy.changedKeys(from: ["a": 1], to: ["a": 2]), ["a"])
+    expectEqual(LyricsResolver.sourceIDs, ["lrclib", "kuwo", "netease", "kugou", "qq"])
+    expectEqual(LyricsResolver.sourceIDs.count, 5)
 }

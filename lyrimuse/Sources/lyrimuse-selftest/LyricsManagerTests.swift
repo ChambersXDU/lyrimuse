@@ -1,6 +1,5 @@
 import LyrimuseCore
 import Foundation
-import Darwin
 
 @MainActor
 func runLyricsManagerTests() {
@@ -13,81 +12,45 @@ func runLyricsManagerTests() {
         let cache = dir.appendingPathComponent("cache.json")
         let lyricsDir = dir.appendingPathComponent("lyrics")
         let lyric = lyricsDir.appendingPathComponent("song.lrc")
-        let disk: [String: [String: Any]] = [
-            "song": ["lyrics": "old"], "collector": ["lyrics": "fresh", "future_field": true]
-        ]
-        try JSONSerialization.data(withJSONObject: disk).write(to: cache)
+        try fm.createDirectory(at: lyricsDir, withIntermediateDirectories: true)
         let memory = try JSONSerialization.data(withJSONObject: ["song": ["lyrics": "manual"]])
-        let saved = try EnrichCachePersistence.save(
-            cacheURL: cache, memoryData: memory, edited: ["song"], deleted: [],
+        try EnrichCachePersistence.save(
+            cacheURL: cache, data: memory,
             fileChanges: [.init(url: lyric, content: Data("manual".utf8))])
-        let merged = try JSONSerialization.jsonObject(with: saved.data) as! [String: [String: Any]]
-        expectEqual(merged["song"]?["lyrics"] as? String, "manual")
-        expectEqual(merged["collector"]?["lyrics"] as? String, "fresh")
-        expectEqual(merged["collector"]?["future_field"] as? Bool, true)
-        expectEqual(saved.pulledNewKeys, true)
+        let stored = try JSONSerialization.jsonObject(with: Data(contentsOf: cache)) as! [String: [String: Any]]
+        expectEqual(stored["song"]?["lyrics"] as? String, "manual")
+        expectEqual(try String(contentsOf: cache), String(data: memory, encoding: .utf8))
         expectEqual(try String(contentsOf: lyric), "manual")
 
-        let deleted = try EnrichCachePersistence.save(
-            cacheURL: cache, memoryData: Data("{}".utf8), edited: [], deleted: ["song"],
+        try EnrichCachePersistence.save(
+            cacheURL: cache, data: Data("{}".utf8),
             fileChanges: [.init(url: lyric, content: nil)])
-        let afterDelete = try JSONSerialization.jsonObject(with: deleted.data) as! [String: [String: Any]]
-        expectEqual(afterDelete["song"] == nil, true)
-        expectEqual(afterDelete["collector"] != nil, true)
         expectEqual(fm.fileExists(atPath: lyric.path), false)
 
-        try Data("keep".utf8).write(to: lyric)
-        try Data("broken json".utf8).write(to: cache)
         do {
-            _ = try EnrichCachePersistence.save(
-                cacheURL: cache, memoryData: memory, edited: ["song"], deleted: [],
-                fileChanges: [.init(url: lyric, content: Data("overwrite".utf8))])
-            expectEqual(false, true, "corrupt cache must refuse writes")
+            try EnrichCachePersistence.save(cacheURL: cache, data: Data("broken json".utf8))
+            expectEqual(false, true, "invalid cache data must refuse writes")
         } catch {
-            expectEqual(try String(contentsOf: cache), "broken json")
-            expectEqual(try String(contentsOf: lyric), "keep")
+            expectEqual(true, true)
         }
 
-        try Data("{}".utf8).write(to: cache)
+        try Data("keep".utf8).write(to: lyric)
         let unrelated = lyricsDir.appendingPathComponent("notes.txt")
         try Data("notes".utf8).write(to: unrelated)
-        _ = try EnrichCachePersistence.save(
-            cacheURL: cache, memoryData: Data("{}".utf8), edited: [], deleted: [],
-            replacingEverything: true, clearLyricsDirectory: lyricsDir)
+        try EnrichCachePersistence.save(
+            cacheURL: cache, data: Data("{}".utf8), clearLyricsDirectory: lyricsDir)
         expectEqual(fm.fileExists(atPath: lyric.path), false)
         expectEqual(try String(contentsOf: unrelated), "notes")
         expectEqual(try String(contentsOf: cache), "{}")
 
         let key = "Artist|Title|Album"
-        let original: [String: [String: Any]] = [key: ["lyrics": "old", "lyrics_tr": "old translation", "lyrics_source": "old source"]]
-        let latest: [String: [String: Any]] = [key: ["lyrics": "old", "lyrics_tr": "new translation", "lyrics_source": "old source", "cover_url": "new cover"]]
-        let edited: [String: [String: Any]] = [key: ["lyrics": "manual", "lyrics_tr": "old translation"]]
-        try JSONSerialization.data(withJSONObject: latest).write(to: cache)
-        let fieldSave = try EnrichCachePersistence.save(
-            cacheURL: cache, memoryData: JSONSerialization.data(withJSONObject: edited),
-            baselineData: JSONSerialization.data(withJSONObject: original), edited: [key], deleted: [],
-            exportKeys: [key], lyricsDirectory: lyricsDir)
-        let fieldMerged = try JSONSerialization.jsonObject(with: fieldSave.data) as! [String: [String: Any]]
-        expectEqual(fieldMerged[key]?["lyrics"] as? String, "manual")
-        expectEqual(fieldMerged[key]?["lyrics_tr"] as? String, "new translation")
-        expectEqual(fieldMerged[key]?["cover_url"] as? String, "new cover")
-        expectEqual(fieldMerged[key]?["lyrics_source"] == nil, true, "explicit field removal survives merge")
+        let exportData = try JSONSerialization.data(withJSONObject: [key: [
+            "lyrics": "[00:01.00]one", "lyrics_tr": "译文", "lyrics_source": "lrclib"
+        ]])
+        try EnrichCachePersistence.save(
+            cacheURL: cache, data: exportData, exportKeys: [key], lyricsDirectory: lyricsDir)
         let translationFile = lyricsDir.appendingPathComponent(EnrichCacheKeys.sanitizeFilename(key) + ".tr.lrc")
-        expectEqual(try String(contentsOf: translationFile).hasSuffix("new translation"), true, "export uses merged cache, not stale editor fields")
-
-        let fd = open(cache.path + ".lock", O_RDWR)
-        guard fd >= 0 else { throw POSIXError(.EIO) }
-        defer { close(fd) }
-        guard flock(fd, LOCK_EX | LOCK_NB) == 0 else { throw POSIXError(.EIO) }
-        do {
-            _ = try EnrichCachePersistence.withLock(cacheURL: cache, timeout: 0.03) { true }
-            expectEqual(false, true, "cache lock must exclude other open file descriptions")
-        } catch let error as POSIXError {
-            expectEqual(error.code, .ETIMEDOUT)
-        }
-        flock(fd, LOCK_UN)
-        expectEqual(try EnrichCachePersistence.withLock(cacheURL: cache) { true }, true)
-        expectEqual(fm.fileExists(atPath: cache.path + ".lock"), true, "lock sidecar must survive commits")
+        expectEqual(try String(contentsOf: translationFile).contains("译文"), true)
     } catch {
         expectEqual(String(describing: error), "no error", "cache persistence filesystem regression")
     }
@@ -203,38 +166,6 @@ func runLyricsManagerTests() {
         expectEqual(W.sanitized(LyricsColumnWidths(artist: .infinity, album: 110, source: 84)), W.defaults)
 
         expectEqual(W.sanitized(LyricsColumnWidths(artist: 96, album: 110, source: 60)), W.defaults)
-    }
-
-    do {
-        let base: [String: [String: Any]] = ["A|a|x": ["lyrics": "L"]]
-
-        let disk: [String: [String: Any]] = [
-            "A|a|x": ["lyrics": "L", "lyrics_tr": "译文"],
-            "B|b|y": ["lyrics": "N"],
-        ]
-        var memory = base
-        memory["C|c|z"] = ["lyrics": "C"]
-        let merged = EnrichCacheMerge.merge(
-            disk: disk, memory: memory, edited: ["C|c|z"], deleted: [])
-        expectEqual(merged["A|a|x"]?["lyrics_tr"] as? String, "译文")
-        expectEqual(merged["B|b|y"] != nil, true)
-        expectEqual(merged["C|c|z"]?["lyrics"] as? String, "C")
-
-        let edited = EnrichCacheMerge.merge(
-            disk: ["A|a|x": ["lyrics": "盘上旧的"]],
-            memory: ["A|a|x": ["lyrics": "用户改的"]],
-            edited: ["A|a|x"], deleted: [])
-        expectEqual(edited["A|a|x"]?["lyrics"] as? String, "用户改的")
-
-        let deleted = EnrichCacheMerge.merge(
-            disk: ["A|a|x": ["lyrics": "L"]], memory: [:],
-            edited: [], deleted: ["A|a|x"])
-        expectEqual(deleted["A|a|x"] == nil, true)
-
-        let editThenDelete = EnrichCacheMerge.merge(
-            disk: ["A|a|x": ["lyrics": "L"]], memory: [:],
-            edited: ["A|a|x"], deleted: ["A|a|x"])
-        expectEqual(editThenDelete["A|a|x"] == nil, true)
     }
 
     do {
@@ -644,15 +575,15 @@ func runLyricsManagerTests() {
     do {
         typealias D = LyricsCandidateDuplicates
         let ordered: [(source: String, fingerprint: String)] = [
-            ("kugou", "aaa"), ("qq", "bbb"), ("netease", "aaa"), ("lrclib", ""), ("migu", "aaa"), ("amll", ""),
+            ("kugou", "aaa"), ("qq", "bbb"), ("netease", "aaa"), ("lrclib", ""), ("kuwo", "aaa"),
         ]
         let m = D.firstMatches(ordered)
         expectEqual(m["kugou"], nil)
         expectEqual(m["netease"], "kugou")
-        expectEqual(m["migu"], "kugou")
+        expectEqual(m["kuwo"], "kugou")
         expectEqual(m["qq"], nil)
         expectEqual(m["lrclib"], nil)
-        expectEqual(D.firstMatches([("lrclib", ""), ("amll", "")]).isEmpty, true)
+        expectEqual(D.firstMatches([("lrclib", ""), ("kuwo", "")]).isEmpty, true)
         expectEqual(D.firstMatches([]).isEmpty, true)
         expectEqual(D.isCurrent(candidateSource: "qq", candidateFingerprint: "x", currentSource: "qq", currentFingerprint: "x"), true)
         expectEqual(D.isCurrent(candidateSource: "qq", candidateFingerprint: "x", currentSource: "qq", currentFingerprint: "y"), false)
@@ -667,7 +598,7 @@ func runLyricsManagerTests() {
     }
 
     do {
-        let SRC = ["netease", "qq", "lrclib", "musixmatch", "amll", "kuwo", "migu"]
+        let SRC = ["lrclib", "kuwo", "netease", "kugou", "qq"]
         let TITLE = "Beautiful World (Da Capo Version) [Instrumental]"
 
         let rounds = [LyricQueryRound(artist: "Utada", title: TITLE, reason: "", sources: [])]
@@ -740,7 +671,7 @@ func runLyricsManagerTests() {
                                   instrumental: instrumental, consensusPeers: peers)
         }
 
-        let peersA = ["netease", "qq", "kugou", "lrclib", "musixmatch"]
+        let peersA = ["netease", "qq", "kugou", "lrclib", "kuwo"]
         let sampleA = [
             cand("qq", 945, [("duration", 164), ("wordTiming", 400), ("lines", 51),
                              ("consensus", 250), ("translation", 50), ("romanization", 30)],
@@ -749,7 +680,7 @@ func runLyricsManagerTests() {
                                 ("consensus", 250), ("translation", 50), ("romanization", 30)]),
             cand("netease", 942, [("duration", 163), ("wordTiming", 400), ("lines", 49),
                                   ("consensus", 250), ("translation", 50), ("romanization", 30)]),
-            cand("musixmatch", 892, [("duration", 164), ("wordTiming", 400), ("lines", 28),
+            cand("kuwo", 892, [("duration", 164), ("wordTiming", 400), ("lines", 28),
                                      ("consensus", 250), ("translation", 50)]),
             cand("lrclib", 460, [("duration", 180), ("lines", 30), ("consensus", 250)]),
         ]
@@ -777,14 +708,14 @@ func runLyricsManagerTests() {
                                   ("consensus", 250), ("translation", 50)]),
             cand("qq", 429, [("duration", 275), ("wordTiming", 400), ("lines", 44),
                              ("versionTags", -600), ("titleMatch", 60), ("consensus", 250)]),
-            cand("musixmatch", 1, [("durationOvershoot", -700), ("lines", 77),
+            cand("kuwo", 1, [("durationOvershoot", -700), ("lines", 77),
                                    ("album", 150), ("titleMatch", 120)]),
             cand("lrclib", -1, [("rejectPlainTextOnly", 0)]),
         ]
         expectEqual(V.build(candidates: sampleC, winner: "kugou"),
                     .decisiveNegative(term: term("versionTags", -600), loser: "netease", gap: 221))
 
-        expectEqual(V.ranked(sampleC).map(\.source), ["kugou", "netease", "qq", "musixmatch"])
+        expectEqual(V.ranked(sampleC).map(\.source), ["kugou", "netease", "qq", "kuwo"])
         expectEqual(sampleC[4].isRejected, true)
         expectEqual(V.sharedTerms(among: sampleC), [])
 
@@ -854,25 +785,6 @@ func runLyricsManagerTests() {
         expectEqual(P.lastRoundHadNoResponder(hasDecisionRecord: false, respondedCount: 0), false)
         expectEqual(P.lastRoundHadNoResponder(hasDecisionRecord: true, respondedCount: 1), false)
         expectEqual(P.lastRoundHadNoResponder(hasDecisionRecord: true, respondedCount: 9), false)
-    }
-
-    do {
-        typealias S = LyricsFillSweep
-        expectEqual(S.requestBody(keys: []), "all\n")
-        expectEqual(S.requestBody(keys: ["周杰伦|晴天|叶惠美", "A|B|C"]), "周杰伦|晴天|叶惠美\nA|B|C\n")
-        let json = """
-        {"running":true,"manual":true,"total":82,"done":3,"filled":1,"current":"范逸臣|革命|無樂不作","startedAt":1788700000,"updatedAt":1788700100}
-        """
-        let info = try? JSONDecoder().decode(S.Info.self, from: Data(json.utf8))
-        expectEqual(info?.running, true)
-        expectEqual(info?.total, 82)
-        expectEqual(info?.current, "范逸臣|革命|無樂不作")
-        expectEqual(info?.finishedAt, nil)
-        let done = try? JSONDecoder().decode(S.Info.self, from: Data("""
-        {"running":false,"manual":false,"total":40,"done":40,"filled":6,"startedAt":1,"updatedAt":2,"finishedAt":3,"cancelled":true}
-        """.utf8))
-        expectEqual(done?.cancelled, true)
-        expectEqual(done?.finishedAt, 3)
     }
 
     do {

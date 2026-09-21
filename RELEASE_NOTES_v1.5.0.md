@@ -262,9 +262,9 @@ Ops / 运维
   发布流水线在打 tag 时校验更新源结构
 - build.sh installs atomically, so concurrent builds can't corrupt the app
   build.sh 改成原子安装，并发构建不再弄坏已装的 App
-- The collector reports the app's own version, so Settings can no longer
+- Version metadata comes from the same build source, so Settings can no longer
   show two mismatched version numbers
-  采集服务版本号与 App 同源，设置页不再出现两个对不上的版本号
+  版本信息与 App 使用同一构建来源，设置页不再出现两个对不上的版本号
 
 ## Download / 下载
 
